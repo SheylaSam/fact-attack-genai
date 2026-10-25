@@ -1,3 +1,15 @@
+# Fact Attack – GenAI-Gruppenprojekt
+
+Eigenständige Fortsetzung des Hackathon-Projekts für das Modul Generative KI und Agentensysteme.
+
+**Start hier: [Projektplan und Umsetzungsvorschlag](docs/genai/PROJEKTPLAN.md).**
+
+Geplant: freie Abstimmungsbehauptungen mit Rückfragen, begrenzter Agentensteuerung und validierten Quellen prüfen. Der Agent ist noch nicht implementiert. Die folgende Dokumentation beschreibt den übernommenen Hackathon-Stand.
+
+Ursprung: [JJukic/Apertus-Team-Fact-Attack-2026](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026), übernommen bei `534e4ef`. Git-Historie, Urheberangaben und Lizenz bleiben erhalten. `origin` verweist auf das eigene Repository, `upstream` auf den Ursprung. GitHub Actions sind im neuen Repository zunächst deaktiviert, da die übernommenen Workflows auch Container veröffentlichen.
+
+---
+
 # 🇨🇭 Fact Attack 2026 — Hack Apertus Track 2A (OST)
 ## Multilingual Natural Language Inference over Swiss Official Voting Booklets
 
