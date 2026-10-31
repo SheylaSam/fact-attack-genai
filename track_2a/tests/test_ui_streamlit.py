@@ -263,3 +263,44 @@ def test_history_search_filters_dates_labels_and_reset_without_api(isolated_hist
         assert len(app.selectbox(key='history_selected').options) == 2
         assert load_checks(isolated_history) == before
         remote.assert_not_called()
+
+
+def test_batch_retry_only_failed_keeps_history_and_survives_language_change(isolated_history):
+    import streamlit as st
+    from src.inference import PredictionResult
+    from src.check_history import load_checks
+    st.cache_resource.clear()
+    statements = ['Die Vorlage verändert das Rentenalter.', 'La proposition change les impôts.']
+    calls = []
+    def prediction(**kwargs):
+        claim = kwargs['claim']
+        calls.append(claim)
+        if claim == statements[1] and calls.count(claim) == 1:
+            raise RuntimeError('Injected failure')
+        return PredictionResult(claim=claim, label=1, label_name='Neutral', reasoning='Injected UI test',
+                                evidence=[], strategy=kwargs['strategy'], booklet_path=str(kwargs['booklet_pdf']),
+                                tokens_prompt=0, tokens_completion=0, tokens_total=0, latency_ms=0)
+    with patch('src.config.LLM_API_KEY', 'ui-test-placeholder'), patch('src.config.MOCK_APERTUS', False), \
+         patch('src.inference.ClaimVerificationEngine.verify_claim', side_effect=prediction), \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No actual API')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        app.text_area(key='batch_text').set_value(' '.join(statements)).run()
+        app.multiselect(key='batch_selected').set_value(statements).run()
+        app.button(key='run_batch').click().run()
+        assert not app.exception
+        assert len(load_checks(isolated_history)) == 1
+        assert app.button(key='retry_batch')
+        app.selectbox(key='ui_language').set_value('fr').run()
+        assert calls == statements
+        app.button(key='retry_batch').click().run()
+        assert not app.exception
+        assert calls == [*statements, statements[1]]
+        assert len(load_checks(isolated_history)) == 2
+        assert not any(button.key == 'retry_batch' for button in app.button)
+        assert app.session_state['batch_check']['outcomes'][0]['attempts'] == 1
+        assert app.session_state['batch_check']['outcomes'][1]['attempts'] == 2
+        assert next(metric for metric in app.metric if metric.label == 'En échec').value == '0'
+        app.run()
+        assert calls == [*statements, statements[1]]
+        remote.assert_not_called()
+    st.cache_resource.clear()

@@ -171,6 +171,23 @@ Das Startdatum liegt nach dem Enddatum. Bitte korrigiere den Zeitraum.|La date d
 Verlaufsfilter zurücksetzen|Réinitialiser les filtres de l’historique|Azzera i filtri della cronologia
 Keine Prüfung passt zu diesen Filtern. Die gespeicherten Einträge bleiben unverändert.|Aucune vérification ne correspond à ces filtres. Les entrées enregistrées restent inchangées.|Nessuna verifica corrisponde a questi filtri. Le voci salvate restano invariate.
 """
+_ROWS += """
+Nur {n} fehlgeschlagene Aussagen werden erneut geprüft; erfolgreiche Antworten bleiben erhalten.|Seules les {n} affirmations en échec seront revérifiées ; les réponses réussies sont conservées.|Saranno riverificate solo le {n} affermazioni non riuscite; le risposte riuscite restano invariate.
+Nur fehlgeschlagene Aussagen erneut prüfen|Revérifier uniquement les échecs|Riprova solo le affermazioni non riuscite
+Mehrfachprüfung wird gestartet…|Démarrage de la vérification multiple…|Avvio della verifica multipla…
+{done} von {total} Einzelprüfungen abgeschlossen · {claim}|{done} vérifications sur {total} terminées · {claim}|{done} verifiche su {total} completate · {claim}
+Aussagen|Affirmations|Affermazioni
+Erfolgreich geprüft|Vérifications terminées|Verifiche completate
+Fehlgeschlagen|En échec|Non riuscite
+Nicht gespeichert|Non enregistrées|Non salvate
+Speicherfehler|Erreurs d’enregistrement|Errori di salvataggio
+Erfolgreich bedeutet technisch abgeschlossen, unabhängig davon, ob das Büchlein die Aussage stützt, offenlässt oder ihr widerspricht.|Réussie signifie techniquement terminée, que la brochure étaye l’affirmation, ne la détermine pas ou la contredise.|Riuscita significa tecnicamente completata, indipendentemente dal fatto che l’opuscolo supporti l’affermazione, non la chiarisca o la contraddica.
+Mehrfachergebnisse exportieren|Exporter les résultats multiples|Esporta i risultati multipli
+Mehrfachprüfung als JSON|Vérification multiple en JSON|Verifica multipla in JSON
+Mehrfachprüfung als CSV|Vérification multiple en CSV|Verifica multipla in CSV
+Der Export enthält auch fehlgeschlagene Aussagen und Versuchszähler. Die Original-PDF-Datei ist nicht enthalten.|L’export contient aussi les affirmations en échec et le nombre de tentatives. Le PDF original n’est pas inclus.|L’esportazione contiene anche le affermazioni non riuscite e il numero di tentativi. Il PDF originale non è incluso.
+Prüfversuche: {n}|Tentatives : {n}|Tentativi: {n}
+"""
 TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
 
 

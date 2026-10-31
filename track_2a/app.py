@@ -30,7 +30,7 @@ from src.evaluator import BenchmarkEvaluator
 from src.results_summary import build_summary
 from src.text_utils import best_snippet, guess_language
 from src import config
-from src.batch_check import suggest_statements, run_checks, MAX_CHECKS
+from src.batch_check import suggest_statements, run_checks, retry_failed, batch_summary, export_batch, MAX_CHECKS
 from src.ui_i18n import LANGUAGES, translate, translate_static_html, date_label
 from src.check_history import save_check, load_checks, matching_source, set_removed, export_checks, filter_checks
 from src.booklet_catalog import load_catalog, available_sources, date_options, languages_for_date, filter_sources
@@ -1540,7 +1540,14 @@ with tab_factcheck:
                            hashlib.sha256(pdf_path.read_bytes()).hexdigest() if pdf_path.exists() else None,
                            vote, strat, claim_lang_choice)
 
-    if batch_clicked:
+        previous_batch = st.session_state.get("batch_check")
+        retry_count = sum(bool(item["error"]) for item in previous_batch["outcomes"]) if previous_batch and previous_batch["signature"] == batch_signature else 0
+        retry_clicked = False
+        if retry_count:
+            st.caption(t("Nur {n} fehlgeschlagene Aussagen werden erneut geprüft; erfolgreiche Antworten bleiben erhalten.").format(n=retry_count))
+            retry_clicked = st.button(t("Nur fehlgeschlagene Aussagen erneut prüfen"), key="retry_batch")
+
+    if batch_clicked or retry_clicked:
         with col_out:
             if not pdf_path.exists():
                 st.error(t("Die gewählte PDF-Datei ist nicht verfügbar."))
@@ -1556,9 +1563,20 @@ with tab_factcheck:
                 def save_one(prediction):
                     save_check(HISTORY_PATH, result=prediction.model_dump(mode="json"), source_path=pdf_path,
                                date=selected_date, language=lang_code, vote=vote)
+                progress = st.progress(0, text=t("Mehrfachprüfung wird gestartet…"))
+                def update_progress(done, total, statement):
+                    progress.progress(done / total, text=t("{done} von {total} Einzelprüfungen abgeschlossen · {claim}").format(
+                        done=done, total=total, claim=statement[:80]))
                 with st.spinner(t("Die ausgewählten Aussagen werden einzeln geprüft…")):
-                    outcomes = run_checks(selected_claims, verify_one, save_one if save_history else None)
-                st.session_state["batch_check"] = {"signature": batch_signature, "outcomes": outcomes}
+                    if retry_clicked:
+                        outcomes = retry_failed(previous_batch["outcomes"], verify_one,
+                                                save_one if save_history else None, update_progress)
+                    else:
+                        outcomes = run_checks(selected_claims, verify_one, save_one if save_history else None, update_progress)
+                context = {"source_file": pdf_path.name, "source_sha256": batch_signature[2],
+                           "date": selected_date, "language": lang_code, "vote": vote, "strategy": strat}
+                st.session_state["batch_check"] = {"signature": batch_signature, "outcomes": outcomes, "context": context}
+                st.rerun()
 
     # ── Verification ─────────────────────────────────────────────────────────
     signature = (claim.strip(), str(pdf_path), vote, strat, claim_lang)
@@ -1610,9 +1628,24 @@ with tab_factcheck:
         current_batch = batch_check if batch_check and batch_check["signature"] == batch_signature else None
         if current_batch:
             st.markdown("### " + t("Ergebnisse der Mehrfachprüfung"))
+            totals = batch_summary(current_batch["outcomes"])
+            metrics = st.columns(4)
+            for column, key, label in zip(metrics, ("total", "successful", "failed", "save_failed"),
+                                           ("Aussagen", "Erfolgreich geprüft", "Fehlgeschlagen", "Speicherfehler")):
+                column.metric(t(label), totals[key])
+            st.caption(t("Erfolgreich bedeutet technisch abgeschlossen, unabhängig davon, ob das Büchlein die Aussage stützt, offenlässt oder ihr widerspricht."))
+            with st.expander(t("Mehrfachergebnisse exportieren"), expanded=False):
+                context = current_batch.get("context", {"source_file": pdf_path.name, "source_sha256": batch_signature[2],
+                           "date": selected_date, "language": lang_code, "vote": vote, "strategy": strat})
+                st.download_button(t("Mehrfachprüfung als JSON"), data=export_batch(current_batch["outcomes"], context),
+                                   file_name="mehrfachpruefung.json", mime="application/json", key="batch_json")
+                st.download_button(t("Mehrfachprüfung als CSV"), data=export_batch(current_batch["outcomes"], context, 'csv'),
+                                   file_name="mehrfachpruefung.csv", mime="text/csv", key="batch_csv")
+                st.caption(t("Der Export enthält auch fehlgeschlagene Aussagen und Versuchszähler. Die Original-PDF-Datei ist nicht enthalten."))
             for index, outcome in enumerate(current_batch["outcomes"]):
                 with st.expander(f"{index + 1}. {outcome['claim'][:100]}", expanded=True):
                     st.text(outcome["claim"])
+                    st.caption(t("Prüfversuche: {n}").format(n=outcome.get("attempts", 1)))
                     if outcome["error"]:
                         st.error(t("Diese Aussage konnte nicht geprüft werden.") + " " + outcome["error"])
                         continue

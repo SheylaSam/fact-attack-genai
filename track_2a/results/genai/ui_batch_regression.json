@@ -1,0 +1,31 @@
+{
+  "kind": "offline_ui_and_batch_regression",
+  "python_environment": "Python 3.12.13 macOS ARM64, requirements-genai312-macos-arm64.lock.txt",
+  "full_suite": {
+    "passed": 276,
+    "subtests_passed": 6,
+    "warnings": 8
+  },
+  "warning_notes": [
+    "5 PDF backend deprecations",
+    "3 existing multiprocessing fork/thread deprecations"
+  ],
+  "real_nli_calls_in_this_phase": 0,
+  "injected_model_responses": true,
+  "quality_metrics": null,
+  "checks": [
+    "failed-only explicit retry",
+    "progress completes on failures",
+    "preserve successful result identity",
+    "no duplicate successful history entries on retry",
+    "JSON/CSV exports include failure and attempts",
+    "source/selection signature guard",
+    "DE/FR language switch without inference",
+    "empty exception message stays retryable"
+  ],
+  "source_sha256": {
+    "track_2a/app.py": "81ef0fbedec57c6a1450b8d82ef0e2ff24d1ae34ec127ce16b24f4009d6a82f8",
+    "track_2a/src/batch_check.py": "0d836d01e632ca72e2a292145d633b50e222cbf61222cbcbd677c929d58a0e05",
+    "track_2a/src/ui_i18n.py": "12e157a0735722ff07ad98c3b78208fb5c81b09092cd9a799947955cdca996e2"
+  }
+}

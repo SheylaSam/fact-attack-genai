@@ -424,3 +424,47 @@ Browserprüfung verwendete nur die separate Demo-Datenbank mit blockierter API.
 Keine echten Apertus-Aufrufe oder neuen Qualitätsmessungen.
 
 ![Suche und Filter im Prüfverlauf](assets/streamlit-history-search.png)
+
+
+## Fünf weitere Schritte für Mehrfachprüfungen
+
+1. **Nur fehlgeschlagene Aussagen wiederholen.** Der ausdrückliche Retry-Button
+   erscheint nur für einen zur aktuellen Auswahl/Quelle passenden Lauf mit Fehlern.
+   Erfolgreiche Antworten bleiben unverändert, werden nicht erneut an Apertus
+   gesendet und nicht doppelt gespeichert. Reine Speicherfehler sind keine NLI-
+   Fehler und werden nicht durch Modellaufrufe wiederholt. Prüfzähler nennen
+   explizite Einzelprüfversuche, nicht die Zahl interner HTTP-Requests. Auch eine
+   Ausnahme ohne Fehlermeldung bleibt als Fehler erkennbar.
+2. **Fortschritt je Aussage.** Während Start und Retry zeigt ein Balken die Zahl
+   abgeschlossener Einzelprüfungen und die aktuelle Aussage. Fehler zählen als
+   abgeschlossen; die Anzeige kann daher auch bei Fehlern 100 Prozent erreichen.
+   Eine Prozentzahl über Tokenfortschritt oder eine Zeitprognose wird nicht behauptet.
+3. **Batch als JSON/CSV exportieren.** Beide Downloads enthalten auch fehlgeschlagene
+   Aussagen und Versuchszähler. JSON enthält Ergebnisse und Quellenidentität,
+   CSV eine Übersicht. Interne absolute Pfade und Retrieval-Debugmetadaten werden
+   nicht exportiert. Formelähnliche CSV-Zellen werden entschärft. Die PDF-Datei
+   ist nicht enthalten; die Statuscodes im Export bleiben sprachunabhängig.
+4. **Ergebnisübersicht.** Anzahl der Aussagen, technisch abgeschlossene Antworten,
+   fehlgeschlagene Prüfungen und Speicherfehler werden getrennt gezählt.
+   „Erfolgreich“ bedeutet keine Zustimmung zur Aussage und keine Qualitätsmessung.
+   Nach Abschluss aktualisiert ein UI-Rerun die Retry-Aktion, ohne neu zu prüfen.
+5. **Gemeinsame Regression.** Die vollständige Testsuite bestand mit **276 Tests
+   plus 6 Subtests**, acht bestehenden Warnungen (PDF-Backend und Fork/Threads).
+   Integriert geprüft wurden Teilfehler, nur ein erneuter Modellaufruf beim Retry,
+   zwei statt drei erfolgreiche Verlaufseinträge und DE/FR-Umschaltung ohne NLI.
+
+Der Regressionseintrag liegt unter `results/genai/ui_batch_regression.json` und
+enthält die geprüften Code-Hashes. Antworten in UI-Integrationstests und in der
+separaten Browser-Testinstanz wurden simuliert. Die Browser-Ansicht war deutlich
+als Offline-Test gekennzeichnet; auch die Aussagen selbst trugen „SIMULIERTE
+TESTAUSSAGE“. Ein simulierter Teilfehler wurde gezielt wiederholt: die unveränderte
+erste Antwort blieb bei einem Versuch, nur die zweite stieg auf zwei. Es gab
+keine echten Apertus-Anfragen und keine neue fachliche Qualitätsmessung.
+
+Die gespeicherten Screenshots entstanden bei dieser Offline-Sichtprüfung; die
+letzte Kennzahl wurde danach präziser „Speicherfehler“ statt „Nicht gespeichert“
+benannt, damit ausgeschaltete Verlaufsspeicherung nicht als Fehler erscheint.
+
+![Simulierter Lauf mit Teilfehler](assets/streamlit-batch-summary.png)
+
+![Simulierte erfolgreiche Wiederholung und Export](assets/streamlit-batch-retry-export.png)
