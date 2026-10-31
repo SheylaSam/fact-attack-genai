@@ -28,3 +28,4 @@ results/*.raw.jsonl
 **/data/genai
 **/data/booklets/custom_*.pdf
 **/data/booklets/.upload-*.tmp
+**/.venv*

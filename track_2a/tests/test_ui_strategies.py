@@ -29,3 +29,16 @@ def test_partial_upload_is_repaired_and_never_reused_as_valid(tmp_path):
     assert store_uploaded_source(tmp_path,content)==path
     assert path.read_bytes()==content
     assert not list(tmp_path.glob('.upload-*.tmp'))
+
+
+def test_only_complete_real_dev42_is_shown_as_current_comparison(tmp_path):
+    import json
+    from pathlib import Path
+    from src.ui_strategies import load_completed_dev42
+    source=Path(__file__).parents[1]/'results/genai/real_nli42.json'
+    report=json.loads(source.read_text())
+    assert load_completed_dev42(source)['paired_case_count']==42
+    path=tmp_path/'report.json'
+    for changes in ({'complete':False},{'mock':True},{'paired_case_count':2}):
+        path.write_text(json.dumps({**report,**changes}))
+        assert load_completed_dev42(path) is None

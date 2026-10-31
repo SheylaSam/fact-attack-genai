@@ -149,3 +149,28 @@ auf 22 Entailment, neun Neutral und sechs Contradiction.
 Keine inferenzstatistische Signifikanz aus naivem Fall-Bootstrap/McNemar abgeleitet:
 Die beobachteten Fälle teilen Claims/Referenzen und ein Büchleindatum. Keine weiteren
 API-Läufe oder neue Promptoptimierung nach Sichtung dieser Ergebnisse.
+
+## UI- und Python-3.12-Integration
+
+Zwei weitere tatsächliche read-only Reviews prüften UI-Strategieauswahl, Quellen-
+belege, Ressourcencache und den Implementierungsdiff. Claude führte keine Inferenz
+oder Secret-Lektüre aus. Codex prüfte die reale Streamlit-Oberfläche zusätzlich mit
+AppTest und im lokalen Browser.
+
+Übernommen: klarer Opt-in bei unverändertem Hybrid-Default, keine Vektormodi im
+Live-Benchmark, ehrliche Datenrollen, lokaler statt pauschalem API-Fehlerhinweis,
+begrenzte offene Indizes, Schliessen unter Lock, keine Neueröffnung nach Freigabe,
+Indexteilung bei identischen Inhalten unter mehreren Pfaden, atomare Upload-
+Speicherung und Reparatur beschädigter Zieldateien. Private Uploads werden aus
+Git und Dockerkontexten ausgeschlossen.
+
+Die Belegprüfung bestätigte den existierenden IDs-/Originalquellenpfad. Ein erster
+Test verglich irrtümlich PDF-Objektreihenfolge mit dem absichtlich sortierten
+Produktionsquelltext; die Prüfung verwendet jetzt denselben physischen Lesemodus
+und kontrolliert die Zitate weiterhin unabhängig direkt am PDF. Keine Änderung
+der Evidence-Algorithmen und keine neue Qualitätsbehauptung.
+
+Die E5-Revision wurde nicht erneut aus dem Netz abgefragt: sie liegt bereits lokal
+im früher dokumentierten Cache. Der echte Offline-Modelllauf bestätigt diese
+Revision in der neuen Python-3.12-Umgebung. Die Dockerempfehlung bleibt offen,
+weil der Dienst nicht läuft; ein Mac-Hashlock ersetzt keinen Linux-CPU-Lock.

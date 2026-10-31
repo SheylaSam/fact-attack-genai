@@ -82,3 +82,16 @@ Unabhängige sklearn- und offizielle Evidence-Nachrechnung stimmen überein. Rei
 offline wurden sämtliche 105 neuen und sechs verwendeten früheren HTTP-Payloadhashes
 bytegenau gegen rekonstruierte Eingaben geprüft. Keine zusätzlichen Modellaufrufe.
 [Ergebnisbericht](ERGEBNISSE_NLI42.md).
+
+## UI und Python 3.12
+
+**241 Tests + 6 Subtests bestanden**, CPython 3.12.13 auf macOS ARM64, in einer
+zweiten neu aus vollständigem Hash-Lock installierten Umgebung. Alle 89 Pakete
+stimmen mit `requirements-genai312-macos-arm64.lock.txt` überein. Unveränderte
+Kernanforderungen plus RAG-Zusätze. Acht Warnungen (fünf PDF, drei Fork-/Thread-Warnungen
+in den Tests). Docker/Python-3.12.6-Linux wurde nicht reproduziert.
+
+Reale Streamlit-AppTests und Browserprüfung erfolgreich. Sechs Produktions-IDs-
+Fälle sichern Originalquellenbelege trotz übersetzter Modellzitate; echtes lokales
+E5/Qdrant in beiden Vektormodi zusätzlich mit injizierter NLI geprüft. Null neue
+kostenpflichtige NLI-Anfragen in dieser Phase. [Start und Grenzen](UI_UND_PYTHON312.md).

@@ -31,8 +31,10 @@ sehr stark; eine neue Suche kann schlechter sein und wird erst nach Messung übe
 - Qdrant/Embedding-Abhängigkeiten werden nur im optionalen Experimentpfad geladen.
 
 `src/vector_rag.py` bietet einen Suchvergleich ohne Apertus-Anfragen.
-`requirements-rag.txt` ergänzt die Kernanforderungen; Container und Streamlit-Auswahl
-wurden noch nicht um die neuen Optionen erweitert. CLI und Python-API sind der erste Einstieg.
+`requirements-rag.txt` ergänzt die Kernanforderungen. CLI, Python-API und eine explizite
+Vektor-Opt-in-Auswahl in Streamlit sind vorhanden. Für macOS ARM64 ist Python 3.12
+mit einem vollständigen Hash-Lock geprüft; der Docker-RAG-Build bleibt offen.
+Aktuelle Startbefehle: [UI_UND_PYTHON312.md](UI_UND_PYTHON312.md).
 
 ## Lokal starten
 
@@ -95,9 +97,10 @@ Offline-Tests verwenden echte lokale Qdrant-Indizes mit injizierten Testvektoren
 Sie prüfen Quellenzuordnung, Sprecherfilter, Indexwiederverwendung, geänderte
 Quelldaten, ungültige Vektoren und den neuen Inferenzpfad mit Mock-NLI.
 
-Die vollständige Suite wurde lokal in einer isolierten Python-3.10-Umgebung geprüft;
-Abhängigkeiten und Ergebnisse stehen in `VALIDIERUNG.md`. Der im Bestand vorgesehene
-Python-3.12-Container wurde hier nicht gebaut. Optionale RAG-Tests werden ohne Qdrant
+Die vollständige Suite ist inzwischen auch mit den unveränderten Kernpins plus RAG
+in einer separat aus Hash-Lock installierten Python-3.12.13-Umgebung geprüft:
+241 Tests plus 6 Subtests. Abhängigkeiten und Ergebnisse stehen in `VALIDIERUNG.md`.
+Der im Bestand vorgesehene Python-3.12.6-Container wurde hier nicht gebaut. Optionale RAG-Tests werden ohne Qdrant
 übersprungen; bei der Entwicklung müssen die RAG-Abhängigkeiten installiert sein.
 
 ## Nächste Versuchsreihe für vier Personen

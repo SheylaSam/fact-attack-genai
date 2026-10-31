@@ -27,7 +27,7 @@ from src.evaluator import BenchmarkEvaluator
 from src.results_summary import build_summary
 from src.text_utils import best_snippet, guess_language
 from src import config
-from src.ui_strategies import STANDARD, strategy_options, strategy_from_label, rag_available, store_uploaded_source
+from src.ui_strategies import STANDARD, strategy_options, strategy_from_label, rag_available, store_uploaded_source, load_completed_dev42
 
 # Page Configuration
 st.set_page_config(
@@ -1617,6 +1617,22 @@ with tab_benchmark:
         "Die Zahlen sind kein unabhängiger Generalisierungsnachweis."
     )
 
+    dev42 = load_completed_dev42(config.BASE_DIR / "results/genai/real_nli42.json")
+    if dev42:
+        st.markdown("##### GenAI: gepaarter Dev-Vergleich mit 42 Fällen")
+        st.caption("Beobachtete Fälle eines Büchleindatums mit Abschnitts-Cues, kein unabhängiger Test. "
+                   "Gleicher JSON-Prompt; dieser Vergleich bildet nicht die vollständige Produktions-NLI ab.")
+        names = {"baseline_native": "Baseline", "vector": "Dense", "vector_hybrid": "Fusion"}
+        st.dataframe([{"Suche": names[row["variant"]], "Fälle": row["count"],
+                       "Macro-F1": f"{row['macro_f1']:.4f}",
+                       "Evidence Hit@5": f"{row['evidence_hit_at_5']:.1%}",
+                       "Ø Prompttokens": round(row["mean_prompt_tokens"])}
+                      for row in dev42["summary"] if row["group"] == "all"],
+                     hide_index=True, width="stretch")
+        st.caption("Evidence Hit@5: 31 Gold-Entailment-/Contradictionfälle. "
+                   "Die Baseline behält ihre Abschnittsauswahl und ihr natives Kontextbudget.")
+        st.markdown("##### Historische gespeicherte Konfigurationen")
+
     def _kpi(value: str, label: str, color: str) -> str:
         return f'<div class="kpi-card"><div class="kpi-value" style="color: {color};">{value}</div><div class="kpi-label">{label}</div></div>'
 
@@ -1629,7 +1645,7 @@ with tab_benchmark:
     comparison = [
         ("Ganzes Büchlein", _pick("full", "json"), False),
         ("Erste Pipeline", _pick("retrieval", "json", 5), False),
-        ("Fact Attack (aktuell)", _pick("hybrid", "ids", 10), True),
+        ("Hybrid (historisch)", _pick("hybrid", "ids", 10), True),
     ]
     comparison = [(name, run, ours) for name, run, ours in comparison if run]
 
@@ -1675,7 +1691,7 @@ with tab_benchmark:
             max_tok = max(run["avg_prompt_tokens"] for _, run, _ in comparison)
             st.markdown(bar_chart("Ø Input-Tokens pro Behauptung", "avg_prompt_tokens",
                                   lambda v: f"{v:,.0f}".replace(",", "'"), max_tok, "tiefer ist besser"), unsafe_allow_html=True)
-        st.caption("Mit dem ganzen Büchlein (bis ~70'000 Tokens) geht die relevante Stelle verloren: Ausgewählter Kontext ist genauer und rund 10× günstiger.")
+        st.caption("Historische Konfigurationen mit unterschiedlicher Kontextauswahl und unterschiedlichen Prompts. Tokenzahlen sind keine Kostenabrechnung.")
 
     # ── Language-pair matrix ────────────────────────────────────────────────
     if head_adv:

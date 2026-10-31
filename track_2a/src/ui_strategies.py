@@ -4,6 +4,7 @@ from pathlib import Path
 import hashlib
 import os
 import tempfile
+import json
 
 STANDARD='Standard (Hybrid)'
 FULL='Ganzes Büchlein'
@@ -48,3 +49,17 @@ def store_uploaded_source(directory, contents):
     finally:
         if temporary is not None and temporary.exists():
             temporary.unlink()
+
+
+def load_completed_dev42(path):
+    try:
+        report = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+    if (report.get('kind') != 'paired_real_nli_observed_dev' or report.get('complete') is not True
+            or report.get('mock') is not False or report.get('paired_case_count') != 42):
+        return None
+    summaries = [r for r in report.get('summary', []) if r.get('group') == 'all']
+    if len(summaries) != 3 or {r.get('variant') for r in summaries} != {'baseline_native','vector','vector_hybrid'}:
+        return None
+    return report
