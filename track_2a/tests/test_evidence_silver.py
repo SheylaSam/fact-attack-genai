@@ -47,10 +47,19 @@ def test_tampered_quote_cannot_pass_exact_source_validation(tmp_path):
 
 def test_frozen_context_integrity_checked_before_scoring(tmp_path):
     r=json.loads((ROOT/'results/genai/ost_june_chunk384.json').read_text())
-    r['rows'][0]['context_hits'][0]['text']='tampered'
+    annotation=json.loads(ANN.read_text().splitlines()[0])
+    case=next(row for row in map(json.loads, DATA.read_text().splitlines()) if row['id']==annotation['id'])
+    target=next(row for row in r['rows'] if row['id']==case['id'] and row['variant']=='baseline_budgeted')
+    target['context_hits'][0]['text']='tampered'
     path=tmp_path/'bad.json';path.write_text(json.dumps(r))
-    with patch('src.evidence_silver.validate',return_value=([{'id':r['rows'][0]['id'],'official_label':0,
-            'selected_witnesses':[{'physical_page':1,'quote':'source'}]}],
-            {r['rows'][0]['id']:{'claim_language':'de','reference_language':'fr'}})):
+    with patch('src.evidence_silver.validate',return_value=([annotation],{case['id']:case})):
         with pytest.raises(ValueError,match='hash mismatch'):
             score(DATA,ANN,ROOT/'data/booklets',path,tmp_path/'out.json')
+
+
+def test_shared_normalisation_handles_soft_wraps_without_eating_suspended_hyphens():
+    from src.text_utils import normalise
+    assert normalise('Parla\u00ad\nment')=='Parlament'
+    assert normalise('Ein-\nund Ausfuhr')=='Ein- und Ausfuhr'
+    assert normalise('E-\nVoting')=='E-Voting'
+    assert normalise('IMMIGRA-\nTION')=='IMMIGRATION'

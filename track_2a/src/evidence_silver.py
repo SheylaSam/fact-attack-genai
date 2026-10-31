@@ -30,6 +30,8 @@ def validate(dataset, annotations, booklets):
     parser = PDFParser()
     cache = {}
     for r in rows:
+        if r['id'] not in source:
+            raise ValueError('Annotation id missing from source dataset')
         original = source[r['id']]
         if r['annotation_tier'] != 'ai_reviewed_dev_silver' or r['human_reviewed'] is not False or r['independent_test'] is not False:
             raise ValueError('Only explicitly non-human, non-test AI silver annotations allowed')
@@ -78,17 +80,29 @@ def score(dataset, annotations, booklets, report_path, output):
         if key in indexed:
             raise ValueError('Duplicate case/variant in retrieval report')
         indexed[key] = r
+    setup_hashes = {s['booklet']:s['sha256'] for s in retrieval.get('setup', [])}
+    for ann in rows:
+        if setup_hashes.get(ann['booklet_file']) != ann['booklet_sha256']:
+            raise ValueError('Retrieval booklet identity mismatch')
     variants = sorted({r['variant'] for r in retrieval['rows']})
     results = []
     for ann in rows:
         original = source[ann['id']]
         for variant in variants:
+            if (ann['id'],variant) not in indexed:
+                raise ValueError('Annotated case missing from one or more retrieval variants')
             r = indexed[(ann['id'],variant)]
+            if r['pair'] != original['claim_language']+'->'+original['reference_language']:
+                raise ValueError('Retrieval case language identity mismatch')
             if 'context_hits' not in r or 'pre_budget_hits' not in r:
                 raise ValueError('Frozen full hit texts required; rerun with --save-hits')
             for hit in r['context_hits'] + r['pre_budget_hits']:
                 if sha(hit['text'].encode()) != hit['text_sha256']:
                     raise ValueError('Frozen hit text hash mismatch')
+            for hit in r['context_hits']:
+                if not any(hit['page_number']==raw['page_number'] and raw['text'].startswith(hit['text'])
+                           for raw in r['pre_budget_hits']):
+                    raise ValueError('Context passage is not a pre-budget passage or its verbatim prefix')
             row = {'id': ann['id'], 'variant': variant, 'label': ann['official_label'],
                    'pair': original['claim_language']+'->'+original['reference_language'],
                    'crosslingual': original['claim_language'] != original['reference_language'],
@@ -114,12 +128,16 @@ def score(dataset, annotations, booklets, report_path, output):
         'human_reviewed':False,'independent_test':False,'annotation_count':len(rows),
         'dataset_sha256':sha(dataset.read_bytes()),'annotations_sha256':sha(annotations.read_bytes()),
         'retrieval_report_sha256':sha(report_path.read_bytes()),'scorer_sha256':sha(Path(__file__).read_bytes()),
+        'source_sha256':{p.name:sha(p.read_bytes()) for p in [Path(__file__).with_name('pdf_parser.py'),Path(__file__).with_name('text_utils.py')]},
+        'retrieval_source_sha256':retrieval.get('source_sha256', {}),
+        'source_label_counts':{str(k):sum(r['official_label']==k for r in rows) for k in (0,2)},
+        'language_pair_count':len({source[r['id']]['claim_language']+'->'+source[r['id']]['reference_language'] for r in rows}),
         'extractors':{'pymupdf':version('PyMuPDF'),'project':'PDFParser.extract_pages'},
         'limitations':['Selected non-exhaustive witnesses; failure may mean an unannotated alternative was retrieved.',
             'Page hit alone does not imply the witness text survived chunking/clipping.',
-            'Complete witness requires one passage to contain the entire normalized quote; valid distributed evidence may fail.',
+            'Complete witness requires one passage to contain the entire normalized quote; distributed evidence, legacy flattened line wraps and short chunks can fail. Do not compare chunk sizes as semantic quality.',
             'AI-reviewed observed dev, no human gold, no sealed test, no recall or significance claim.',
-            'Annotation selection covers all six source Contradictions plus six Entailments spanning nine pairs; no Neutral absence labels.'],
+            'Annotation selection and non-exhaustive witnesses are observed development data; no Neutral absence labels.'],
         'summary':summary,'rows':results}
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')

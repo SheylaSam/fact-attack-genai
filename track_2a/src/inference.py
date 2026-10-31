@@ -99,7 +99,7 @@ _GLOBAL_BOOKLET_CACHE: Dict[str, Dict[str, Any]] = {}
 _BOOKLET_LOCKS: Dict[Any, threading.Lock] = {}
 _BOOKLET_LOCKS_GUARD = threading.Lock()
 _PROMPT_INPUT_JOURNAL_LOCK = threading.Lock()
-_PARSE_CACHE_VERSION = 8  # whole-page passages dehyphenate before flattening line breaks
+_PARSE_CACHE_VERSION = 9  # whole/quick pages normalize soft wraps and preserve suspended compounds
 
 _COMMITTEE_SECTION = "Arguments of the initiative/referendum committee"
 _FEDERAL_COUNCIL_SECTION = "Arguments of the Federal Council and Parliament"
