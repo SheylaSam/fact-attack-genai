@@ -95,7 +95,10 @@ def run(args):
     if any(not r['reference_string'] for r in records):
         raise ValueError('Reference text required for retrieval proxy metrics')
     client = ApertusClient()
-    variants = ('baseline_native', 'baseline_budgeted', 'bm25_pages', 'bm25_chunks', 'vector', 'vector_hybrid')
+    allowed_variants = ('baseline_native', 'baseline_budgeted', 'bm25_pages', 'bm25_chunks', 'vector', 'vector_hybrid')
+    variants = tuple(getattr(args, 'variants', None) or allowed_variants)
+    if len(set(variants)) != len(variants) or not set(variants).issubset(allowed_variants):
+        raise ValueError('Invalid or duplicate retrieval variants')
     if args.nli and (client.mock or not client.api_key):
         raise ValueError('Real NLI requested but API key missing or mock active; refusing quality scores')
     if args.nli and len(records) * len(variants) > args.max_nli_calls:
@@ -269,6 +272,7 @@ def main():
     parser.add_argument('--chunk-tokens', type=int, default=384)
     parser.add_argument('--overlap', type=int, default=64)
     parser.add_argument('--save-hits', action='store_true', help='Save full pre-budget and context texts for error analysis')
+    parser.add_argument('--variants', nargs='+', choices=['baseline_native','baseline_budgeted','bm25_pages','bm25_chunks','vector','vector_hybrid'])
     parser.add_argument('--nli', action='store_true')
     parser.add_argument('--max-nli-calls', type=int, default=15)
     args = parser.parse_args()

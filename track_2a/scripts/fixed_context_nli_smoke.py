@@ -37,9 +37,9 @@ def strict_label(content):
 
 
 class AttemptBudget:
-    def __init__(self, limit, journal):
-        if type(limit) is not int or not 1<=limit<=12:
-            raise ValueError('HTTP budget must be 1 through 12')
+    def __init__(self, limit, journal, max_allowed=12):
+        if max_allowed not in (12,126) or type(limit) is not int or not 1<=limit<=max_allowed:
+            raise ValueError('HTTP budget exceeds the declared run limit')
         self.limit, self.used, self.journal = limit, 0, journal
     def append(self, event):
         self.journal.write(json.dumps(event,ensure_ascii=False)+'\n')
