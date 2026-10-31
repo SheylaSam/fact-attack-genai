@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src import config
 from src.agent import settings
 from src.agent.source_index import VoteCandidate, VoteRef
-from src.agent.tools import TERMINAL_TOOLS, AgentTools
+from src.agent.tools import ERROR_INVALID_ARGS, TERMINAL_TOOLS, AgentTools
 from src.agent.trace import TraceEvent, Tracer
 from src.inference import EvidenceSource, PredictionResult
 from src.text_utils import official_normalize
@@ -291,7 +291,7 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(result.steps, 2)
         self.assertIn(broken.error, contents(decider.calls[1]['messages']))
         [rejected] = decider.calls[1]['history']
-        self.assertEqual(rejected.data['error_kind'], 'invalid_args')
+        self.assertEqual(rejected.data['error_kind'], ERROR_INVALID_ARGS)
 
     def test_invalid_tool_arguments_are_fed_back(self):
         decider = PresetDecider(act('suche_passagen', vorlage_id='../../.env', anfrage='Miete'),
@@ -353,7 +353,7 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(len(engine.verify_calls), 1)
         rejected = decider.calls[2]['history'][-1]
         self.assertEqual(rejected.tool, 'pruefen')
-        self.assertEqual(rejected.data['error_kind'], 'invalid_args')
+        self.assertEqual(rejected.data['error_kind'], ERROR_INVALID_ARGS)
         self.assertIn('keine Passagen', rejected.error)
         self.assertIn(rejected.error, contents(decider.calls[2]['messages']))
 

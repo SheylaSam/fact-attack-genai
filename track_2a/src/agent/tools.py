@@ -29,6 +29,9 @@ PASSAGE_PREVIEW_CHARS = 200
 ERROR_CHARS = 300
 SCORE_HINT = "Die Scores liegen bei diesem Modell eng beieinander; die Trefferzahl trennt oft besser."
 
+ERROR_INVALID_ARGS = "invalid_args"  # `Observation.data["error_kind"]`: the model's mistake, fed back as a search step
+ERROR_TOOL_FAILURE = "tool_failure"  # the index or the engine failed: a technical error
+
 TERMINAL_TOOLS = frozenset({"pruefen", "rueckfrage", "quelle_fehlt"})
 FIXED_VOTE_HIDDEN_TOOLS = frozenset({"suche_vorlagen", "rueckfrage"})  # nothing to find or to choose between
 
@@ -231,7 +234,7 @@ class AgentTools:
 
     def run(self, tool: str, args: dict) -> Observation:
         """Runs a search tool. Rejected calls and exceptions of the index or engine come back as an observation
-        with `error`; `data["error_kind"]` tells "invalid_args" (the model's mistake) from "tool_failure"."""
+        with `error`; `data["error_kind"]` tells `ERROR_INVALID_ARGS` (the model's mistake) from `ERROR_TOOL_FAILURE`."""
         if not isinstance(tool, str) or tool not in _TOOLS:
             return self._rejected((tool if isinstance(tool, str) else repr(tool))[:60], _unknown_tool(tool))
         if tool in TERMINAL_TOOLS:
@@ -250,11 +253,11 @@ class AgentTools:
         except Exception as exc:  # index or engine failed: reported, never raised into the graph
             detail = f"{type(exc).__name__}: {str(exc)[:ERROR_CHARS]}"
             return Observation(tool, f"Fehler: Das Werkzeug {tool} ist ausgefallen ({type(exc).__name__}).",
-                               {"error_kind": "tool_failure", "exception": type(exc).__name__}, detail)
+                               {"error_kind": ERROR_TOOL_FAILURE, "exception": type(exc).__name__}, detail)
 
     @staticmethod
     def _rejected(tool: str, message: str) -> Observation:
-        return Observation(tool, f"Fehler: {message}", {"error_kind": "invalid_args"}, message)
+        return Observation(tool, f"Fehler: {message}", {"error_kind": ERROR_INVALID_ARGS}, message)
 
     def _search_votes(self, args: dict) -> Observation:
         candidates = self.index.search_votes(args["anfrage"], k=VOTE_CANDIDATES)

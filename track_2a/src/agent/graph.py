@@ -30,7 +30,7 @@ from src.agent import settings
 from src.agent.decider import AgentAction, Decider
 from src.agent.prompts import system_prompt
 from src.agent.source_index import VoteRef
-from src.agent.tools import TERMINAL_TOOLS, AgentTools, Observation, validate_args
+from src.agent.tools import ERROR_INVALID_ARGS, TERMINAL_TOOLS, AgentTools, Observation, validate_args
 from src.agent.trace import TraceEvent, Tracer
 from src.inference import PredictionResult
 from src.text_utils import guess_language, official_normalize
@@ -184,11 +184,11 @@ class _Nodes:
             self.emit(step, "act", started, tool=tool, args=args, summary="Schrittgrenze", error=message)
             return {"error": message, "route": "finish"}
         if rejection is not None:
-            observation = Observation(tool or "Werkzeugwahl", f"Fehler: {rejection}", {"error_kind": "invalid_args"},
-                                      rejection)
+            observation = Observation(tool or "Werkzeugwahl", f"Fehler: {rejection}",
+                                      {"error_kind": ERROR_INVALID_ARGS}, rejection)
         else:
             observation = self.tools.run(tool, action.args)
-            if observation.error and observation.data.get("error_kind") != "invalid_args":  # tool_failure
+            if observation.error and observation.data.get("error_kind") != ERROR_INVALID_ARGS:  # a tool failure
                 message = f"Werkzeug {tool} fehlgeschlagen: {observation.error}"
                 self.emit(step, "act", started, tool=tool, args=args, summary=_short(observation.text),
                           error=message)

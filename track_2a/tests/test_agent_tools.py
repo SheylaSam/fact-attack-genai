@@ -8,7 +8,8 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.agent import settings
 from src.agent.source_index import VoteCandidate, VoteRef
-from src.agent.tools import TERMINAL_TOOLS, TOOL_SPECS, AgentTools, Observation, validate_args
+from src.agent.tools import (ERROR_INVALID_ARGS, ERROR_TOOL_FAILURE, TERMINAL_TOOLS, TOOL_SPECS, AgentTools,
+                             Observation, validate_args)
 
 
 def installed(*packages):
@@ -376,7 +377,7 @@ class RunTests(unittest.TestCase):
         self.assertIn('FileNotFoundError', obs.error)
         self.assertIn('FileNotFoundError', obs.text)
         self.assertNotIn(secret, obs.text)  # what the LLM sees carries no local paths
-        self.assertEqual(obs.data['error_kind'], 'tool_failure')
+        self.assertEqual(obs.data['error_kind'], ERROR_TOOL_FAILURE)
         self.assertEqual(tools.passages_for(V1.vote_id), [])
         for tool, args in (('suche_vorlagen', {'anfrage': 'Miete'}),
                            ('suche_passagen_vektor', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'})):
@@ -384,13 +385,16 @@ class RunTests(unittest.TestCase):
                 tools, _, _ = make_tools(index=FakeIndex(error=RuntimeError('Qdrant ist zu')))
                 obs = tools.run(tool, args)
                 self.assertIn('RuntimeError', obs.error)
-                self.assertEqual(obs.data['error_kind'], 'tool_failure')
+                self.assertEqual(obs.data['error_kind'], ERROR_TOOL_FAILURE)
 
     def test_rejected_calls_are_marked_as_invalid_not_as_failures(self):
         tools, _, _ = make_tools()
         obs = tools.run('suche_passagen', {'vorlage_id': BAD_IDS[1], 'anfrage': 'Miete'})
-        self.assertEqual(obs.data['error_kind'], 'invalid_args')
-        self.assertEqual(tools.run('suche_vorlagen', {'anfrage': ''}).data['error_kind'], 'invalid_args')
+        self.assertEqual(obs.data['error_kind'], ERROR_INVALID_ARGS)
+        self.assertEqual(tools.run('suche_vorlagen', {'anfrage': ''}).data['error_kind'], ERROR_INVALID_ARGS)
+
+    def test_error_kinds_are_the_documented_values(self):
+        self.assertEqual((ERROR_INVALID_ARGS, ERROR_TOOL_FAILURE), ('invalid_args', 'tool_failure'))
 
     def test_a_failed_search_leaves_the_pool_and_recent_ids_untouched(self):
         tools, index, engine = make_tools(engine=FakeEngine([passage(2)]))

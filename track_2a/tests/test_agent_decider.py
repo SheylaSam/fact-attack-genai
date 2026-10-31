@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src import config
 from src.agent import settings
-from src.agent.tools import TOOL_SPECS, Observation, validate_args
+from src.agent.tools import ERROR_INVALID_ARGS, TOOL_SPECS, Observation, validate_args
 
 
 def installed(*packages):
@@ -380,7 +380,8 @@ class ScriptedDeciderTests(unittest.TestCase):
         self.assertEqual(action.tool, 'quelle_fehlt')
 
     def test_scripted_failed_observation_is_an_invalid_step_not_a_guess(self):
-        failed = Observation('suche_passagen', 'Fehler: ...', {'error_kind': 'invalid_args'}, 'Unbekannte Vorlagen-ID')
+        failed = Observation('suche_passagen', 'Fehler: ...', {'error_kind': ERROR_INVALID_ARGS},
+                             'Unbekannte Vorlagen-ID')
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, [failed])
         self.assertIsNone(action.tool)
         self.assertIn('Unbekannte Vorlagen-ID', action.error)
