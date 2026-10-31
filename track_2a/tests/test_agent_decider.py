@@ -16,6 +16,7 @@ import httpx
 
 from src import config
 from src.agent import decider as decider_module
+from src.agent import settings
 from src.agent.budget import BudgetExceeded, RequestBudget, budget_http_client
 from src.agent.decider import (AgentAction, JsonActionDecider, NativeToolDecider, ScriptedDecider, make_chat_model,
                                make_decider, parse_json_action)
@@ -486,7 +487,10 @@ class MakeChatModelTests(unittest.TestCase):
             return httpx.Response(200, json=self.ANSWER)
 
         self.make(RequestBudget(limit=1), handler).invoke('hallo')
-        self.assertEqual(timeouts[0]['read'], config.LLM_REQUEST_TIMEOUT_S)  # not None: the SDK would send no limit
+        # not None: without it the SDK sends no limit at all; connecting fails fast, a silent host after LLM_TIMEOUT_S
+        self.assertEqual(timeouts[0]['read'], settings.LLM_TIMEOUT_S)
+        self.assertEqual(timeouts[0]['write'], settings.LLM_TIMEOUT_S)
+        self.assertEqual(timeouts[0]['connect'], 10.0)
 
     def test_make_chat_model_async_path_is_refused(self):
         budget = RequestBudget(limit=3)

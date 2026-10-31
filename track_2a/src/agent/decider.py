@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, Tuple
 import httpx
 
 from src import config
+from src.agent import settings
 from src.agent.budget import RequestBudget, budget_http_client
 from src.agent.tools import MAX_QUERY_CHARS, Observation, validate_args
 from src.apertus_client import ApertusClient
@@ -33,6 +34,7 @@ MODES = ("native", "json", "scripted")
 DEFAULT_MARGIN = 0.02  # top-1 must lead top-2 by at least this much, or the scripted policy asks
 RAW_CHARS = 2000  # cap on a model answer that parsed to nothing; it goes into the history again
 TITLE_CHARS = 90  # a vote title inside the scripted question
+CONNECT_TIMEOUT_S = 10.0
 FORMAT_INSTRUCTION = (
     'Antworte ausschließlich mit genau einem JSON-Objekt der Form {"tool": "<Werkzeugname>", "args": {<Argumente>}}. '
     "Schreibe keinen weiteren Text und kein Markdown. Die Argumente müssen genau den Parametern des gewählten "
@@ -302,11 +304,13 @@ def make_chat_model(budget: RequestBudget) -> "ChatOpenAI":
     """The agent's LLM client: every HTTP request is counted on `budget` and none is retried by the SDK.
 
     `timeout` is passed on because the SDK hands its own (by default: no) timeout to every request, which would
-    override the one of the httpx client.
+    override the one of the httpx client. An unreachable host fails after `CONNECT_TIMEOUT_S`, a silent one after
+    `settings.LLM_TIMEOUT_S`.
     """
     from langchain_openai import ChatOpenAI
     return ChatOpenAI(model=config.LLM_NAME, base_url=config.LLM_BASE_URL, api_key=config.LLM_API_KEY, temperature=0,
-                      max_retries=0, timeout=config.LLM_REQUEST_TIMEOUT_S, http_client=budget_http_client(budget),
+                      max_retries=0, timeout=httpx.Timeout(settings.LLM_TIMEOUT_S, connect=CONNECT_TIMEOUT_S),
+                      http_client=budget_http_client(budget),
                       http_async_client=httpx.AsyncClient(transport=_SyncOnlyTransport()))
 
 
