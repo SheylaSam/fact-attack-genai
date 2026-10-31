@@ -4,6 +4,7 @@ import hashlib
 import csv
 import io
 import json
+import unicodedata
 import os
 from pathlib import Path
 import sqlite3
@@ -98,3 +99,33 @@ def export_checks(records, format='json'):
             safe.append(text)
         writer.writerow(safe)
     return output.getvalue().encode('utf-8-sig')
+
+
+def filter_checks(records, *, query='', label=None, start=None, end=None):
+    """Local, read-only AND filters; date boundaries include the whole UTC day."""
+    def normalise(text):
+        return ''.join(char for char in unicodedata.normalize('NFKD', text.casefold())
+                       if not unicodedata.combining(char))
+    if start and end and start > end:
+        return []
+    terms = normalise(query).split()
+    found = []
+    for record in records:
+        result = record['result']
+        if label is not None and result.get('label') != label:
+            continue
+        if start or end:
+            try:
+                timestamp = datetime.fromisoformat(record['created_at'])
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=timezone.utc)
+                day = timestamp.astimezone(timezone.utc).date()
+            except (ValueError, KeyError):
+                continue
+            if (start and day < start) or (end and day > end):
+                continue
+        text = ' '.join([result.get('claim', ''), record.get('vote') or '',
+                         *[source.get('quote', '') for source in result.get('evidence_sources', [])]])
+        if all(term in normalise(text) for term in terms):
+            found.append(record)
+    return found

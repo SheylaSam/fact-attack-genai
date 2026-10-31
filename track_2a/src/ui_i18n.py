@@ -158,6 +158,19 @@ Diese Aussage konnte nicht geprüft werden.|Cette affirmation n’a pas pu être
 Erfolgreiche Prüfungen werden einzeln im Verlauf gespeichert, wenn die lokale Speicherung aktiviert ist. Ein erneuter Start prüft alle ausgewählten Aussagen nochmals.|Les vérifications réussies sont enregistrées individuellement si l’historique local est activé. Un nouveau démarrage vérifie à nouveau toutes les affirmations sélectionnées.|Le verifiche riuscite sono salvate singolarmente se la cronologia locale è attiva. Un nuovo avvio verifica nuovamente tutte le affermazioni selezionate.
 Quelle oder Auswahl geändert. Die bisherigen Mehrfachergebnisse passen nicht mehr zur aktuellen Auswahl.|La source ou la sélection a changé. Les résultats précédents ne correspondent plus à la sélection actuelle.|La fonte o la selezione è cambiata. I risultati precedenti non corrispondono più alla selezione attuale.
 """
+_ROWS += """
+Verlauf durchsuchen|Rechercher dans l’historique|Cerca nella cronologia
+Text in Prüfungen suchen|Rechercher du texte dans les vérifications|Cerca testo nelle verifiche
+Sucht lokal in Behauptungen, Vorlagentiteln und gespeicherten Belegzitaten.|Recherche locale dans les affirmations, les titres des objets et les citations enregistrées.|Ricerca locale nelle affermazioni, nei titoli degli oggetti e nelle citazioni salvate.
+Ergebnis filtern|Filtrer le résultat|Filtra il risultato
+Alle Ergebnisse|Tous les résultats|Tutti i risultati
+Prüfdatum ab (UTC)|Date de vérification depuis (UTC)|Data della verifica da (UTC)
+Prüfdatum bis (UTC)|Date de vérification jusqu’au (UTC)|Data della verifica fino a (UTC)
+Das Startdatum liegt nach dem Enddatum. Bitte korrigiere den Zeitraum.|La date de début est après la date de fin. Corrigez la période.|La data iniziale è successiva a quella finale. Correggi il periodo.
+{n} von {total} Prüfungen in dieser Ansicht gefunden.|{n} vérifications sur {total} trouvées dans cette vue.|{n} verifiche su {total} trovate in questa vista.
+Verlaufsfilter zurücksetzen|Réinitialiser les filtres de l’historique|Azzera i filtri della cronologia
+Keine Prüfung passt zu diesen Filtern. Die gespeicherten Einträge bleiben unverändert.|Aucune vérification ne correspond à ces filtres. Les entrées enregistrées restent inchangées.|Nessuna verifica corrisponde a questi filtri. Le voci salvate restano invariate.
+"""
 TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
 
 

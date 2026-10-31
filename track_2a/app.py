@@ -32,7 +32,7 @@ from src.text_utils import best_snippet, guess_language
 from src import config
 from src.batch_check import suggest_statements, run_checks, MAX_CHECKS
 from src.ui_i18n import LANGUAGES, translate, translate_static_html, date_label
-from src.check_history import save_check, load_checks, matching_source, set_removed, export_checks
+from src.check_history import save_check, load_checks, matching_source, set_removed, export_checks, filter_checks
 from src.booklet_catalog import load_catalog, available_sources, date_options, languages_for_date, filter_sources
 from src.ui_strategies import STANDARD, strategy_options, strategy_from_label, rag_available, store_uploaded_source, load_completed_dev42
 
@@ -48,7 +48,7 @@ UI_LANGUAGE = st.session_state.get("ui_language", "de")
 # Streamlit keeps the wire label of keyed selections; resend canonical values
 # when only their display language changes.
 if st.session_state.get("_last_ui_language") != UI_LANGUAGE:
-    for selection_key in ("source_year", "ballot", "vote", "claim_lang", "strategy_option", "history_view"):
+    for selection_key in ("source_year", "ballot", "vote", "claim_lang", "strategy_option", "history_view", "history_label"):
         if selection_key in st.session_state:
             st.session_state[selection_key] = st.session_state[selection_key]
     st.session_state["_last_ui_language"] = UI_LANGUAGE
@@ -1329,6 +1329,13 @@ def warm_up_demo_booklets():
 warm_up_demo_booklets()
 
 
+def _reset_history_filters():
+    st.session_state["history_query"] = ""
+    st.session_state["history_label"] = "Alle Ergebnisse"
+    st.session_state["history_start"] = None
+    st.session_state["history_end"] = None
+
+
 def _reset_source_filters():
     st.session_state["source_query"] = ""
     st.session_state["source_year"] = "Alle Jahre"
@@ -1769,7 +1776,29 @@ with tab_history:
     except (OSError, ValueError, sqlite3.Error):
         history = []
         st.warning(t("Der lokale Verlauf lässt sich gerade nicht lesen."))
-    if not history:
+    all_history = history
+    with st.expander(t("Verlauf durchsuchen"), expanded=True):
+        history_query = st.text_input(t("Text in Prüfungen suchen"), key="history_query",
+                                     help=t("Sucht lokal in Behauptungen, Vorlagentiteln und gespeicherten Belegzitaten."))
+        history_label = st.selectbox(t("Ergebnis filtern"),
+                                    ["Alle Ergebnisse", "Gestützt", "Nicht geklärt", "Widerspruch"],
+                                    key="history_label", format_func=t)
+        c_start, c_end = st.columns(2)
+        with c_start:
+            history_start = st.date_input(t("Prüfdatum ab (UTC)"), value=None, key="history_start")
+        with c_end:
+            history_end = st.date_input(t("Prüfdatum bis (UTC)"), value=None, key="history_end")
+        if history_start and history_end and history_start > history_end:
+            st.warning(t("Das Startdatum liegt nach dem Enddatum. Bitte korrigiere den Zeitraum."))
+        labels = {"Alle Ergebnisse": None, "Gestützt": 0, "Nicht geklärt": 1, "Widerspruch": 2}
+        history = filter_checks(all_history, query=history_query, label=labels[history_label],
+                                start=history_start, end=history_end)
+        st.caption(t("{n} von {total} Prüfungen in dieser Ansicht gefunden.").format(n=len(history), total=len(all_history)))
+        if history_query.strip() or history_label != "Alle Ergebnisse" or history_start or history_end:
+            st.button(t("Verlaufsfilter zurücksetzen"), on_click=_reset_history_filters, key="reset_history_filters")
+    if not history and all_history:
+        st.info(t("Keine Prüfung passt zu diesen Filtern. Die gespeicherten Einträge bleiben unverändert."))
+    elif not history:
         st.info(t("Der Papierkorb ist leer." if in_trash else "Noch keine Prüfungen gespeichert. Aktiviere beim Faktencheck die lokale Speicherung."))
     else:
         indexed = {record["id"]: record for record in history}

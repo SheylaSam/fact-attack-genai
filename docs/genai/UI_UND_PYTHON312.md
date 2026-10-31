@@ -393,3 +393,34 @@ wurden zwei lokale Satzvorschläge ausgewählt und der angezeigte Startumfang
 kontrolliert. Keine echte NLI-Anfrage in dieser Erweiterung.
 
 ![Ausgewählte Aussagen vor dem ausdrücklichen Start](assets/streamlit-batch-selection.png)
+
+
+## Verlauf nach Text, Ergebnis und Prüfdatum durchsuchen
+
+„Verlauf durchsuchen“ kombiniert eine lokale Textsuche mit einem Ergebnisfilter
+und optionalem Start-/Enddatum. Die Suche berücksichtigt Behauptungen,
+Vorlagentitel und gespeicherte Belegzitate, unabhängig von Grossschreibung und
+Akzenten. Mehrere Suchwörter müssen alle vorkommen. Die Ergebnisfilter beziehen
+sich auf die numerischen gespeicherten Labels, nicht auf ihre übersetzten Namen.
+
+Die Datumsgrenzen umfassen jeweils den ganzen UTC-Kalendertag der Prüfung
+(`created_at`), nicht den Abstimmungstermin. Auch Zeitstempel mit Offset werden
+für diesen Vergleich nach UTC umgerechnet. Ein umgekehrter Zeitraum zeigt einen
+Hinweis und keine Treffer. Bei null Treffern bleiben alle Einträge gespeichert;
+der Reset setzt Suchtext, Ergebnis und beide Datumsgrenzen zurück.
+
+Die Filter gelten innerhalb der gewählten Ansicht, aktive Prüfungen oder
+Papierkorb. Trefferzahl und verfügbare Einträge werden aktualisiert; die Auswahl
+wechselt gegebenenfalls auf einen noch sichtbaren Eintrag. „Angezeigten Verlauf“
+exportiert genau die gefilterten Treffer. Die Einzelprüfung bleibt separat
+exportierbar. Suche, Filter und Exporte lösen keine neue NLI-Anfrage aus.
+Beschriftungen und Ergebnisoptionen stehen auf DE/FR/IT bereit; Originaldaten
+werden weder übersetzt noch verändert.
+
+Zwanzig gezielte Speicher-/Sprach-/Streamlit-Tests bestanden (fünf bestehende
+PDF-Warnungen), einschliesslich kombinierter Filter, UTC-Tagesgrenzen,
+Nulltreffer, Reset, unveränderter Daten und gefiltertem JSON-Export. Die
+Browserprüfung verwendete nur die separate Demo-Datenbank mit blockierter API.
+Keine echten Apertus-Aufrufe oder neuen Qualitätsmessungen.
+
+![Suche und Filter im Prüfverlauf](assets/streamlit-history-search.png)

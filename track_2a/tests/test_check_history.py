@@ -60,3 +60,25 @@ def test_exports_preserve_quotes_and_omit_internal_paths(tmp_path):
     assert exported['checks'][0]['result']['claim'] == result['claim']
     rows = list(csv.reader(io.StringIO(export_checks([record], 'csv').decode('utf-8-sig'))))
     assert rows[1][1].startswith("'=") and rows[1][5].startswith("'  +")
+
+
+def test_history_filters_are_combined_inclusive_utc_and_read_only():
+    from datetime import date
+    from copy import deepcopy
+    from src.check_history import filter_checks, export_checks
+    import json
+    records = [
+        {'id': 'a', 'created_at': '2026-10-31T00:30:00+02:00', 'vote': 'Biodiversité',
+         'result': {'claim': 'Le texte protège la nature.', 'label': 0, 'evidence_sources': [{'quote': 'Une forêt protégée.'}]}},
+        {'id': 'b', 'created_at': '2026-10-31T23:59:59+00:00', 'vote': 'Mietrecht',
+         'result': {'claim': 'Die Miete steigt.', 'label': 2}},
+    ]
+    before = deepcopy(records)
+    assert [r['id'] for r in filter_checks(records, query='BIODIVERSITE FORET', label=0)] == ['a']
+    day = date(2026, 10, 31)
+    found = filter_checks(records, start=day, end=day)
+    assert [r['id'] for r in found] == ['b']
+    assert filter_checks(records, query='nature', label=2) == []
+    assert filter_checks(records, start=date(2026, 11, 1), end=day) == []
+    assert len(json.loads(export_checks(found))['checks']) == 1
+    assert records == before

@@ -233,3 +233,33 @@ def test_batch_results_are_separate_persisted_and_not_rechecked_on_rerun(isolate
         assert verify.call_count == 2
         remote.assert_not_called()
     st.cache_resource.clear()
+
+
+def test_history_search_filters_dates_labels_and_reset_without_api(isolated_history):
+    import json
+    from datetime import datetime, timezone, timedelta
+    from src.check_history import save_check, load_checks
+    sample = json.loads((APP.parent / 'data/demo_cases.json').read_text())['cases'][0]
+    for claim, label in [('Mietrecht alpha', 0), ('Rente beta', 2)]:
+        result = {**sample['cached_result'], 'claim': claim, 'label': label}
+        save_check(isolated_history, result=result, source_path=APP.parent / 'data/booklets/2026-06-14_fr.pdf',
+                   date='2026-06-14', language='fr', vote=None, notice='saved demo')
+    before = load_checks(isolated_history)
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        assert len(app.selectbox(key='history_selected').options) == 2
+        app.text_input(key='history_query').set_value('Mietrecht').run()
+        assert not app.exception
+        assert len(app.selectbox(key='history_selected').options) == 1
+        app.selectbox(key='history_label').set_value('Widerspruch').run()
+        assert any('Keine Prüfung passt' in info.value for info in app.info)
+        assert not any(widget.key == 'history_selected' for widget in app.selectbox)
+        app.button(key='reset_history_filters').click().run()
+        assert len(app.selectbox(key='history_selected').options) == 2
+        app.date_input(key='history_start').set_value(datetime.now(timezone.utc).date() + timedelta(days=1)).run()
+        assert any('Keine Prüfung passt' in info.value for info in app.info)
+        app.button(key='reset_history_filters').click().run()
+        assert not app.exception
+        assert len(app.selectbox(key='history_selected').options) == 2
+        assert load_checks(isolated_history) == before
+        remote.assert_not_called()
