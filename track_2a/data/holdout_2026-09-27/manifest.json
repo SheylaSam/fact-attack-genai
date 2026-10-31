@@ -22,7 +22,7 @@
     "expected-labels.jsonl": "761eb884c58849a5f748e218590aa32e5369fea315471174565952bb6e7a9e77",
     "folds.jsonl": "6199a92e095602b4a405df64ade54668630e2f6595ca8e2f34c0efb8afb087c8"
   },
-  "historical_test_is_observed": false,
+  "historical_test_is_observed": true,
   "untouched_holdout_available": false,
   "usage_status": "Observed dev/regression: influenced E23 and later development; not a sealed test set"
 }

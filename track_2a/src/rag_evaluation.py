@@ -45,6 +45,11 @@ def mean_available(rows, key):
     return sum(values)/len(values) if values else None
 
 
+def evidence_score(rows):
+    eligible = [r for r in rows if r['gold'] != 1]
+    return sum(r['evidence_hit_at_5'] for r in eligible)/len(eligible) if eligible else None
+
+
 def run(args):
     raw_records = [json.loads(line) for line in args.dataset.read_text().splitlines() if line.strip()]
     records = load_records(args.dataset)
@@ -149,7 +154,7 @@ def run(args):
     for (variant, group), rows in sorted(groups.items()):
         keys = ['reference_hit_at_k', 'reference_hit_at_5', 'reference_token_coverage', 'retrieval_ms', 'context_e5_tokens']
         if args.nli:
-            keys += ['prompt_tokens', 'completion_tokens', 'nli_ms', 'evidence_hit_at_5']
+            keys += ['prompt_tokens', 'completion_tokens', 'nli_ms']
         report['summary'].append({'variant': variant, 'group': group, 'count': len(rows),
             **{k: sum(r[k] for r in rows)/len(rows) for k in keys},
             'retrieval_hit_at_k': mean_available(rows, 'retrieval_hit_at_k'),
@@ -157,7 +162,8 @@ def run(args):
             'small_sample': len(rows) < 30,
             'gold_page_count': sum(r['retrieval_hit_at_k'] is not None for r in rows),
             'nli_macro_f1': _macro_f1([r['gold'] for r in rows], [r['predicted'] for r in rows]) if args.nli else None,
-            'evidence_hit_at_5': sum(r['evidence_hit_at_5'] for r in rows)/len(rows) if args.nli else None})
+            'evidence_hit_at_5': evidence_score(rows) if args.nli else None,
+            'evidence_eligible_count': sum(r['gold'] != 1 for r in rows) if args.nli else 0})
     report['limitations'] = ['Existing data are observed dev/regression, never held-out test.',
         'Reference fuzzy hits and unique token coverage are proxies, not gold evidence Recall@k: no span annotations.',
         'bm25_chunks/vector/vector_hybrid isolate ranking on identical chunks and budget without speaker rules.',

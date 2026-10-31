@@ -130,3 +130,11 @@ Die Nachricht ist keine Aufforderung, Apertus zwingend zu ersetzen.
   normalisierte Embeddings und Kontextgrenze.
 - [Sentence Transformers](https://sbert.net/docs/package_reference/sentence_transformer/model.html)
 - [Qdrant Python Client](https://python-client.qdrant.tech/)
+
+## Fortsetzung: gepaarte Evaluation
+
+Der nächste vertikale Schritt ist jetzt implementiert:
+[EVALUATION.md](EVALUATION.md) enthält Startbefehle, die kontrollierte Chunk-/Budget-
+Ablation und die klare Trennung von Referenz-Proxys und echter NLI-Qualität.
+[CLAUDE_REVIEW.md](CLAUDE_REVIEW.md) dokumentiert die tatsächliche Zusammenarbeit
+und übernommene sowie zurückgestellte Reviewbefunde.

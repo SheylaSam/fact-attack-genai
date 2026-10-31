@@ -21,3 +21,12 @@ transformers 5.20.2, torch 2.14.1, rank-bm25 0.2.2, pypdf 6.21.4,
 PyMuPDF 1.28.2. Dies ist nicht die unveränderte Python-3.12-Wettbewerbsumgebung:
 Die dort gepinnten Kernanforderungen bleiben unangetastet; Container-Reproduktion
 ist ein eigener noch offener Integrationsschritt.
+
+## Fortsetzung: gepaarter Dev-Vergleich
+
+191 Tests + 6 Subtests in der vollständigen Suite bestanden. Danach wurde der
+NLI-Evidence-Nenner auf Gold-Entailment/Contradiction beschränkt; alle vier
+Evaluations-Tests inklusive des neuen Nenner-Tests bestanden.
+Zwei echte lokale Embedding-Läufe mit 28 Fällen × 6 Armen × 2 Budgets abgeschlossen.
+Keine Apertus-API-Anfragen; strikte Mock-Abweisung zusätzlich am CLI geprüft.
+Details und Einschränkungen: [ERGEBNISSE_DEV.md](ERGEBNISSE_DEV.md).

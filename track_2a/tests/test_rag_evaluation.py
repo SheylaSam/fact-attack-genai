@@ -35,3 +35,11 @@ def test_real_nli_refuses_mock_before_loading_embeddings(tmp_path):
         with pytest.raises(ValueError, match='mock active'):
             run(args)
         encoder.assert_not_called()
+
+
+def test_evidence_score_uses_gold_non_neutral_denominator():
+    from src.rag_evaluation import evidence_score
+    assert evidence_score([{'gold': 0, 'evidence_hit_at_5': True},
+                           {'gold': 2, 'evidence_hit_at_5': False},
+                           {'gold': 1, 'evidence_hit_at_5': False}]) == .5
+    assert evidence_score([{'gold': 1, 'evidence_hit_at_5': False}]) is None
