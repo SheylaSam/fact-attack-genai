@@ -43,3 +43,15 @@ Zwei neue echte Retrieval-Läufe mit je 42 Fällen × sechs Armen, einschliessli
 27 crosslingualer Fälle. Zwei Chunkkonfigurationen und tatsächlich neuer
 Indexaufbau separat erfasst. Keine echten NLI-Aufrufe, keine neuen Goldseiten.
 Details: [ERGEBNISSE_CROSSLINGUAL_DEV.md](ERGEBNISSE_CROSSLINGUAL_DEV.md).
+
+## Quellzitat-/Parser-Fortsetzung
+
+**209 Tests + 6 Subtests bestanden**. Neu geprüft: exakte Quellzitate und Offsets,
+Abweisung geänderter Labels/ungeprüfter Annotationen, falsche Kontexthashes,
+Normalisierung harter/weicher Worttrennungen, Erhalt suspensiver Bindestriche und
+explizite gepaarte Fallauswahl. Weiterhin fünf bestehende PDF-Warnungen.
+
+Zwölf Codex-/Claude-geprüfte Dev-Silver-Zitate wurden in beiden PDF-Extraktions-
+pfaden bestätigt. Neuer echter Retrieval-Lauf auf denselben zwölf Fällen nach
+Parser-/Quick-Pfad-Korrektur, Cache v9. Keine echten NLI-Aufrufe.
+[Ergebnisse und Grenzen](ERGEBNISSE_BELEGPRUEFUNG.md).

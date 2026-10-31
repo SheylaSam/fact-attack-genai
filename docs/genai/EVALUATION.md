@@ -177,3 +177,8 @@ Das Prüfpaket bindet sich an den Dataset-Hash, gruppiert nur die Referenzanzeig
 und behält separate Annotationen für jeden einzelnen Claim. Kein automatischer
 Import ungeprüfter Seitenvorschläge als Goldlabels. Tatsächliche neue Ergebnisse:
 [ERGEBNISSE_CROSSLINGUAL_DEV.md](ERGEBNISSE_CROSSLINGUAL_DEV.md).
+
+Fortsetzung mit zwölf unabhängig durch Codex und Claude geprüften Quellzitaten,
+separatem Silver-Validator und korrigierter Zeilentrennung (Parsercache v9):
+[ERGEBNISSE_BELEGPRUEFUNG.md](ERGEBNISSE_BELEGPRUEFUNG.md). Der Sidecar verändert
+keine offiziellen NLI-Labels und ersetzt keine menschlichen Belegannotationen.

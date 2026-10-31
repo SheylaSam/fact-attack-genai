@@ -76,3 +76,31 @@ Nicht übernommen / bewusst begrenzt:
 - Kein voller Parametersweep und kein neues Embedding-Modell. Zunächst zwei
   vorab festgelegte Chunkkonfigurationen auf denselben 42 Fällen, mit demselben
   maximalen Kontextbudget und ausreichend Kandidaten zur Budgetfüllung.
+
+## Fortsetzung: Quellzitate, Silver-Anmerkungen und Parserfehler
+
+Drei weitere reale read-only Reviews: (1) unabhängige Prüfung des Silver-/NLI-
+Replay-Konzepts, (2) Einzelprüfung aller zwölf Quellzitate gegen die vollständigen
+exportierten physischen Seitentexte, (3) Codeprüfung des neuen Validators und der
+Parserkorrektur. Codex führte zusätzlich die visuelle Prüfung von elf PDF-Seiten
+und alle lokalen Tests durch. Claude bestätigte zwölf Zitate, benannte drei
+semantische/Attributions-Einschränkungen; diese bleiben im Sidecar erhalten und
+werden in einer separaten Sensitivitätsgruppe ausgeschlossen.
+
+Übernommene neue Codebefunde: explizite Soft-Hyphen-Zeilenumbrüche behandeln;
+suspensive Bindestriche erhalten; echte grossgeschriebene Zusammensetzungen
+behalten; Quick- und Vollparser angleichen; Cacheversion erhöhen; Fehler bei
+fehlenden Fall-IDs verständlich melden; Büchlein-/Sprachidentität sowie die
+Beziehung gekürzter Kontexte zu ihren ursprünglichen Passagen prüfen; Parser- und
+Textnormalisierungshashes auch im Belegreport führen. Zitatlänge/Chunkgrösse ist
+als Confound dokumentiert. Die offizielle Fuzzy-Normalisierung bleibt unverändert.
+
+Nicht übernommen: historische Reports pauschal wegen abweichenden aktuellen
+Parsers verwerfen. Für den absichtlichen Vorher-Nachher-Vergleich bleiben sie
+notwendig; historische Quellhashes und aktueller Scorer werden getrennt aufgeführt.
+Die Silver-Scorereports sind keine Retrievalreports und brauchen deshalb nicht
+dieselben Hittext-Felder; sie referenzieren die konkreten Retrievalreporthashes.
+
+Das vorgeschlagene strikt gedeckelte und journalisierte Online-NLI-Replay ist
+weiterhin offen. Die bestehenden logischen Aufrufgrenzen werden nicht als harte
+HTTP-Anfragegrenze ausgegeben. Es gab keine echte Apertus-Anfrage.
