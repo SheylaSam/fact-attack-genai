@@ -182,3 +182,9 @@ Fortsetzung mit zwölf unabhängig durch Codex und Claude geprüften Quellzitate
 separatem Silver-Validator und korrigierter Zeilentrennung (Parsercache v9):
 [ERGEBNISSE_BELEGPRUEFUNG.md](ERGEBNISSE_BELEGPRUEFUNG.md). Der Sidecar verändert
 keine offiziellen NLI-Labels und ersetzt keine menschlichen Belegannotationen.
+
+Der zuvor fehlende Zugang wurde im von der Nutzerin genannten bisherigen Checkout
+gefunden und der erste echte, auf zwölf HTTP-Versuche begrenzte NLI-Smoke
+abgeschlossen: [APERTUS_ZUGANG_UND_SMOKE.md](APERTUS_ZUGANG_UND_SMOKE.md).
+Die früheren Hinweise „kein API-Schlüssel vorhanden“ beschreiben den damaligen
+Konfigurationsstand der beiden geprüften Checkouts, nicht sämtliche Projektkopien.

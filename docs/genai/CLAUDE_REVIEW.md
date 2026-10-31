@@ -104,3 +104,18 @@ dieselben Hittext-Felder; sie referenzieren die konkreten Retrievalreporthashes.
 Das vorgeschlagene strikt gedeckelte und journalisierte Online-NLI-Replay ist
 weiterhin offen. Die bestehenden logischen Aufrufgrenzen werden nicht als harte
 HTTP-Anfragegrenze ausgegeben. Es gab keine echte Apertus-Anfrage.
+
+## Reales NLI mit wiedergefundenem Zugang
+
+Die Nutzerin nannte den bisherigen Checkout unter `/Users/sheyla/Projects/…`.
+Dessen `.env` enthält einen gültigen Zugang; Codex bestätigte Modellverfügbarkeit
+mit einer lesenden Abfrage. Claude prüfte den neuen festen Kontext-Smoke **vor**
+dem ersten NLI-Aufruf ohne Zugriff auf die `.env`. Übernommen wurden: Rohantworten
+vor Scoring journalisieren, vollständiges JSON und explizite gültige Labels
+verlangen, Ausgangsdateien nicht überschreiben und das Zwei-Fälle-Design erzwingen.
+Der Requestzähler greift vor jeder tatsächlichen HTTP-Sendung inklusive Reconnect.
+
+Erster echter Smoke abgeschlossen: elf Anfragen, zwölf Ergebnisse mit einer
+identisch wiederverwendeten Antwort. Kein Modellwechsel oder Mock. Danach reine
+Offline-Korrektur der Neutral-Evidence-Darstellung, keine wiederholte Inferenz.
+Details: [APERTUS_ZUGANG_UND_SMOKE.md](APERTUS_ZUGANG_UND_SMOKE.md).

@@ -55,3 +55,16 @@ Zwölf Codex-/Claude-geprüfte Dev-Silver-Zitate wurden in beiden PDF-Extraktion
 pfaden bestätigt. Neuer echter Retrieval-Lauf auf denselben zwölf Fällen nach
 Parser-/Quick-Pfad-Korrektur, Cache v9. Keine echten NLI-Aufrufe.
 [Ergebnisse und Grenzen](ERGEBNISSE_BELEGPRUEFUNG.md).
+
+## Vorhandener Zugang / echte NLI
+
+Vollständige Suite: **218 Tests + 6 Subtests bestanden**, fünf bestehende
+PDF-Deprecation-Warnungen. Neue Tests prüfen den echten Transport-Requestdeckel
+inklusive Reconnect, fsync vor dem Senden und Abweisung fehlender/ungültiger JSON-
+Labels. Danach wurden Neutral-Evidence-Darstellung und Token-/Anfragezahlen direkt
+an den gespeicherten Antworten geprüft, ohne neue Inferenz.
+
+Realer Smoke erfolgreich: elf tatsächliche POST-Anfragen, elf Antworten, zwölf
+gepaarte Zeilen mit einer identischen wiederverwendeten Antwort, kein Mock und
+bestätigtes Servermodell. Artefakte wurden auf enthaltene Zugangsschlüssel geprüft:
+keine gefunden. Details: [APERTUS_ZUGANG_UND_SMOKE.md](APERTUS_ZUGANG_UND_SMOKE.md).

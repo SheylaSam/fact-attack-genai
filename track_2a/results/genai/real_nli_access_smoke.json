@@ -1,0 +1,324 @@
+{
+  "kind": "real_fixed_context_access_smoke_not_quality_study",
+  "complete": true,
+  "model": "swiss-ai/Apertus-v1.5-70B-thinking",
+  "mock": false,
+  "case_ids": [
+    "ost-0000",
+    "ost-1208"
+  ],
+  "variants": [
+    "baseline_budgeted",
+    "baseline_native",
+    "bm25_chunks",
+    "bm25_pages",
+    "vector",
+    "vector_hybrid"
+  ],
+  "max_http_attempts": 12,
+  "dataset_sha256": "232a84e32cf8ff5d0c7489d3cd2a63a764820b4b512da323fa677d79feca8459",
+  "retrieval_report_sha256": "554fbb5a33484772e0171cfa09ebcbedb9e4d1fc5d021583d3940e4951614aa2",
+  "runner_sha256": "6922e42a3a020208776f5d1757ed34d1b4181f4f5f6f174ca03f9db4606be2b5",
+  "nli_source_sha256": "8da55f073eab21cf3ee8c673c5a278f8b82de4a1f9e1d6d99fa3419f5dd2d595",
+  "prompt": "Constant ApertusClient.infer JSON, raw Page joins, not production NLI pipeline",
+  "limitations": [
+    "Two selected dev cases cannot establish a model ranking or reliable macro-F1.",
+    "No Neutral case in the default pair; all three-label macro-F1 is only a smoke diagnostic.",
+    "Identical claim/context jobs reuse one response across variants; billed usage counts unique calls."
+  ],
+  "rows": [
+    {
+      "id": "ost-0000",
+      "variant": "baseline_budgeted",
+      "true_label": 0,
+      "predicted": 0,
+      "raw_label": 0,
+      "evidence": [
+        "Le Conseil fédéral et le Parlement rejettent le projet, notamment pour les raisons suivantes.",
+        "Pour toutes ces raisons, le Conseil fédéral et le Parlement recommandent de rejeter l’initiative populaire « Pas de Suisse à 10 millions ! (initiative pour la durabilité) »."
+      ],
+      "decision_rule": "Decision-Rule 2: Direct support dominant (p_entail >= 0.60)",
+      "prompt_tokens": 1370,
+      "completion_tokens": 149,
+      "latency_ms": 2389.73,
+      "response_reused": false,
+      "input_identity": "c033208d7d560cb00a84e6b499a5e629db65111dbd73f2f513563e434e01e860",
+      "evidence_hit_at_5": true,
+      "raw_evidence": [
+        "Le Conseil fédéral et le Parlement rejettent le projet, notamment pour les raisons suivantes.",
+        "Pour toutes ces raisons, le Conseil fédéral et le Parlement recommandent de rejeter l’initiative populaire « Pas de Suisse à 10 millions ! (initiative pour la durabilité) »."
+      ]
+    },
+    {
+      "id": "ost-0000",
+      "variant": "baseline_native",
+      "true_label": 0,
+      "predicted": 0,
+      "raw_label": 0,
+      "evidence": [
+        "Le Conseil fédéral et le Parlement rejettent le projet, notamment pour les raisons suivantes.",
+        "Pour toutes ces raisons, le Conseil fédéral et le Parlement recommandent de rejeter l’initiative populaire « Pas de Suisse à 10 millions ! (initiative pour la durabilité) »."
+      ],
+      "decision_rule": "Decision-Rule 2: Direct support dominant (p_entail >= 0.60)",
+      "prompt_tokens": 1370,
+      "completion_tokens": 149,
+      "latency_ms": 2389.73,
+      "response_reused": true,
+      "input_identity": "c033208d7d560cb00a84e6b499a5e629db65111dbd73f2f513563e434e01e860",
+      "evidence_hit_at_5": true,
+      "raw_evidence": [
+        "Le Conseil fédéral et le Parlement rejettent le projet, notamment pour les raisons suivantes.",
+        "Pour toutes ces raisons, le Conseil fédéral et le Parlement recommandent de rejeter l’initiative populaire « Pas de Suisse à 10 millions ! (initiative pour la durabilité) »."
+      ]
+    },
+    {
+      "id": "ost-0000",
+      "variant": "bm25_chunks",
+      "true_label": 0,
+      "predicted": 2,
+      "raw_label": 2,
+      "evidence": [
+        "Nein zur Initiative « Pas de Suisse à 10 millions ! (initiative pour la durabilité) »"
+      ],
+      "decision_rule": "Decision-Rule 1: Conflict dominant (p_contra >= 0.40)",
+      "prompt_tokens": 2314,
+      "completion_tokens": 164,
+      "latency_ms": 2520.78,
+      "response_reused": false,
+      "input_identity": "70da660b7a68b15dc9be4a187d13b7e5eddbefe2190c6c9bc1d68471fffa80ac",
+      "evidence_hit_at_5": false,
+      "raw_evidence": [
+        "Nein zur Initiative « Pas de Suisse à 10 millions ! (initiative pour la durabilité) »"
+      ]
+    },
+    {
+      "id": "ost-0000",
+      "variant": "bm25_pages",
+      "true_label": 0,
+      "predicted": 2,
+      "raw_label": 2,
+      "evidence": [
+        "Der Bundesrat empfiehlt, die Initiative abzulehnen."
+      ],
+      "decision_rule": "Decision-Rule 1: Conflict dominant (p_contra >= 0.40)",
+      "prompt_tokens": 2299,
+      "completion_tokens": 143,
+      "latency_ms": 2191.21,
+      "response_reused": false,
+      "input_identity": "2501b2afee256572ec364f2527ad2b8f83883763d4bf0cd21dd4ae75e087d6ed",
+      "evidence_hit_at_5": false,
+      "raw_evidence": [
+        "Der Bundesrat empfiehlt, die Initiative abzulehnen."
+      ]
+    },
+    {
+      "id": "ost-0000",
+      "variant": "vector",
+      "true_label": 0,
+      "predicted": 0,
+      "raw_label": 0,
+      "evidence": [
+        "L’initiative menace notre tradition humanitaire... Pour toutes ces raisons, le Conseil fédéral et le Parlement recommandent de rejeter l’initiative populaire « Pas de Suisse à 10 millions ! (initiative pour la durabilité) ».",
+        "Le Conseil fédéral et le Parlement vous recommandent de voter, le 14 juin 2026 : Non"
+      ],
+      "decision_rule": "Decision-Rule 2: Direct support dominant (p_entail >= 0.60)",
+      "prompt_tokens": 2313,
+      "completion_tokens": 163,
+      "latency_ms": 2507.6,
+      "response_reused": false,
+      "input_identity": "d0793ffbbd1678ff9e9034a4faf75bdd8e9252913e4295e933a257c6167a8fc0",
+      "evidence_hit_at_5": false,
+      "raw_evidence": [
+        "L’initiative menace notre tradition humanitaire... Pour toutes ces raisons, le Conseil fédéral et le Parlement recommandent de rejeter l’initiative populaire « Pas de Suisse à 10 millions ! (initiative pour la durabilité) ».",
+        "Le Conseil fédéral et le Parlement vous recommandent de voter, le 14 juin 2026 : Non"
+      ]
+    },
+    {
+      "id": "ost-0000",
+      "variant": "vector_hybrid",
+      "true_label": 0,
+      "predicted": 2,
+      "raw_label": 2,
+      "evidence": [
+        "Der Bundesrat empfiehlt, die Initiative abzulehnen."
+      ],
+      "decision_rule": "Decision-Rule 1: Conflict dominant (p_contra >= 0.40)",
+      "prompt_tokens": 2311,
+      "completion_tokens": 148,
+      "latency_ms": 2255.76,
+      "response_reused": false,
+      "input_identity": "d8e0cf5ea9359eb5de19ac191b3bbf14bae790b97393d76289fb7bd7c0cd42a5",
+      "evidence_hit_at_5": false,
+      "raw_evidence": [
+        "Der Bundesrat empfiehlt, die Initiative abzulehnen."
+      ]
+    },
+    {
+      "id": "ost-1208",
+      "variant": "baseline_budgeted",
+      "true_label": 2,
+      "predicted": 1,
+      "raw_label": 1,
+      "evidence": [],
+      "decision_rule": "Decision-Rule 3: High neutrality (p_neutral >= 0.40)",
+      "prompt_tokens": 2416,
+      "completion_tokens": 181,
+      "latency_ms": 2774.57,
+      "response_reused": false,
+      "input_identity": "40f289df540e307086232932d1c47903ce5e322fbf9fd1d9e9c2d143d6a17b58",
+      "evidence_hit_at_5": false,
+      "raw_evidence": [
+        "Art. 1 1 Die Volksinitiative vom 3. April 2024 «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» ist gültig und wird Volk und Ständen zur Abstimmung unterbreitet."
+      ]
+    },
+    {
+      "id": "ost-1208",
+      "variant": "baseline_native",
+      "true_label": 2,
+      "predicted": 2,
+      "raw_label": 2,
+      "evidence": [
+        "Art. 2 Die Bundesversammlung empfiehlt Volk und Ständen, die Initiative abzulehnen."
+      ],
+      "decision_rule": "Decision-Rule 1: Conflict dominant (p_contra >= 0.40)",
+      "prompt_tokens": 2980,
+      "completion_tokens": 127,
+      "latency_ms": 1917.37,
+      "response_reused": false,
+      "input_identity": "b31918ca2ae823dad5754aa0e70cc28c42d66bf3abd37f01fb1406caf347020e",
+      "evidence_hit_at_5": true,
+      "raw_evidence": [
+        "Art. 2 Die Bundesversammlung empfiehlt Volk und Ständen, die Initiative abzulehnen."
+      ]
+    },
+    {
+      "id": "ost-1208",
+      "variant": "bm25_chunks",
+      "true_label": 2,
+      "predicted": 1,
+      "raw_label": 1,
+      "evidence": [],
+      "decision_rule": "Decision-Rule 3: High neutrality (p_neutral >= 0.40)",
+      "prompt_tokens": 2444,
+      "completion_tokens": 141,
+      "latency_ms": 2165.29,
+      "response_reused": false,
+      "input_identity": "689ec162051e9542ba5024a792ad5e2a4a80fa2e6dfa73edd0546edc8f9ea0fd",
+      "evidence_hit_at_5": false,
+      "raw_evidence": []
+    },
+    {
+      "id": "ost-1208",
+      "variant": "bm25_pages",
+      "true_label": 2,
+      "predicted": 1,
+      "raw_label": 1,
+      "evidence": [],
+      "decision_rule": "Decision-Rule 3: High neutrality (p_neutral >= 0.40)",
+      "prompt_tokens": 2449,
+      "completion_tokens": 196,
+      "latency_ms": 2914.59,
+      "response_reused": false,
+      "input_identity": "134dd365a16a25f3ef207ffd65cbf2fcd79e87d3ace3034d7f18711fb4dde71b",
+      "evidence_hit_at_5": false,
+      "raw_evidence": [
+        "Art. 1 1 Die Volksinitiative vom 3. April 2024 «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» ist gültig und wird Volk und Ständen zur Abstimmung unterbreitet."
+      ]
+    },
+    {
+      "id": "ost-1208",
+      "variant": "vector",
+      "true_label": 2,
+      "predicted": 2,
+      "raw_label": 2,
+      "evidence": [
+        "Page 5 : \"Empfehlung von Bundesrat und Parlament Empfehlung des Initiativkomitees Abstimmung im Nationalrat 123 Nein 67 Ja 6 Enthaltungen\"",
+        "Page 5 : \"Aus Sicht von Bundesrat und Parlament bringt die Initiative Unsicherheit und gefährdet die Stabilität der Schweiz. Sie schadet der Wirtschaft, bedroht den Wohlstand und die innere Sicherheit und führt zu erheblichen Kosten für Bund und Kantone. Zudem stellt sie den bilateralen Weg mit der EU und die humanitäre Tradition in Frage. admin.ch/nachhaltigkeitsinitiative Empfehlung von Bundesrat und Parlament: Nein\""
+      ],
+      "decision_rule": "Decision-Rule 1: Conflict dominant (p_contra >= 0.40)",
+      "prompt_tokens": 2438,
+      "completion_tokens": 280,
+      "latency_ms": 4194.48,
+      "response_reused": false,
+      "input_identity": "6158023518cce8f2f2cb36f6f923b79e9df5681a58654de281fe5172c1649389",
+      "evidence_hit_at_5": false,
+      "raw_evidence": [
+        "Page 5 : \"Empfehlung von Bundesrat und Parlament Empfehlung des Initiativkomitees Abstimmung im Nationalrat 123 Nein 67 Ja 6 Enthaltungen\"",
+        "Page 5 : \"Aus Sicht von Bundesrat und Parlament bringt die Initiative Unsicherheit und gefährdet die Stabilität der Schweiz. Sie schadet der Wirtschaft, bedroht den Wohlstand und die innere Sicherheit und führt zu erheblichen Kosten für Bund und Kantone. Zudem stellt sie den bilateralen Weg mit der EU und die humanitäre Tradition in Frage. admin.ch/nachhaltigkeitsinitiative Empfehlung von Bundesrat und Parlament: Nein\""
+      ]
+    },
+    {
+      "id": "ost-1208",
+      "variant": "vector_hybrid",
+      "true_label": 2,
+      "predicted": 1,
+      "raw_label": 1,
+      "evidence": [],
+      "decision_rule": "Decision-Rule 3: High neutrality (p_neutral >= 0.40)",
+      "prompt_tokens": 2432,
+      "completion_tokens": 189,
+      "latency_ms": 2860.08,
+      "response_reused": false,
+      "input_identity": "df8aedec54c344d593c2d4fbe0930d836b136f504ab1b36fa5bb4f3bf12ccb5b",
+      "evidence_hit_at_5": false,
+      "raw_evidence": [
+        "Art. 1 1 Die Volksinitiative vom 3. April 2024 «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» ist gültig und wird Volk und Ständen zur Abstimmung unterbreitet."
+      ]
+    }
+  ],
+  "served_models": [
+    "swiss-ai/Apertus-v1.5-70B-thinking"
+  ],
+  "summary": [
+    {
+      "variant": "baseline_budgeted",
+      "count": 2,
+      "macro_f1_smoke_only": 0.3333,
+      "correct": 1,
+      "evidence_hit_at_5": 0.5
+    },
+    {
+      "variant": "baseline_native",
+      "count": 2,
+      "macro_f1_smoke_only": 0.6667,
+      "correct": 2,
+      "evidence_hit_at_5": 1.0
+    },
+    {
+      "variant": "bm25_chunks",
+      "count": 2,
+      "macro_f1_smoke_only": 0.0,
+      "correct": 0,
+      "evidence_hit_at_5": 0.0
+    },
+    {
+      "variant": "bm25_pages",
+      "count": 2,
+      "macro_f1_smoke_only": 0.0,
+      "correct": 0,
+      "evidence_hit_at_5": 0.0
+    },
+    {
+      "variant": "vector",
+      "count": 2,
+      "macro_f1_smoke_only": 0.6667,
+      "correct": 2,
+      "evidence_hit_at_5": 0.0
+    },
+    {
+      "variant": "vector_hybrid",
+      "count": 2,
+      "macro_f1_smoke_only": 0.0,
+      "correct": 0,
+      "evidence_hit_at_5": 0.0
+    }
+  ],
+  "http_attempts_reserved": 11,
+  "unique_successful_inferences": 11,
+  "billed_prompt_tokens": 25766,
+  "billed_completion_tokens": 1881,
+  "score_postprocessing": {
+    "policy": "Predicted Neutral exports no evidence; raw evidence retained separately. No inference repeated.",
+    "corrected_runner_sha256": "14376ba248514e1336b2f89c752fe3a69238226c88b15f1e242286b79203e3db"
+  }
+}

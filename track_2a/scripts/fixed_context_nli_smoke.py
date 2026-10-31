@@ -159,10 +159,10 @@ def run(args):
                 raw_label=raw_label_holder['label']
                 cache[identity]=(out,raw_label)
             row={'id':cid,'variant':variant,'true_label':rec['entailment_label'],'predicted':out.label,'raw_label':raw_label,
-                 'evidence':out.evidence,'decision_rule':out.decision_rule_applied,
+                 'raw_evidence':out.evidence,'evidence':out.evidence if out.label!=1 else [],'decision_rule':out.decision_rule_applied,
                  'prompt_tokens':out.tokens_prompt,'completion_tokens':out.tokens_completion,
                  'latency_ms':out.latency_ms,'response_reused':reused,'input_identity':identity,
-                 'evidence_hit_at_5':evidence_hit5({'evidence':[{'text':e} for e in out.evidence]},rec['reference_string'])}
+                 'evidence_hit_at_5':out.label!=1 and evidence_hit5({'evidence':[{'text':e} for e in out.evidence]},rec['reference_string'])}
             result['rows'].append(row)
             budget.append({'kind':'result',**row})
         result['complete']=len(result['rows'])==len(jobs)
