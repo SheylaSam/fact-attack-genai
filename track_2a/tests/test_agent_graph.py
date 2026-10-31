@@ -72,8 +72,8 @@ def make_prediction(label, quotes=(), error=None):
 
 
 class FakeIndex:
-    def __init__(self, candidates=None, error=None):
-        self.votes = {vote.vote_id: vote for vote in (V1, V2)}
+    def __init__(self, candidates=None, error=None, votes=(V1, V2)):
+        self.votes = {vote.vote_id: vote for vote in votes}
         self.candidates = [candidate(V1, 0.873), candidate(V2, 0.801)] if candidates is None else candidates
         self.error = error
         self.vote_calls = []
@@ -550,6 +550,15 @@ class GraphTests(unittest.TestCase):
         self.assertNotIn(INJECTION, injected[0]['content'])
         self.assertEqual(injected[1:], [{'role': 'user', 'content': INJECTION}])
         self.assertEqual(other[1:], [{'role': 'user', 'content': CLAIM}])
+
+    def test_whole_booklet_vote_is_checked_without_a_vote_title(self):
+        whole = VoteRef('2030-01-01_de#0', '2030-01-01_de', '2030-01-01', 'de', 'Gesamtes Büchlein', (1, 2))
+        decider = RecordingDecider(ScriptedDecider(fixed_vote_id=whole.vote_id))
+        result, engine, _ = check(decider, index=FakeIndex(votes=(V1, whole)), fixed_vote_id=whole.vote_id)
+        self.assertEqual(result.outcome, 'gestuetzt')
+        [call] = engine.verify_calls
+        self.assertIsNone(call['vote'])  # the NLI prompt gets no placeholder title
+        self.assertEqual(call['booklet_pdf'], BOOKLETS / '2030-01-01_de.pdf')
 
     def test_fixed_vote_is_named_in_system_prompt_and_any_language_proceeds(self):
         decider = RecordingDecider(ScriptedDecider(fixed_vote_id=V1.vote_id))

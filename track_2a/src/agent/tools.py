@@ -83,8 +83,10 @@ _TOOLS: Dict[str, Tuple[type, str]] = {
         f"{VOTE_CANDIDATES} Kandidaten mit Vorlagen-ID, Abstimmungstermin, Titel, Score und Trefferzahl. "
         "Zuerst aufrufen, solange die Vorlage nicht feststeht.")),
     "suche_passagen": (_SearchPassagesArgs, (
-        "Sucht in einer gewählten Vorlage die Textstellen zur Anfrage (bewährte Suche mit Stichwörtern und "
-        "Abschnittslogik). Die Fundstellen kommen in den Passagenpool, der später geprüft wird.")),
+        "Sucht die Textstellen zur Anfrage im ganzen Abstimmungsbüchlein der gewählten Vorlage (bewährte Suche mit "
+        "Stichwörtern und Abschnittslogik). Stellen zum Titel der Vorlage werden bevorzugt; Seiten anderer Vorlagen "
+        "desselben Büchleins können dabei sein. Die Fundstellen kommen in den Passagenpool dieser Vorlage, der später "
+        "geprüft wird.")),
     "suche_passagen_vektor": (_SearchPassagesArgs, (
         "Sucht in einer gewählten Vorlage die Textstellen zur Anfrage über die Bedeutung (Vektorsuche). "
         "Sinnvoll, wenn suche_passagen nichts Passendes fand oder die Behauptung anders formuliert ist als der Text. "
@@ -182,6 +184,12 @@ def _preview(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit].rstrip() + "…"
 
 
+def engine_vote(vote: VoteRef) -> Optional[str]:
+    """The vote title the engine's retrieval and NLI prompt get; None for the whole-booklet vote ("#0"), whose
+    placeholder title names no vote of the booklet."""
+    return None if vote.vote_id.endswith("#0") else vote.title
+
+
 def _passage_key(passage: Dict[str, Any]) -> Tuple[int, str]:
     return int(passage["page_number"]), hashlib.sha256(passage["text"].encode("utf-8")).hexdigest()
 
@@ -234,7 +242,7 @@ class AgentTools:
 
     def run(self, tool: str, args: dict) -> Observation:
         """Runs a search tool. Rejected calls and exceptions of the index or engine come back as an observation
-        with `error`; `data["error_kind"]` tells `ERROR_INVALID_ARGS` (the model's mistake) from `ERROR_TOOL_FAILURE`."""
+        with `error`; `data["error_kind"]` tells `ERROR_INVALID_ARGS` (the model's mistake) from a tool failure."""
         if not isinstance(tool, str) or tool not in _TOOLS:
             return self._rejected((tool if isinstance(tool, str) else repr(tool))[:60], _unknown_tool(tool))
         if tool in TERMINAL_TOOLS:
@@ -280,17 +288,24 @@ class AgentTools:
                 "score": found.score, "hits": found.hits, "best_page": found.best_page}
 
     def _search_passages(self, args: dict) -> Observation:
+        """The proven search runs over the vote's whole booklet; the vote title only ranks its pages first."""
         vote = self.index.votes[args["vorlage_id"]]
+        title = engine_vote(vote)
         found = self.engine.retrieve_passages(
-            claim=args["anfrage"], booklet_pdf=self.booklets_dir / f"{vote.source_id}.pdf", vote=vote.title,
+            claim=args["anfrage"], booklet_pdf=self.booklets_dir / f"{vote.source_id}.pdf", vote=title,
             booklet_language=vote.language)
-        return self._pooled("suche_passagen", "bewährte Suche", vote, found)
+        label = f"bewährte Suche im ganzen Büchlein {vote.source_id}"
+        if title is not None:
+            label += "; Stellen zum Titel der Vorlage zuerst, Seiten anderer Vorlagen möglich"
+        return self._pooled("suche_passagen", label, vote, found, scope="für")
 
     def _search_passages_by_vector(self, args: dict) -> Observation:
         found = self.index.search_passages(args["vorlage_id"], args["anfrage"], k=VECTOR_PASSAGES)
         return self._pooled("suche_passagen_vektor", "Vektorsuche", self.index.votes[args["vorlage_id"]], found)
 
-    def _pooled(self, tool: str, label: str, vote: VoteRef, found: List[Dict[str, Any]]) -> Observation:
+    def _pooled(self, tool: str, label: str, vote: VoteRef, found: List[Dict[str, Any]],
+                scope: str = "aus") -> Observation:
+        """`scope` "aus": the search found only passages of the vote; "für": it searched beyond the vote's pages."""
         keyed = [(_passage_key(p), dict(p)) for p in found]  # fails before anything enters the pool
         pool = self._pool.setdefault(vote.vote_id, [])
         seen = self._seen.setdefault(vote.vote_id, set())
@@ -307,9 +322,9 @@ class AgentTools:
                 status, new = "neu", new + 1
             shown.append({"page_number": passage_key[0], "section": passage.get("section"), "status": status})
         if not keyed:
-            head = f"Keine Passagen in {vote.vote_id} gefunden ({label})."
+            head = f"Keine Passagen {scope} {vote.vote_id} gefunden ({label})."
         else:
-            head = f"Passagen aus {vote.vote_id} ({label}): {len(keyed)} gefunden, {new} neu im Pool."
+            head = f"Passagen {scope} {vote.vote_id} ({label}): {len(keyed)} gefunden, {new} neu im Pool."
         head += f" Pool dieser Vorlage: {len(pool)} von höchstens {limit} Passagen."
         if dropped:
             head += f" {dropped} neue Passagen passten nicht mehr hinein und werden nicht geprüft."

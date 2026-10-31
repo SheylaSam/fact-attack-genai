@@ -28,6 +28,7 @@ V2 = VoteRef('2024-11-24_de#2', '2024-11-24_de', '2024-11-24', 'de',
 V3 = VoteRef('2026-06-14_de#1', '2026-06-14_de', '2026-06-14', 'de', 'Änderung des Zivildienstgesetzes', (2, 3))
 WRAPPED = VoteRef('2025-09-28_de#1', '2025-09-28_de', '2025-09-28', 'de',
                   'Volksinitiativ e «Mehr bezahlbare Wohnungen»', (2,))
+WHOLE = VoteRef('2030-01-01_de#0', '2030-01-01_de', '2030-01-01', 'de', 'Gesamtes Büchlein', (1, 2))  # no contents
 BAD_IDS = ('2024-11-24_de#7', '../../.env', 'https://x')
 
 
@@ -135,6 +136,32 @@ class SearchToolTests(unittest.TestCase):
         self.assertEqual(call['booklet_language'], 'de')
         self.assertIn('Seite 2', obs.text)
         self.assertIn('Originaltext von Seite 3.', obs.text)
+
+    def test_suche_passagen_says_truthfully_that_it_searches_the_whole_booklet(self):
+        spec = next(spec for spec in TOOL_SPECS if spec['name'] == 'suche_passagen')
+        self.assertIn('ganzen Abstimmungsbüchlein der gewählten Vorlage', spec['description'])
+        self.assertIn('Titel der Vorlage', spec['description'])  # the proven search prioritises the vote's title
+        self.assertIn('anderer Vorlagen', spec['description'])  # and may return pages of other votes
+        self.assertNotIn('in einer gewählten Vorlage', spec['description'])
+        tools, _, _ = make_tools(engine=FakeEngine([passage(2)]))
+        head = tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'}).text.splitlines()[0]
+        self.assertIn('ganzen Büchlein 2024-11-24_de', head)
+        self.assertIn('Titel der Vorlage', head)
+        self.assertIn('anderer Vorlagen', head)
+        self.assertNotIn(f'Passagen aus {V1.vote_id}', head)
+        vector = make_tools(index=FakeIndex(passages=[passage(4)]))[0].run(
+            'suche_passagen_vektor', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'})
+        self.assertTrue(vector.text.startswith(f'Passagen aus {V1.vote_id} (Vektorsuche)'))  # filtered by vote
+
+    def test_suche_passagen_for_the_whole_booklet_passes_no_vote_title(self):
+        tools, _, engine = make_tools(index=FakeIndex(votes=(V1, WHOLE)), engine=FakeEngine([passage(2)]))
+        obs = tools.run('suche_passagen', {'vorlage_id': WHOLE.vote_id, 'anfrage': 'Miete'})
+        self.assertIsNone(obs.error)
+        self.assertIsNone(engine.calls[0]['vote'])  # "Gesamtes Büchlein" is a placeholder, not a vote of the booklet
+        self.assertEqual(engine.calls[0]['booklet_pdf'], BOOKLETS / '2030-01-01_de.pdf')
+        self.assertNotIn('Titel der Vorlage', obs.text.splitlines()[0])
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'})
+        self.assertEqual(engine.calls[1]['vote'], V1.title)
 
     def test_suche_passagen_vektor_searches_the_index_for_that_vote(self):
         index = FakeIndex(passages=[passage(4), passage(5)])

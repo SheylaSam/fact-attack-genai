@@ -35,7 +35,8 @@ from src.agent import settings
 from src.agent.decider import AgentAction, Decider
 from src.agent.prompts import system_prompt
 from src.agent.source_index import VoteRef
-from src.agent.tools import ERROR_INVALID_ARGS, TERMINAL_TOOLS, AgentTools, Observation, validate_args
+from src.agent.tools import (ERROR_INVALID_ARGS, TERMINAL_TOOLS, AgentTools, Observation, engine_vote,
+                             validate_args)
 from src.agent.trace import TraceEvent, Tracer
 from src.inference import PredictionResult
 from src.text_utils import guess_language, official_normalize
@@ -249,7 +250,7 @@ class _Nodes:
         args = {"vorlage_id": vote.vote_id, "passagen": len(passages)}
         started = time.perf_counter()
         prediction = self.engine.verify_with_passages(state["claim"], self.booklet_pdf(vote), passages,
-                                                      vote=vote.title, claim_language=state.get("language"))
+                                                      vote=engine_vote(vote), claim_language=state.get("language"))
         tokens = {"tokens_prompt": prediction.tokens_prompt, "tokens_completion": prediction.tokens_completion}
         message = None
         if prediction.error:  # the engine's neutral fallback: technical, never "nicht belegt"
