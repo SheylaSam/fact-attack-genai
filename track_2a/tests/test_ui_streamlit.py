@@ -65,6 +65,7 @@ def test_saved_example_result_remains_readable_when_live_is_unavailable():
         assert app.session_state['last_check']['notice']
         assert any(expander.label == 'Details zur Prüfung' for expander in app.expander)
         assert any('gespeicherte' in item.value for item in app.markdown)
+        assert any('Markiert ist der angezeigte Belegauszug' in item.value for item in app.caption)
 
 
 def test_partial_source_installation_only_offers_available_date_and_language():

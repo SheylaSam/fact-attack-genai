@@ -203,3 +203,35 @@ NLI-Anfragen. Beide Dockerfiles kopieren nun auch die Katalog-Metadaten; ein
 Containerbuild bleibt weiterhin ungeprüft.
 
 ![Verfügbare offizielle Quellen](assets/streamlit-source-catalog.png)
+
+
+## Originalseite mit Belegmarkierung
+
+Unter jeder unterstützten Belegseite lässt sich „Originalseite … öffnen“
+aufklappen. PyMuPDF rendert die physische Originalseite als PNG mit einer nur im
+Arbeitsspeicher ergänzten Markierung. Die PDF-Datei wird nicht überschrieben.
+Der angezeigte Belegauszug (ohne künstliches abschliessendes Auslassungszeichen)
+wird vollständig gesucht; kurze Präfixe werden nicht als Ersatz markiert.
+Nach Whitespace-/Trennstrichnormalisierung muss der Auszug genau einmal auf der
+Seite vorkommen und die PDF-Suche passende Koordinaten liefern. Andernfalls
+erscheint die Originalseite unmarkiert mit einem ausdrücklichen Hinweis.
+Neutrale Ergebnisse erhalten keine Belegmarkierung.
+
+Die bestehende Auswahl des angezeigten Belegauszugs auf der zitierten Seite und
+die NLI-/Exportlogik bleiben bestehen. Eine Markierung ist eine Lesehilfe, keine
+zusätzliche fachliche Verifikation. Die Beschriftung nennt die physische
+PDF-Seitennummer, die von der gedruckten Seitenzahl abweichen kann. Vollbild,
+Lesetext und Download des unveränderten Original-PDFs stehen bereit.
+Vorschaubilder werden begrenzt im Streamlit-Arbeitsspeicher gecacht (12 Einträge),
+ohne Dateipersistenz oder externe Übertragung. Auch der Lesetext markiert keine
+kurzen Präfixe mehr als Ersatz für ein nicht gefundenes vollständiges Zitat.
+
+Zwölf gezielte PDF-/UI-Tests bestanden (fünf bestehende PDF-Deprecation-Warnungen).
+Validiert mit synthetischen eindeutigen, fehlenden, wiederholten und neutralen
+Zitaten, ungültiger Seitennummer und dem echten italienischen PDF auf Seite 22.
+Die UI-Sichtprüfung lief in einer separaten lokalen Instanz mit blockierter API
+und einer ausdrücklich als gespeichert gekennzeichneten Demoantwort. Das echte
+französische Original auf Seite 20 und seine Markierung wurden im Vollbild
+geprüft. Keine neuen NLI-Aufrufe und keine neuen Modell-Qualitätsmessungen.
+
+![Markierter Beleg auf der französischen Originalseite](assets/streamlit-original-evidence.png)

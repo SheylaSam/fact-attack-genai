@@ -20,6 +20,7 @@ if str(_pkg_root) not in sys.path:
     sys.path.insert(0, str(_pkg_root))
 
 from src.pdf_parser import PDFParser
+from src.pdf_preview import render_evidence_page
 from src.retriever import PassageRetriever
 from src.apertus_client import ApertusClient
 from src.inference import ClaimVerificationEngine, PredictionResult, EvidenceSource
@@ -1118,7 +1119,7 @@ def highlight_evidence_in_page(page_text: str, quote: str, label: int) -> str:
         return html.escape(page_text)
 
     # Search with flexible whitespace \s+ (matches spaces, tabs, newlines across tokens)
-    for span_len in (len(words), min(len(words), 14), min(len(words), 8), min(len(words), 5), min(len(words), 3)):
+    for span_len in (len(words),):
         if span_len < 2:
             break
         pattern_str = r"\s+".join(words[:span_len])
@@ -1134,6 +1135,30 @@ def highlight_evidence_in_page(page_text: str, quote: str, label: int) -> str:
             pass
 
     return html.escape(page_text)
+
+
+@st.cache_data(max_entries=12, show_spinner=False)
+def original_page_preview(pdf_bytes, page_number, quote, label):
+    return render_evidence_page(pdf_bytes, page_number, quote, label)
+
+
+def show_original_page(pdf_path, source, snippet, label, page_text):
+    with st.expander(f"Originalseite {source.page_number} öffnen", expanded=False):
+        st.caption(f"PDF-Seite {source.page_number} · Die gedruckte Seitenzahl kann abweichen.")
+        try:
+            preview = original_page_preview(pdf_path.read_bytes(), source.page_number, snippet.removesuffix(" …"), label)
+            if preview.highlighted:
+                st.caption(preview.reason)
+            else:
+                st.info(preview.reason)
+            st.image(preview.png, caption=f"Original-PDF · Seite {source.page_number}", width="stretch")
+        except Exception:
+            st.warning("Die Originalseite lässt sich gerade nicht darstellen. Der Lesetext und das Original-PDF bleiben verfügbar.")
+        with st.expander("Lesetext der Seite", expanded=False):
+            st.markdown(highlight_evidence_in_page(page_text, snippet.removesuffix(" …"), label), unsafe_allow_html=True)
+        st.download_button("Original-PDF herunterladen", data=pdf_path.read_bytes(),
+                           file_name=pdf_path.name, mime="application/pdf",
+                           key=f"original_pdf_{source.page_number}_{source.quote[:30]}")
 
 
 # =============================================================================
@@ -1540,21 +1565,15 @@ with tab_factcheck:
                 primary_quote, primary_page = snippets[0], first.page_number
                 st.markdown(evidence_html(first, snippets[0]), unsafe_allow_html=True)
                 if first.page_number in pages_by_no:
-                    with st.expander(f"Ganze Seite {first.page_number} ansehen", expanded=False):
-                        highlighted_html = highlight_evidence_in_page(pages_by_no[first.page_number]["text"], snippets[0], result.label)
-                        st.markdown(f"""
-                        <div class="doc-facsimile">
-                            <div class="doc-facsimile-bar">
-                                <span>Abstimmungsbüchlein {selected_date} ({lang_code.upper()})</span>
-                                <span>Seite {first.page_number}</span>
-                            </div>
-                            <div style="white-space: pre-wrap;">{highlighted_html}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    show_original_page(pdf_path, first, snippets[0], result.label,
+                                       pages_by_no[first.page_number]["text"])
                 if len(result.evidence_sources) > 1:
                     with st.expander(f"Weitere Belegstellen ({len(result.evidence_sources) - 1})", expanded=False):
                         for src, snippet in zip(result.evidence_sources[1:], snippets[1:]):
                             st.markdown(evidence_html(src, snippet), unsafe_allow_html=True)
+                            if src.page_number in pages_by_no and src.page_number != first.page_number:
+                                show_original_page(pdf_path, src, snippet, result.label,
+                                                   pages_by_no[src.page_number]["text"])
             elif result.label == 1:
                 chips = "".join(
                     f'<span class="page-chip">S. {pg}{" · " + SECTION_DE[section_by_page[pg]] if SECTION_DE.get(section_by_page.get(pg)) else ""}</span>'
