@@ -29,3 +29,6 @@ results/*.raw.jsonl
 **/data/booklets/custom_*.pdf
 **/data/booklets/.upload-*.tmp
 **/.venv*
+
+# Private local check history
+**/.local-history

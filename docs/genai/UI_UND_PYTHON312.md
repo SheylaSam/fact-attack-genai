@@ -260,3 +260,38 @@ Im Browser führte „Mietrecht“ zu genau einem Termin, dem 24. November 2024.
 Keine Downloads oder Apertus-Aufrufe durch die Suche.
 
 ![Themensuche im Quellenkatalog](assets/streamlit-source-search.png)
+
+
+## Lokaler Prüfverlauf
+
+„Prüfung lokal im Verlauf speichern“ ist beim Start aktiviert und kann vor einer
+Prüfung abgewählt werden. Erfolgreiche Prüfungen werden mit UTC-Zeitpunkt,
+Behauptung, Vorlage, Strategie, Ergebnis, Belegen und SHA-256 der Quelle in
+`track_2a/data/.local-history/checks.sqlite3` gespeichert. Die ursprünglichen
+PDF-Dateien werden dafür nicht kopiert. Jede bewusst gestartete erfolgreiche
+Prüfung legt einen eigenen Eintrag an; ein reines Öffnen des Verlaufs nicht.
+Demo-Fallbacks sind als `saved_demo` statt als neue Liveantwort gekennzeichnet.
+Eine fehlgeschlagene Verlaufsspeicherung verwirft nicht das angezeigte Ergebnis.
+
+Im Tab „Prüfverlauf“ lassen sich frühere Antworten und Belege nach einem App-
+Neustart ohne neue Inferenz ansehen. Eine Originalvorschau wird nur gezeigt,
+wenn die gespeicherte PDF-Datei noch denselben Inhalts-Hash hat; sonst bleiben
+Zitate und Ergebnis als historische Momentaufnahme lesbar. Die Auswertung wird
+nicht neu berechnet oder als aktuell verifiziert ausgegeben.
+
+SQLite schreibt Einträge transaktional; neu angelegte Datenbankdateien erhalten
+Modus 0600. Verlauf und Nebenfiles sind aus Git und beiden Docker-Buildkontexten
+ausgeschlossen. Das ist ein lokaler Verlauf für diese App-Installation, kein
+persönliches Konto oder Mehrbenutzersystem: Nutzer derselben Installation sehen
+denselben Verlauf. Automatische Löschung, Export und eine Löschoberfläche sind
+noch nicht implementiert.
+
+Neun gezielte Speicher-/Streamlit-Tests bestanden (fünf bestehende PDF-Warnungen):
+Persistenz über einen neuen App-Lauf, Abschalten der Speicherung, Demo-/Live-
+Kennzeichnung, veränderte oder fehlende Quellen und Pfadbegrenzung. UI-Tests
+verwenden ausschliesslich temporäre Datenbanken. Die Browser-Sichtprüfung nutzte
+eine separate Datenbank unter `/tmp` mit blockierter API und einer gespeicherten
+Demoantwort. Keine neue Apertus-Anfrage. Die normale lokale Vorschau enthält
+keinen dadurch angelegten Demo-Verlaufseintrag.
+
+![Lokaler Prüfverlauf mit gekennzeichneter Demoantwort](assets/streamlit-check-history.png)

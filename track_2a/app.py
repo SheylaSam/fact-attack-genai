@@ -10,6 +10,7 @@ import json
 import time
 import re
 import html
+import sqlite3
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import streamlit as st
@@ -28,6 +29,7 @@ from src.evaluator import BenchmarkEvaluator
 from src.results_summary import build_summary
 from src.text_utils import best_snippet, guess_language
 from src import config
+from src.check_history import save_check, load_checks, matching_source
 from src.booklet_catalog import load_catalog, available_sources, date_options, languages_for_date, filter_sources
 from src.ui_strategies import STANDARD, strategy_options, strategy_from_label, rag_available, store_uploaded_source, load_completed_dev42
 
@@ -1365,8 +1367,10 @@ st.markdown("""
 
 
 # ── Navigation Tabs ──────────────────────────────────────────────────────────
-tab_factcheck, tab_benchmark, tab_methodology = st.tabs([
+HISTORY_PATH = config.DATA_DIR / ".local-history/checks.sqlite3"
+tab_factcheck, tab_history, tab_benchmark, tab_methodology = st.tabs([
     "Faktencheck",
+    "Prüfverlauf",
     "Ergebnisse & Vergleiche",
     "So funktioniert’s",
 ])
@@ -1465,6 +1469,8 @@ with tab_factcheck:
             claim_lang_choice = st.selectbox("Erkennung", ["Automatisch", "DE", "FR", "IT"], key="claim_lang")
             st.caption("Deutsch, Französisch und Italienisch werden automatisch erkannt. Die Quelle darf eine andere Sprache haben.")
         claim_lang = guess_language(claim) if claim_lang_choice == "Automatisch" else claim_lang_choice.lower()
+        save_history = st.checkbox("Prüfung lokal im Verlauf speichern", value=True, key="save_history",
+                                   help="Speichert Behauptung, Quelle und Ergebnis auf diesem Rechner. Der Verlauf ist für Nutzer dieser lokalen App-Installation sichtbar.")
         verify_clicked = st.button("Behauptung prüfen", type="primary", width="stretch", disabled=not claim.strip() or (no_source_matches and uploaded_file is None))
         st.caption("Beim Prüfen werden die Behauptung und ausgewählte Textstellen an Apertus auf CSCS gesendet.")
         st.markdown(
@@ -1518,6 +1524,13 @@ with tab_factcheck:
                         st.error(f"Die Prüfung konnte nicht abgeschlossen werden ({exc}).")
             if result is not None:
                 st.session_state["last_check"] = {"signature": signature, "result": result, "notice": notice}
+                if save_history:
+                    try:
+                        save_check(HISTORY_PATH, result=result.model_dump(mode="json"), source_path=pdf_path,
+                                   date=selected_date, language=lang_code, vote=vote, notice=notice)
+                    except (OSError, ValueError, sqlite3.Error):
+                        with col_out:
+                            st.warning("Das Ergebnis ist verfügbar, konnte aber nicht im lokalen Verlauf gespeichert werden.")
 
     last_check = st.session_state.get("last_check")
     result = last_check["result"] if last_check and last_check["signature"] == signature else None
@@ -1657,6 +1670,53 @@ with tab_factcheck:
                     label="SVG herunterladen", data=card_svg,
                     file_name=f"faktencheck_{result.label_name.lower()}.svg", mime="image/svg+xml", width="stretch",
                 )
+
+
+with tab_history:
+    st.markdown("### Dein Prüfverlauf")
+    st.caption("Lokal auf diesem Rechner gespeichert · Öffnen löst keine neue Prüfung aus. Sichtbar für Nutzer dieser App-Installation.")
+    try:
+        history = load_checks(HISTORY_PATH)
+    except (OSError, ValueError, sqlite3.Error):
+        history = []
+        st.warning("Der lokale Verlauf lässt sich gerade nicht lesen.")
+    if not history:
+        st.info("Noch keine Prüfungen gespeichert. Aktiviere beim Faktencheck die lokale Speicherung.")
+    else:
+        indexed = {record["id"]: record for record in history}
+        selected_id = st.selectbox("Gespeicherte Prüfung", list(indexed),
+            format_func=lambda key: f"{indexed[key]['created_at'][:16].replace('T', ' ')} UTC · {indexed[key]['result']['claim'][:90]}",
+            key="history_selected")
+        record = indexed[selected_id]
+        saved_result = PredictionResult(**record["result"])
+        st.markdown("#### " + VERDICTS[saved_result.label][2])
+        st.text(saved_result.claim)
+        st.caption(f"Quelle: {record['date']} · {record['language'].upper()} · Strategie: {saved_result.strategy}")
+        if record["origin"] == "saved_demo":
+            st.info("Gespeicherte Demoantwort – bei dieser Prüfung wurde keine neue Liveantwort erzeugt.")
+        else:
+            st.caption("Gespeicherte Liveantwort · Keine erneute API-Anfrage beim Öffnen")
+        if record.get("vote"):
+            st.text("Vorlage: " + record["vote"])
+        source_path = matching_source(config.BOOKLETS_DIR, record)
+        if source_path is None:
+            st.warning("Die ursprüngliche PDF-Datei fehlt oder hat sich verändert. Die gespeicherten Zitate bleiben lesbar; eine Originalvorschau wird nicht angezeigt.")
+        if saved_result.label == 1:
+            st.info("Im damals geprüften Kontext wurde keine bestätigende oder widersprechende Belegstelle gefunden.")
+        for index, source in enumerate(saved_result.evidence_sources if saved_result.label != 1 else []):
+            with st.expander(f"Beleg {index + 1} · PDF-Seite {source.page_number}", expanded=index == 0):
+                snippet = best_snippet(source.quote, saved_result.claim)
+                st.text(snippet)
+                if source_path and source.page_number:
+                    try:
+                        preview = original_page_preview(source_path.read_bytes(), source.page_number,
+                                                        snippet.removesuffix(" …"), saved_result.label)
+                        st.caption(preview.reason)
+                        st.image(preview.png, width="stretch")
+                    except Exception:
+                        st.info("Die Originalseite lässt sich gerade nicht darstellen.")
+        with st.expander("Gespeicherte Details", expanded=False):
+            st.json(saved_result.to_official_dict())
 
 
 # =============================================================================

@@ -9,6 +9,15 @@ from src.ui_strategies import STANDARD,DENSE,FUSED
 APP=Path(__file__).parents[1]/'app.py'
 
 
+@pytest.fixture(autouse=True)
+def isolated_history(tmp_path):
+    from src.check_history import save_check, load_checks
+    database = tmp_path / 'history.sqlite3'
+    with patch('src.check_history.save_check', side_effect=lambda path, **kwargs: save_check(database, **kwargs)), \
+         patch('src.check_history.load_checks', side_effect=lambda path: load_checks(database)):
+        yield database
+
+
 def test_strategy_opt_in_switch_and_reset_do_not_infer():
     with patch('src.apertus_client.ApertusClient._request_completion',side_effect=AssertionError('No paid inference in UI tests')) as remote:
         app=AppTest.from_file(APP,default_timeout=50).run()
@@ -102,3 +111,28 @@ def test_source_filters_no_hits_reset_and_examples_do_not_infer():
         assert app.selectbox(key='source_year').value == 'Alle Jahre'
         assert app.selectbox(key='ballot').value == '14. Juni 2026'
         remote.assert_not_called()
+
+
+def test_history_reopens_after_app_restart_without_inference(isolated_history):
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=RuntimeError('Offline')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        next(button for button in app.button if button.key.startswith('story_')).click().run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert not app.exception
+        assert isolated_history.exists()
+        reopened = AppTest.from_file(APP, default_timeout=50).run()
+        assert not reopened.exception
+        assert len(reopened.selectbox(key='history_selected').options) == 1
+        assert any('Gespeicherte Demoantwort' in info.value for info in reopened.info)
+        remote.assert_not_called()
+
+
+def test_history_opt_out_does_not_persist_a_check(isolated_history):
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=RuntimeError('Offline')):
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        app.checkbox(key='save_history').uncheck().run()
+        next(button for button in app.button if button.key.startswith('story_')).click().run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert not app.exception
+        assert 'last_check' in app.session_state
+        assert not isolated_history.exists()
