@@ -117,3 +117,11 @@ def test_metadata_failure_restores_config_and_closes_engine():
             run(args)
         engine.return_value.close.assert_called_once()
     assert (config.RETRIEVAL_QUERY_MODE, config.TRANSLATE_CLAIM)==old
+
+
+def test_explicit_subset_rejects_unknown_ids_before_model_loading():
+    args=argparse.Namespace(dataset=Path(__file__).parents[1]/'data/demo_dataset.jsonl',case_ids=['unknown'])
+    with patch('src.rag_evaluation.E5Encoder') as encoder:
+        with pytest.raises(ValueError,match='case ids'):
+            run(args)
+        encoder.assert_not_called()

@@ -83,6 +83,11 @@ def run(args):
     records = load_records(args.dataset)
     for rec, raw in zip(records, raw_records):
         rec['gold_evidence_pages'] = validate_gold_pages(raw.get('gold_evidence_pages'))
+    if getattr(args, 'case_ids', None):
+        requested = set(args.case_ids)
+        if len(requested) != len(args.case_ids) or not requested.issubset({r['id'] for r in records}):
+            raise ValueError('Requested case ids must be unique and exist in dataset')
+        records = [r for r in records if r['id'] in requested]
     if args.limit:
         records = records[:args.limit]
     if not records or len({r['id'] for r in records}) != len(records):
@@ -115,6 +120,7 @@ def run(args):
                   'baseline_config': {k: getattr(config, k) for k in ('PART_CONTEXT', 'PART_CONTEXT_CHARS', 'PART_CONTEXT_CHARS_LEGAL', 'PAGE_MAX_CHARS', 'SPEAKER_AWARE', 'SPEAKER_BOOST', 'DEFAULT_TOP_K')},
                   'retrieval_policy': {'query_translation': 'disabled', 'claim_translation': 'disabled',
                       'baseline_budget': 'native or shared E5 text budget; context order retained'},
+                  'selected_case_ids': [r['id'] for r in records],
                   'top_k': args.top_k, 'context_budget_e5_tokens': args.budget, 'setup': [], 'rows': []}
         for pdf in sorted({r['booklet_pdf'] for r in records}):
             start = time.perf_counter()
@@ -243,7 +249,8 @@ def run(args):
         'Warm query times include query encoding; setup reports index build OR reopen, not cold-only build.']
     report['source_sha256'] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
         for p in [Path(__file__), Path(__file__).with_name('vector_rag.py'),
-                  Path(__file__).with_name('inference.py'), Path(__file__).with_name('apertus_client.py')]}
+                  Path(__file__).with_name('inference.py'), Path(__file__).with_name('apertus_client.py'),
+                  Path(__file__).with_name('pdf_parser.py'), Path(__file__).with_name('text_utils.py')]}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n')
     print(f"Wrote {len(report['rows'])} paired rows to {args.output}")
@@ -255,6 +262,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--index-dir', type=Path, default=config.BASE_DIR/'.rag-index')
     parser.add_argument('--revision', default='614241f622f53c4eeff9890bdc4f31cfecc418b3')
+    parser.add_argument('--case-ids', nargs='+', help='Explicit paired subset; all ids must exist')
     parser.add_argument('--limit', type=int)
     parser.add_argument('--top-k', type=int, default=5)
     parser.add_argument('--budget', type=int, default=1536)
