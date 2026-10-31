@@ -23,5 +23,6 @@
     "folds.jsonl": "6199a92e095602b4a405df64ade54668630e2f6595ca8e2f34c0efb8afb087c8"
   },
   "historical_test_is_observed": false,
-  "untouched_holdout_available": true
+  "untouched_holdout_available": false,
+  "usage_status": "Observed dev/regression: influenced E23 and later development; not a sealed test set"
 }

@@ -292,6 +292,7 @@ class ClaimVerificationEngine:
         self._source_pages_lock = threading.Lock()
         self._query_translator = None
         self._vector_retrievers = {}
+        self._vector_encoder = None
         self._vector_lock = threading.Lock()
 
     def close(self):
@@ -300,6 +301,7 @@ class ClaimVerificationEngine:
             for retriever in self._vector_retrievers.values():
                 retriever.close()
             self._vector_retrievers.clear()
+            self._vector_encoder = None
 
     def _get_booklet_data(self, pdf_path: Union[str, Path]) -> Dict[str, Any]:
         path_str = str(Path(pdf_path).resolve())
@@ -555,11 +557,16 @@ class ClaimVerificationEngine:
             retriever: PassageRetriever = booklet_data["retriever"]
             if strat in ("vector", "vector_hybrid"):
                 # Optional GenAI experiment: explicit strategy, never a default fallback.
-                from src.vector_rag import VectorRetriever
-                key = str(Path(booklet_pdf).resolve())
+                from src.vector_rag import E5Encoder, VectorRetriever
+                content_hash = hashlib.sha256(json.dumps(booklet_data["paragraphs"], sort_keys=True,
+                    ensure_ascii=False, default=str).encode()).hexdigest()
+                key = (str(Path(booklet_pdf).resolve()), content_hash)
                 with self._vector_lock:
                     if key not in self._vector_retrievers:
-                        self._vector_retrievers[key] = VectorRetriever(booklet_data["paragraphs"])
+                        if self._vector_encoder is None:
+                            self._vector_encoder = E5Encoder()
+                        self._vector_retrievers[key] = VectorRetriever(
+                            booklet_data["paragraphs"], encoder=self._vector_encoder)
                     candidate_paras = self._vector_retrievers[key].retrieve(
                         claim, top_k=top_k, target_vote=vote, mode=strat,
                         exclude_sections=opposing_sections(claim) if config.SPEAKER_AWARE else None,
@@ -568,9 +575,9 @@ class ClaimVerificationEngine:
                         section_caps={_LEGAL_TEXT_SECTION: config.LEGAL_TEXT_MAX_PAGES}
                         if config.LEGAL_TEXT_MAX_PAGES else None,
                     )
-                query_metadata = {"mode": strat,
-                                  "embedding": self._vector_retrievers[key].metadata,
-                                  "translation_used": False}
+                    query_metadata = {"mode": strat,
+                                      "embedding": self._vector_retrievers[key].metadata,
+                                      "translation_used": False}
             elif strat == "hybrid":
                 # Strategy 3: booklet-wide BM25(claim) + BM25(vote title), no hard proposal filter
                 candidate_paras = retriever.retrieve_hybrid(

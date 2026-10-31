@@ -94,17 +94,22 @@ class VectorRetriever:
         else:
             self.client = QdrantClient(':memory:')
         self.collection = 'booklet'
-        if self.client.collection_exists(self.collection):
-            if self.client.count(self.collection, exact=True).count != len(self.chunks):
-                raise ValueError('Incomplete index: remove its fingerprint directory and rebuild')
-        elif self.chunks:
-            vectors = self.encoder.encode([p['text'] for p in self.chunks])
-            self._validate_vectors(vectors, len(self.chunks))
-            self.client.create_collection(self.collection, vectors_config=models.VectorParams(
-                size=len(vectors[0]), distance=models.Distance.COSINE))
-            for start in range(0, len(vectors), 128):
-                self.client.upsert(self.collection, points=[models.PointStruct(id=i, vector=vectors[i])
-                                   for i in range(start, min(start + 128, len(vectors)))], wait=True)
+        try:
+            self.metadata["index_reused"] = self.client.collection_exists(self.collection)
+            if self.metadata["index_reused"]:
+                if self.client.count(self.collection, exact=True).count != len(self.chunks):
+                    raise ValueError('Incomplete index: remove its fingerprint directory and rebuild')
+            elif self.chunks:
+                vectors = self.encoder.encode([p['text'] for p in self.chunks])
+                self._validate_vectors(vectors, len(self.chunks))
+                self.client.create_collection(self.collection, vectors_config=models.VectorParams(
+                    size=len(vectors[0]), distance=models.Distance.COSINE))
+                for start in range(0, len(vectors), 128):
+                    self.client.upsert(self.collection, points=[models.PointStruct(id=i, vector=vectors[i])
+                                       for i in range(start, min(start + 128, len(vectors)))], wait=True)
+        except BaseException:
+            self.client.close()
+            raise
 
     @staticmethod
     def _validate_vectors(vectors, expected):
@@ -133,7 +138,8 @@ class VectorRetriever:
         if mode == 'vector_hybrid':
             lexical = self.bm25.retrieve_hybrid(claim, top_k=len(self.chunks), target_vote=target_vote)
             identities = {(p['parent_index'], p['chunk_number']): i for i, p in enumerate(self.chunks)}
-            rankings.append([identities[(p['parent_index'], p['chunk_number'])] for p in lexical])
+            rankings.append([identities[(p['parent_index'], p['chunk_number'])] for p in lexical
+                             if p.get('retrieval_score', 0) > 0])
         scores = dict(dense_scores)
         if mode == 'vector_hybrid':
             scores = {i: 0.0 for i in dense_ids}

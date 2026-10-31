@@ -107,6 +107,9 @@ class TestConcurrentBatch(unittest.TestCase):
             def __init__(self, **kwargs):
                 self.client = client
 
+            def close(self):
+                pass
+
             def verify_premise(self, **kwargs):
                 self.client._request_completion(model='swiss-ai/Apertus-v1.5-70B-thinking',
                                                 messages=[{'role': 'user', 'content': kwargs['claim']}])

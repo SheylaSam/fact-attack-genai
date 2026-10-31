@@ -61,6 +61,40 @@ class VectorRetrievalTests(unittest.TestCase):
                 r.retrieve('claim', top_k=0)
         finally:
             r.close()
+    def test_failed_constructor_releases_persistent_lock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            encoder = Encoder()
+            with patch.object(encoder, 'encode', side_effect=ValueError('bad encoder')):
+                with self.assertRaisesRegex(ValueError, 'bad encoder'):
+                    VectorRetriever(self.paras, encoder=encoder, index_dir=directory)
+            r = VectorRetriever(self.paras, encoder=Encoder(), index_dir=directory)
+            r.close()
+
+    def test_engine_shares_encoder_and_invalidates_changed_content(self):
+        from src.apertus_client import ApertusClient
+        from src.inference import ClaimVerificationEngine
+        engine = ClaimVerificationEngine(strategy='vector', apertus_client=ApertusClient(mock=True))
+        data = {'paragraphs': self.paras, 'pages': self.paras, 'full_text': 'text', 'retriever': PassageRetriever(self.paras)}
+        r = VectorRetriever(self.paras, encoder=Encoder())
+        changed = [{**p, 'text': p['text'] + ' changed'} for p in self.paras]
+        r2 = VectorRetriever(changed, encoder=Encoder())
+        try:
+            with patch.object(engine, '_ready_booklet_data', return_value=data), \
+                 patch('src.vector_rag.VectorRetriever', side_effect=[r, r2]) as factory, \
+                 patch('src.vector_rag.E5Encoder', return_value=Encoder()) as encoder, \
+                 patch('src.config.EVIDENCE_POLICY', 'legacy'):
+                engine.verify_claim('loyer', 'unused.pdf', top_k=1)
+                engine.verify_claim('loyer', 'unused.pdf', top_k=1)
+                self.assertEqual(factory.call_count, 1)
+                data['paragraphs'] = changed
+                engine.verify_claim('loyer', 'unused.pdf', top_k=1)
+                self.assertEqual(factory.call_count, 2)
+                encoder.assert_called_once()
+        finally:
+            engine.close()
+        self.assertEqual(engine._vector_retrievers, {})
+        self.assertIsNone(engine._vector_encoder)
+
     def test_engine_routes_to_vector_not_part_heuristic(self):
         from src.apertus_client import ApertusClient
         from src.inference import ClaimVerificationEngine
@@ -71,10 +105,11 @@ class VectorRetrievalTests(unittest.TestCase):
             with patch.object(engine, '_ready_booklet_data', return_value=data), \
                  patch.object(engine, '_part_passages', side_effect=AssertionError('Part routing')), \
                  patch('src.vector_rag.VectorRetriever', return_value=r), \
+                 patch('src.vector_rag.E5Encoder', return_value=Encoder()), \
                  patch('src.config.EVIDENCE_POLICY', 'legacy'):
                 prediction = engine.verify_claim('loyer', 'unused.pdf', top_k=1)
             self.assertEqual(prediction.strategy, 'vector')
             self.assertIsNone(prediction.error)
             self.assertEqual(prediction.context_pages, [4])
         finally:
-            r.close()
+            engine.close()
