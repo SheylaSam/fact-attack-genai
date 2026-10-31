@@ -13,8 +13,11 @@
   that answer does not end the search, the run ends as `technischer_fehler` ("Schrittgrenze").
 * `verify` checks the claim against the vote's pooled passages with the proven NLI path. `PredictionResult.error`
   is a technical error, whatever the label.
-* `check_evidence` keeps a quote only if `official_normalize(quote)` is part of the normalized PDF text of its page. A
-  verdict without a valid quote becomes `nicht_belegt` with the note `DISCARDED_NOTE`.
+* `check_evidence` keeps a quote only if `official_normalize(quote)` is part of the normalized PDF text of its page or
+  of one of that page's PDF text blocks (`engine.source_page`; the engine quotes whole pages and blocks). A verdict
+  without a valid quote becomes `nicht_belegt` with the note `DISCARDED_NOTE`. A cited page without readable PDF text
+  cannot be checked: technical error, never `nicht_belegt`.
+* `run_check` refuses `EVIDENCE_POLICY=legacy` before any LLM call: its quotes are not original PDF text.
 
 Every node emits a `TraceEvent`; any exception in a node ends the run as `technischer_fehler` with a message.
 Sync only (`invoke`): the request budget counts only synchronous requests.
@@ -26,6 +29,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, TypedDic
 
 from langgraph.graph import END, START, StateGraph
 
+from src import config
 from src.agent import settings
 from src.agent.decider import AgentAction, Decider
 from src.agent.prompts import system_prompt
@@ -46,6 +50,11 @@ LANGUAGE_REASON = ("Die Behauptung ist nicht auf Deutsch (Sprache: {language}). 
                    "bisher nur für deutsche Büchlein. Bitte die Quelle selbst wählen; mit vorgegebener Quelle wird "
                    "die Behauptung in jeder Sprache geprüft.")
 NO_RESULT = "Der Lauf endete ohne Ergebnis."
+UNREADABLE_ERROR = ("Belegprüfung nicht möglich: Für {pages} von {source} gibt es keinen lesbaren PDF-Text; die "
+                    "Zitate dort lassen sich nicht prüfen.")
+LEGACY_POLICY_ERROR = ("EVIDENCE_POLICY=legacy wird vom Agenten nicht unterstützt: Seine Belegprüfung braucht Zitate "
+                       "aus dem Originaltext der PDF-Seiten (EVIDENCE_POLICY raw_pages oder raw_pages_and_blocks). Es "
+                       "wurde nichts geprüft.")
 SUMMARY_CHARS = 200
 ERROR_CHARS = 300
 _PAGE_PREFIX = re.compile(r"^\[(?:page|seite)\s+\d+\] ?", re.IGNORECASE)  # engine prefix, as in to_official_dict
@@ -262,8 +271,13 @@ class _Nodes:
         if verdict == "nicht_belegt":
             self.emit(step, "check_evidence", started, summary="Nicht belegt: kein Zitat zu prüfen")
             return {"outcome": verdict, "evidence": [], "reasoning": prediction.reasoning, "route": "finish"}
-        evidence = self._valid_evidence(vote, prediction)
+        evidence, unreadable = self._valid_evidence(vote, prediction)
         total = len(prediction.evidence_sources)
+        if unreadable:  # the check could not be done: technical, never "nicht belegt"
+            pages = ("Seite " if len(unreadable) == 1 else "Seiten ") + ", ".join(map(str, unreadable))
+            message = UNREADABLE_ERROR.format(pages=pages, source=f"{vote.source_id}.pdf")
+            self.emit(step, "check_evidence", started, summary="Belegprüfung nicht möglich", error=message)
+            return {"error": message, "route": "finish"}
         if evidence:
             self.emit(step, "check_evidence", started,
                       summary=f"{len(evidence)} gültige Belege aus {total} Zitaten: {verdict}")
@@ -273,11 +287,18 @@ class _Nodes:
         return {"outcome": "nicht_belegt", "evidence": [], "note": DISCARDED_NOTE,
                 "reasoning": DISCARDED_REASON.format(verdict=verdict), "route": "finish"}
 
-    def _valid_evidence(self, vote: VoteRef, prediction: PredictionResult) -> List[EvidenceItem]:
-        """The quotes found verbatim (after `official_normalize`) in the PDF text of their page, without duplicates."""
+    def _page_texts(self, pdf, page: int) -> List[str]:
+        """The normalized PDF text of the page and of each of its text blocks; empty: the page has no readable text."""
+        source = self.engine.source_page(pdf, page) or {}
+        texts = [source.get("text") or ""] + list(source.get("blocks") or [])
+        return [text for text in (official_normalize(t) for t in texts if isinstance(t, str)) if text]
+
+    def _valid_evidence(self, vote: VoteRef, prediction: PredictionResult) -> Tuple[List[EvidenceItem], List[int]]:
+        """The quotes found verbatim (after `official_normalize`) in the PDF text of their page or of one of its text
+        blocks, without duplicates; and the cited pages without readable PDF text, whose quotes cannot be checked."""
         pdf = self.booklet_pdf(vote)
-        pages: Dict[int, str] = {}
-        seen, items = set(), []
+        pages: Dict[int, List[str]] = {}
+        seen, items, unreadable = set(), [], []
         for source in prediction.evidence_sources:
             page = source.page_number
             if type(page) is not int or page < 1:
@@ -287,12 +308,13 @@ class _Nodes:
             if not normalized or (page, normalized) in seen:
                 continue
             if page not in pages:
-                text = self.engine.source_page_text(pdf, page)
-                pages[page] = official_normalize(text) if text else ""
-            if normalized in pages[page]:
+                pages[page] = self._page_texts(pdf, page)
+                if not pages[page]:
+                    unreadable.append(page)
+            if any(normalized in text for text in pages[page]):
                 seen.add((page, normalized))
                 items.append(EvidenceItem(page=page, quote=quote))
-        return items
+        return items, sorted(unreadable)
 
     def finish(self, state: _State) -> dict:
         outcome, error = state.get("outcome"), state.get("error")
@@ -358,6 +380,7 @@ def run_check(claim: str, *, tools: AgentTools, decider: Decider, engine, tracer
     Without a given vote (`tools.fixed_vote_id`) only claims in `settings.LANGUAGES` are searched; others end as
     `quelle_fehlt` before any LLM call. `claim_language` defaults to `guess_language(claim)`. With `budget` (the
     check's `RequestBudget`) a refused request makes the result a technical error even if it was swallowed.
+    `EVIDENCE_POLICY=legacy` is refused as a technical error before any LLM call.
     """
     if not isinstance(claim, str) or not claim.strip() or len(claim) > settings.MAX_CLAIM_CHARS:
         length = len(claim) if isinstance(claim, str) else type(claim).__name__
@@ -365,6 +388,10 @@ def run_check(claim: str, *, tools: AgentTools, decider: Decider, engine, tracer
                          f"(erhalten: {length}).")
     first_event = len(tracer.events)
     try:
+        if config.EVIDENCE_POLICY == "legacy":  # its quotes are not original PDF text: the evidence check cannot work
+            tracer.emit(step=0, node="finish", summary="Ergebnis: technischer_fehler", error=LEGACY_POLICY_ERROR)
+            return AgentResult(outcome="technischer_fehler", reasoning=TECHNICAL_REASON, error=LEGACY_POLICY_ERROR,
+                               events=tracer.events[first_event:])
         language = (claim_language or guess_language(claim)).strip().lower()
         if tools.fixed_vote_id is None and language not in settings.LANGUAGES:
             reasoning = LANGUAGE_REASON.format(language=language)

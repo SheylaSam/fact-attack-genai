@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src import config
@@ -88,10 +89,11 @@ class FakeIndex:
 
 
 class FakeEngine:
-    def __init__(self, prediction=None, pages=None, verify_error=None):
+    def __init__(self, prediction=None, pages=None, blocks=None, verify_error=None):
         self.passages = [passage(2, PAGE_2)]
         self.prediction = make_prediction(0, [(2, QUOTE)]) if prediction is None else prediction
-        self.pages = {2: PAGE_2} if pages is None else pages
+        self.pages = {2: PAGE_2} if pages is None else pages  # page number -> PDF text; a missing page is None
+        self.blocks = blocks or {}  # page number -> the page's text blocks
         self.verify_error = verify_error
         self.verify_calls = []
 
@@ -105,8 +107,10 @@ class FakeEngine:
             raise self.verify_error
         return self.prediction
 
-    def source_page_text(self, booklet_pdf, page_number):
-        return self.pages.get(page_number)
+    def source_page(self, booklet_pdf, page_number):
+        if page_number not in self.pages:
+            return None
+        return {'text': self.pages[page_number], 'blocks': list(self.blocks.get(page_number, []))}
 
 
 class RecordingDecider:
@@ -377,7 +381,6 @@ class GraphTests(unittest.TestCase):
 
     def test_supported_without_valid_quote_becomes_nicht_belegt_with_note(self):
         cases = {'quote not in the PDF': [(2, 'Ein Satz, den das Büchlein so nicht enthält.')],
-                 'quote on a page the PDF lacks': [(9, QUOTE)],
                  'quote without page': [(None, QUOTE)],
                  'no quote': []}
         for label in (0, 2):
@@ -393,6 +396,56 @@ class GraphTests(unittest.TestCase):
                     self.assertEqual(result.vote, V1)
                     evidence_check = next(e for e in result.events if e.node == 'check_evidence')
                     self.assertIn('verworfen', evidence_check.summary)
+
+    def test_quote_of_a_text_block_is_valid(self):
+        # the page text runs margin labels into the lines; the PDF text block keeps the quoted sentence together
+        page = 'Empfehlung     Aus all diesen Gründen empfehlen\nBundesrat      Bundesrat und Parlament ein Ja.'
+        block = 'Aus all diesen Gründen empfehlen \nBundesrat und Parlament ein Ja.\n'
+        self.assertNotIn(official_normalize(block), official_normalize(page))
+        engine = FakeEngine(prediction=make_prediction(0, [(2, block)]), pages={2: page}, blocks={2: [block]})
+        decider = PresetDecider(search_votes(), search_passages(), act('pruefen', vorlage_id=V1.vote_id))
+        result, _, _ = check(decider, engine=engine)
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertEqual(result.evidence, [EvidenceItem(page=2, quote=block)])
+        # a block of another page does not make the quote valid on this one
+        engine = FakeEngine(prediction=make_prediction(0, [(2, block)]), pages={2: page, 3: 'Seite 3'},
+                            blocks={3: [block]})
+        decider = PresetDecider(search_votes(), search_passages(), act('pruefen', vorlage_id=V1.vote_id))
+        result, _, _ = check(decider, engine=engine)
+        self.assertEqual(result.outcome, 'nicht_belegt')
+        self.assertEqual(result.note, NOTE)
+
+    def test_cited_page_without_readable_text_is_technical_error(self):
+        cases = {'page the PDF source lacks': ({2: PAGE_2}, [(9, QUOTE)]),
+                 'page without any text': ({2: ''}, [(2, QUOTE)]),
+                 'page of blanks only': ({2: ' \n\t '}, [(2, QUOTE)]),
+                 'a valid quote and an unreadable page': ({2: PAGE_2}, [(2, QUOTE), (9, QUOTE)])}
+        for label in (0, 2):
+            for name, (pages, quotes) in cases.items():
+                with self.subTest(label=label, case=name):
+                    engine = FakeEngine(prediction=make_prediction(label, quotes), pages=pages)
+                    decider = PresetDecider(search_votes(), search_passages(), act('pruefen', vorlage_id=V1.vote_id))
+                    result, _, _ = check(decider, engine=engine)
+                    self.assertEqual(result.outcome, 'technischer_fehler')  # never "nicht belegt"
+                    self.assertIn('Belegprüfung', result.error)
+                    self.assertIn('lesbaren PDF-Text', result.error)
+                    self.assertIn('Seite 9' if 9 in dict(quotes) else 'Seite 2', result.error)
+                    self.assertEqual(result.evidence, [])
+                    self.assertIsNone(result.note)
+                    self.assertEqual(result.vote, V1)
+                    evidence_check = next(e for e in result.events if e.node == 'check_evidence')
+                    self.assertEqual(evidence_check.error, result.error)
+
+    def test_legacy_evidence_policy_is_refused_before_any_decision(self):
+        decider = PresetDecider(search_votes())
+        with patch.object(config, 'EVIDENCE_POLICY', 'legacy'):
+            result, engine, index = check(decider)
+        self.assertEqual(result.outcome, 'technischer_fehler')
+        self.assertIn('EVIDENCE_POLICY=legacy', result.error)
+        self.assertEqual(decider.calls, [])  # no LLM call
+        self.assertEqual(index.vote_calls, [])
+        self.assertEqual(engine.verify_calls, [])
+        self.assertEqual([(e.node, e.error) for e in result.events], [('finish', result.error)])
 
     def test_labels_map_to_outcomes_and_only_valid_quotes_are_kept(self):
         other_quote = 'Dieser Satz steht nirgends.'
@@ -524,13 +577,27 @@ class SystemPromptTests(unittest.TestCase):
 
 
 BOOKLET = config.BOOKLETS_DIR / '2026-06-14_de.pdf'
+RENT_BOOKLET = config.BOOKLETS_DIR / '2024-11-24_de.pdf'
 REAL_VOTE = VoteRef('2026-06-14_de#1', '2026-06-14_de', '2026-06-14', 'de',
                     'Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)»', tuple(range(1, 41)))
+EVICTION_VOTE = VoteRef('2024-11-24_de#3', '2024-11-24_de', '2024-11-24', 'de',
+                        'Änderung des Obligationenrechts (Mietrecht: Kündigung wegen Eigenbedarfs)',
+                        tuple(range(1, 73)))
+EVICTION_CLAIM = 'Die Mietrechtsvorlage stärkt die Vermieter.'
+P41_BLOCK_START = 'Aus all diesen Gründen empfehlen'  # rejected in the first real run (AGENT_STUFE1.md, run 1)
 
 
-@unittest.skipUnless(HAS_LANGGRAPH and BOOKLET.exists(), f'Needs requirements-agent.txt and {BOOKLET}')
+def distinct_quotes(prediction):
+    """The (page, normalized quote) pairs of the engine's evidence, as the evidence check keys them."""
+    return {(s.page_number, official_normalize(s.quote)) for s in prediction.evidence_sources}
+
+
+@unittest.skipUnless(HAS_LANGGRAPH and BOOKLET.exists() and RENT_BOOKLET.exists(),
+                     f'Needs requirements-agent.txt, {BOOKLET} and {RENT_BOOKLET}')
 class RealEngineTests(unittest.TestCase):
-    def test_real_evidence_passes_the_evidence_check(self):
+    """The evidence check against what the real engine quotes (mock client: every verdict is "gestützt")."""
+
+    def run_real(self, vote, claim, engine=None):
         from src.apertus_client import ApertusClient, NLIOutput
         from src.inference import ClaimVerificationEngine
 
@@ -549,18 +616,59 @@ class RealEngineTests(unittest.TestCase):
                 return self._answer()
 
         class OneVoteIndex:
-            votes = {REAL_VOTE.vote_id: REAL_VOTE}
+            votes = {vote.vote_id: vote}
 
-        engine = ClaimVerificationEngine(apertus_client=SupportingClient())
-        tools = AgentTools(OneVoteIndex(), engine, config.BOOKLETS_DIR, fixed_vote_id=REAL_VOTE.vote_id)
-        claim = 'Die Initiative will die Bevölkerung auf 10 Millionen begrenzen.'
-        result = run_check(claim, tools=tools, decider=ScriptedDecider(fixed_vote_id=REAL_VOTE.vote_id),
+        engine = engine or ClaimVerificationEngine(apertus_client=SupportingClient())
+        tools = AgentTools(OneVoteIndex(), engine, config.BOOKLETS_DIR, fixed_vote_id=vote.vote_id)
+        result = run_check(claim, tools=tools, decider=ScriptedDecider(fixed_vote_id=vote.vote_id),
                            engine=engine, tracer=Tracer())
+        return result, engine
+
+    def assert_every_engine_quote_is_kept(self, result):
         self.assertEqual(result.outcome, 'gestuetzt', result.error)
-        self.assertGreaterEqual(len(result.evidence), 1)
+        self.assertIsNone(result.note)
+        kept = {(item.page, official_normalize(item.quote)) for item in result.evidence}
+        self.assertEqual(kept, distinct_quotes(result.prediction))
+        self.assertEqual(len(kept), len(result.evidence))
+
+    def test_real_evidence_passes_the_evidence_check(self):
+        result, engine = self.run_real(REAL_VOTE, 'Die Initiative will die Bevölkerung auf 10 Millionen begrenzen.')
+        self.assert_every_engine_quote_is_kept(result)
         for item in result.evidence:
-            page = engine.source_page_text(BOOKLET, item.page)
-            self.assertIn(official_normalize(item.quote), official_normalize(page))
+            page = engine.source_page(BOOKLET, item.page)
+            texts = [official_normalize(t) for t in [page['text']] + page['blocks']]
+            self.assertTrue(any(official_normalize(item.quote) in text for text in texts))
+
+    def test_block_quotes_of_the_real_engine_pass_the_evidence_check(self):
+        result, engine = self.run_real(EVICTION_VOTE, EVICTION_CLAIM)
+        self.assert_every_engine_quote_is_kept(result)
+        page_41 = engine.source_page(RENT_BOOKLET, 41)
+        [block] = [item.quote for item in result.evidence if item.page == 41 and item.quote.startswith(P41_BLOCK_START)]
+        self.assertIn(block, page_41['blocks'])
+        # the reason it was rejected before: margin labels interrupt the sentence in the page text
+        self.assertNotIn(official_normalize(block), official_normalize(page_41['text']))
+
+    def test_parse_without_source_pages_falls_back_to_the_pdf(self):
+        from src.apertus_client import ApertusClient
+        from src.inference import ClaimVerificationEngine
+
+        engine = ClaimVerificationEngine(apertus_client=ApertusClient(mock=True))
+        stripped = {**engine._get_booklet_data(RENT_BOOKLET), 'source_pages': {}}  # e.g. their extraction failed
+        with patch.object(engine, '_ready_booklet_data', return_value=stripped), \
+                patch.object(engine, '_get_booklet_data', return_value=stripped):
+            self.assertIsNone(engine.source_page_text(RENT_BOOKLET, 41))  # the old source of the check
+            result, _ = self.run_real(EVICTION_VOTE, EVICTION_CLAIM, engine=self.supporting(engine))
+        self.assert_every_engine_quote_is_kept(result)
+        self.assertTrue(any(item.page == 41 for item in result.evidence))
+
+    @staticmethod
+    def supporting(engine):
+        from src.apertus_client import NLIOutput
+        answer = NLIOutput(label=0, reasoning='gestützt', evidence_ids=[1], tokens_prompt=10, tokens_completion=2,
+                           tokens_total=12, latency_ms=1.0)
+        engine.client.infer = lambda *args, **kwargs: answer
+        engine.client.infer_compact = lambda *args, **kwargs: answer
+        return engine
 
 
 if __name__ == '__main__':

@@ -211,8 +211,8 @@ class FakeEngine:
             evidence_sources=[EvidenceSource(quote=QUOTE, page_number=2)], strategy='agent',
             booklet_path=str(booklet_pdf), tokens_prompt=100, tokens_completion=7, tokens_total=107, latency_ms=1.0)
 
-    def source_page_text(self, booklet_pdf, page_number):
-        return PAGE_2 if page_number == 2 else None
+    def source_page(self, booklet_pdf, page_number):
+        return {'text': PAGE_2, 'blocks': [QUOTE]} if page_number == 2 else None
 
     def close(self):
         self.closed = True

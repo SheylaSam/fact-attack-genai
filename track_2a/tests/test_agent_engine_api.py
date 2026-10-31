@@ -2,6 +2,7 @@
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src import config
 from src.apertus_client import ApertusClient, NLIOutput
@@ -86,6 +87,41 @@ class AgentEngineApiTests(unittest.TestCase):
         self.assertIsNone(self.engine.source_page_text(BOOKLET, 0))
         stored = self.engine._get_booklet_data(BOOKLET)['source_pages']
         self.assertEqual(self.engine.source_page_text(BOOKLET, 1), stored['1']['text'])
+
+
+    def test_source_page_is_text_and_blocks_of_the_stored_page(self):
+        stored = self.engine._get_booklet_data(BOOKLET)['source_pages']
+        for number in (1, 6, 26):
+            with self.subTest(page=number):
+                page = self.engine.source_page(BOOKLET, number)
+                self.assertEqual(page, {'text': stored[str(number)]['text'], 'blocks': stored[str(number)]['blocks']})
+                self.assertEqual(page['text'], self.engine.source_page_text(BOOKLET, number))
+        page = self.engine.source_page(BOOKLET, 1)
+        page['blocks'].clear()  # a copy: the engine's shared cache stays intact
+        self.assertTrue(stored['1']['blocks'])
+
+    def test_source_page_unknown_page_is_none(self):
+        for number in (999, 0, -1, None, '3', 2.0):
+            with self.subTest(page=number):
+                self.assertIsNone(self.engine.source_page(BOOKLET, number))
+
+    def test_source_page_falls_back_to_the_pdf_without_stored_source_pages(self):
+        stored = self.engine._get_booklet_data(BOOKLET)['source_pages']
+        stripped = {**self.engine._get_booklet_data(BOOKLET), 'source_pages': {}}  # their extraction failed
+        engine = ClaimVerificationEngine(apertus_client=ApertusClient(mock=True))
+        with patch.object(engine, '_ready_booklet_data', return_value=stripped), \
+                patch.object(engine, '_get_booklet_data', return_value=stripped):
+            self.assertIsNone(engine.source_page_text(BOOKLET, 26))
+            self.assertEqual(engine.source_page(BOOKLET, 26), stored['26'])
+            self.assertIsNone(engine.source_page(BOOKLET, 999))
+
+    def test_source_page_reads_the_quick_booklet_while_the_parse_is_not_ready(self):
+        stored = self.engine._get_booklet_data(BOOKLET)['source_pages']
+        engine = ClaimVerificationEngine(apertus_client=ApertusClient(mock=True))
+        with patch.object(config, 'QUICK_PARTS', True), \
+                patch.object(engine, '_ready_booklet_data', return_value=None), \
+                patch.object(engine, '_get_booklet_data', side_effect=AssertionError('full parse awaited')):
+            self.assertEqual(engine.source_page(BOOKLET, 26), stored['26'])
 
 
 if __name__ == '__main__':

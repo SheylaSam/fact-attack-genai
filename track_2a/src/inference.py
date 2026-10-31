@@ -831,6 +831,32 @@ class ClaimVerificationEngine:
         page = ParsedSourcePages(self._get_booklet_data(booklet_pdf).get("source_pages") or {}).get(None, page_number)
         return page["text"] if page else None
 
+    def source_page(self, booklet_pdf: Union[str, Path], page_number: int) -> Optional[Dict[str, Any]]:
+        """{"text", "blocks"} of one page as PyMuPDF reads it: the whole page and its text blocks, the two forms
+        src/evidence.py quotes as evidence (EVIDENCE_POLICY raw_pages_and_blocks quotes both). Read like the evidence
+        itself (`_finalize_evidence`): from the quick booklet while the full parse is not ready, else from the source
+        pages stored with the parse; a page neither has is read from the PDF. None for a page the PDF does not have.
+        """
+        if type(page_number) is not int or page_number < 1:
+            return None
+        from src.evidence import ParsedSourcePages, SourcePages
+        page = None
+        ready = self._ready_booklet_data(booklet_pdf)
+        if ready is None and config.QUICK_PARTS:  # booklet still being parsed: its pages one by one
+            from src import quick_booklet
+            from src.quick_booklet import QuickSourcePages
+            page = QuickSourcePages(quick_booklet.booklet(booklet_pdf)).get(None, page_number)
+        else:
+            stored = (ready or self._get_booklet_data(booklet_pdf)).get("source_pages")
+            if stored:
+                page = ParsedSourcePages(stored).get(None, page_number)
+        if page is None:  # e.g. the parse stored no source pages because their extraction failed
+            with self._source_pages_lock:
+                if self._source_pages is None:
+                    self._source_pages = SourcePages(Path("."), lazy=config.SOURCE_PAGES_LAZY)
+            page = self._source_pages.get({"booklet": {"path": str(Path(booklet_pdf).resolve())}}, page_number)
+        return {"text": page.get("text") or "", "blocks": list(page.get("blocks") or [])} if page else None
+
     def verify_premise(
         self,
         claim: str,
