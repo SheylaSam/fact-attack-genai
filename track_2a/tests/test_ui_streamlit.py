@@ -65,3 +65,16 @@ def test_saved_example_result_remains_readable_when_live_is_unavailable():
         assert app.session_state['last_check']['notice']
         assert any(expander.label == 'Details zur Prüfung' for expander in app.expander)
         assert any('gespeicherte' in item.value for item in app.markdown)
+
+
+def test_partial_source_installation_only_offers_available_date_and_language():
+    from src.booklet_catalog import load_catalog
+    sources = load_catalog(APP.parent / 'data/booklet_catalog.json')
+    partial = {'2024-11-24_de.pdf': sources['2024-11-24_de.pdf']}
+    with patch('src.booklet_catalog.available_sources', return_value=partial), \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No network')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        assert not app.exception
+        assert app.selectbox(key='ballot').options == ['24. November 2024']
+        assert app.radio(key='booklet_lang').options == ['DE']
+        remote.assert_not_called()

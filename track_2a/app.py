@@ -27,6 +27,7 @@ from src.evaluator import BenchmarkEvaluator
 from src.results_summary import build_summary
 from src.text_utils import best_snippet, guess_language
 from src import config
+from src.booklet_catalog import load_catalog, available_sources, date_options, languages_for_date
 from src.ui_strategies import STANDARD, strategy_options, strategy_from_label, rag_available, store_uploaded_source, load_completed_dev42
 
 # Page Configuration
@@ -1233,11 +1234,9 @@ def generate_fact_card_svg(
 # =============================================================================
 # DEMO DATA & HELPERS FOR THE FACT-CHECK TAB
 # =============================================================================
-BOOKLET_CATALOG = {
-    "Juni 2026 — Nachhaltigkeitsinitiative & Zivildienst": "2026-06-14",
-    "November 2024 — Nationalstrassen, Mietrecht, EFAS": "2024-11-24",
-    "September 2024 — Biodiversität & BVG-Reform": "2024-09-22",
-}
+SOURCE_METADATA = load_catalog(config.DATA_DIR / "booklet_catalog.json")
+AVAILABLE_SOURCES = available_sources(config.BOOKLETS_DIR, SOURCE_METADATA)
+BOOKLET_CATALOG = date_options(AVAILABLE_SOURCES)
 VOTE_AUTO = "Automatisch erkennen"
 
 # Wording describes the relationship to the booklet, never a verdict on truth (OST ethics guideline)
@@ -1346,13 +1345,20 @@ tab_factcheck, tab_benchmark, tab_methodology = st.tabs([
 # TAB 1: INTERAKTIVER FAKTENCHECK
 # =============================================================================
 with tab_factcheck:
+    if not BOOKLET_CATALOG:
+        st.warning("Noch keine offiziellen Büchlein installiert. Bitte im Projektordner `python -m src.booklet_catalog` ausführen.")
+        st.stop()
     if "ballot" not in st.session_state:
-        _apply_case(DEMO_CASES[0], set_active=False)
+        st.session_state["ballot"] = next((name for name, date in BOOKLET_CATALOG.items()
+                                                 if date == "2026-06-14"), next(iter(BOOKLET_CATALOG)))
+        st.session_state["active_case"] = None
         st.session_state["claim_input"] = ""
         st.session_state["claim_lang"] = "Automatisch"
         st.session_state["booklet_lang"] = "DE"
         st.session_state["vote"] = VOTE_AUTO
 
+    if st.session_state.get("ballot") not in BOOKLET_CATALOG:
+        st.session_state["ballot"] = next(iter(BOOKLET_CATALOG))
     col_in, col_out = st.columns([1, 1.12], gap="large")
 
     # ── LEFT: input ──────────────────────────────────────────────────────────
@@ -1366,6 +1372,8 @@ with tab_factcheck:
         with st.expander("Keine eigene Behauptung? Beispiel auswählen", expanded=False):
             st.caption("Ein Beispiel füllt Behauptung und Quelle aus. Die Prüfung startest du anschliessend selbst.")
             for case in DEMO_CASES:
+                if f"{case['booklet_date']}_{case['booklet_language']}.pdf" not in AVAILABLE_SOURCES:
+                    continue
                 st.button(case["title"], key=f"story_{case['id']}", width="stretch",
                           on_click=_apply_case, args=(case,))
         active_case = next((c for c in DEMO_CASES if c["id"] == st.session_state.get("active_case")
@@ -1379,7 +1387,10 @@ with tab_factcheck:
             selected_ballot_name = st.selectbox("Abstimmung", list(BOOKLET_CATALOG.keys()), key="ballot")
             selected_date = BOOKLET_CATALOG[selected_ballot_name]
         with c_lang:
-            selected_lang = st.radio("Sprache des Büchleins", ["DE", "FR", "IT"], horizontal=True, key="booklet_lang")
+            language_options = languages_for_date(AVAILABLE_SOURCES, selected_date)
+            if st.session_state.get("booklet_lang") not in language_options:
+                st.session_state["booklet_lang"] = language_options[0]
+            selected_lang = st.radio("Sprache des Büchleins", language_options, horizontal=True, key="booklet_lang")
             lang_code = selected_lang.lower()
 
         uploaded_file = st.session_state.get("uploaded_pdf")
@@ -1389,11 +1400,14 @@ with tab_factcheck:
             pdf_path = store_uploaded_source(config.BOOKLETS_DIR, uploaded_bytes)
             st.success(f"✓ {uploaded_file.name} geladen")
 
-        vote_options = [VOTE_AUTO] + ([] if uploaded_file is not None else DEMO_VOTES.get(pdf_path.name, []))
+        vote_options = [VOTE_AUTO] + ([] if uploaded_file is not None else DEMO_VOTES.get(pdf_path.name, SOURCE_METADATA.get(pdf_path.name, {}).get("votes", [])))
         if st.session_state.get("vote") not in vote_options:
             st.session_state["vote"] = VOTE_AUTO
         selected_vote = st.selectbox("Vorlage", vote_options, key="vote")
         vote = None if selected_vote == VOTE_AUTO else selected_vote
+        if uploaded_file is None:
+            st.caption(f"{len(BOOKLET_CATALOG)} Abstimmungstermine · {len(AVAILABLE_SOURCES)} Sprachfassungen lokal verfügbar")
+            st.link_button("Original bei der Bundeskanzlei öffnen ↗", SOURCE_METADATA[pdf_path.name]["url"])
 
         with st.expander("Sprache der Behauptung", expanded=False):
             claim_lang_choice = st.selectbox("Erkennung", ["Automatisch", "DE", "FR", "IT"], key="claim_lang")

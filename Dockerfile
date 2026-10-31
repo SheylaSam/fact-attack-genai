@@ -11,6 +11,7 @@ COPY track_2a/tests /app/tests
 COPY track_2a/.env.example /app/.env.example
 COPY track_2a/scripts /app/scripts
 COPY track_2a/data/booklets /app/data/booklets
+COPY track_2a/data/booklet_catalog.json /app/data/booklet_catalog.json
 # Source-only demo inputs: the development dataset's gold labels stay outside
 # every image layer while the dashboard's existing demo path remains usable.
 COPY track_2a/data/demo_cases.jsonl /app/data/demo_dataset.jsonl

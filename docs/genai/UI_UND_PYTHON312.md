@@ -168,3 +168,38 @@ Ergebnisansicht bei blockiertem Live-Aufruf. Keine echte NLI-Anfrage in dieser
 UI-Überarbeitung. Mobile Sichtprüfung im lokalen Browser.
 
 ![Vereinfachter Einstieg](assets/streamlit-guided-check.png)
+
+
+## Erweiterter offizieller Quellenkatalog
+
+Der feste Demo-Katalog wurde durch `data/booklet_catalog.json` ersetzt. Er enthält
+60 offizielle PDF-URLs für 20 Abstimmungstermine vom 9. Februar 2020 bis zum
+14. Juni 2026, jeweils DE/FR/IT. Die Metadaten stammen aus den Spalten Datum,
+Büchlein-URL und Vorlage des OST-Datensatzes; für diese Erweiterung wurden keine
+Behauptungen oder Gold-Labels ausgewertet. Das ist kein vollständiges Schweizer
+Abstimmungsarchiv und erweitert nicht den gemessenen 42-Fälle-NLI-Vergleich.
+
+Alle 60 Dateien wurden lokal von `www.bk.admin.ch` geladen (zusammen rund 76 MB),
+mit pypdf geöffnet und mit Seitenzahl und SHA-256 in
+`results/genai/booklet_inventory.json` protokolliert. Zusätzliche heruntergeladene
+PDFs bleiben wie bisher ausserhalb von Git. Nach einem frischen Checkout:
+
+```sh
+cd track_2a
+python -m src.booklet_catalog
+```
+
+Die UI selbst startet keine Downloads. Sie bietet nur Katalogeinträge mit lokalem
+PDF-Header an, filtert Sprachen je Datum und setzt eine ungültig gewordene
+Vorlagenauswahl zurück. Eigene Uploads gelangen nicht in den offiziellen Katalog.
+Nicht verfügbare Demo-Beispiele werden ausgeblendet. Jeder offizielle Eintrag
+hat einen direkten Originallink zur Bundeskanzlei. Vorlagentitel stammen aus den
+bestehenden Demo-Metadaten bzw. ansonsten aus dem OST-Katalog und können dessen
+Textartefakte enthalten.
+
+Elf gezielte Katalog-/UI-Tests bestanden, auch mit nur einer installierten Sprachfassung. Im Browser wurden die 20 Termine und
+der Wechsel auf das nachgeladene November-2024-Büchlein geprüft. Keine neuen
+NLI-Anfragen. Beide Dockerfiles kopieren nun auch die Katalog-Metadaten; ein
+Containerbuild bleibt weiterhin ungeprüft.
+
+![Verfügbare offizielle Quellen](assets/streamlit-source-catalog.png)
