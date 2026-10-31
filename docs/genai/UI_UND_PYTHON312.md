@@ -355,3 +355,41 @@ Keine zusätzlichen Apertus-Aufrufe oder Qualitätsmessungen.
 ![Französische Bedienoberfläche](assets/streamlit-ui-fr.png)
 
 ![Italienische Bedienoberfläche](assets/streamlit-ui-it.png)
+
+
+## Mehrere Aussagen aus einem Text prüfen
+
+Im Faktencheck öffnet „Mehrere Aussagen aus einem Text prüfen“ die Textauswahl.
+Bis zu 20 000 Zeichen werden lokal anhand von Zeilenumbrüchen und Satzenden in
+Vorschläge zerlegt; identische Vorschläge werden dedupliziert. Das ist keine
+semantische Extraktion überprüfbarer Behauptungen. Abkürzungen und zusammengesetzte
+Aussagen können falsch aufgeteilt werden; der Text bleibt zur Korrektur editierbar.
+Bei mehr als 30 Vorschlägen muss der Text gekürzt werden. Zunächst ist keine
+Aussage ausgewählt. Höchstens fünf Aussagen lassen sich ausdrücklich starten.
+
+Alle verwenden die aktuell ausgewählte PDF-Datei, Vorlage und Strategie.
+Automatische Spracherkennung erfolgt separat pro Aussage. Die UI nennt vor dem
+Start die Anzahl der Einzelprüfungen und weist darauf hin, dass jede mehrere
+API-Anfragen verursachen kann. Auswahl und Sprachumschaltung starten keine NLI.
+Erst „Ausgewählte Aussagen prüfen“ arbeitet die Auswahl nacheinander ab.
+Es gibt weder automatische Wiederholungen noch einen Demo-Fallback im Batchlauf.
+
+Ergebnisse, neutrale Antworten und Fehler erscheinen pro Aussage getrennt.
+Erfolgreiche Ergebnisse werden einzeln im Verlauf gespeichert, wenn dessen
+Speicherung aktiv ist. Speicherfehler lassen die jeweilige Antwort sichtbar.
+Die Ergebniszuordnung berücksichtigt Auswahl, PDF-Inhaltshash, Vorlage,
+Strategie und Spracherkennung. Eine geänderte Auswahl oder Quelle verbirgt alte
+Mehrfachergebnisse mit Hinweis; Neuladen startet keine neue Prüfung. Ein erneuter
+bewusster Batchstart prüft alle ausgewählten Aussagen erneut. Eine neue
+Einzelprüfung wechselt zurück auf die Einzelansicht. Erfolgreiche historische
+Einträge bleiben unabhängig davon im Verlauf samt Originalvorschau erreichbar.
+
+Siebzehn gezielte Batch-/Sprach-/Streamlit-Tests bestanden (fünf bestehende
+PDF-Warnungen), inklusive Zahlen, Duplikaten, Limits, Teilfehlern, Speicherfehlern,
+explizitem Start, getrennten Verlaufseinträgen und Invalidierung geänderter Auswahl.
+Modellantworten wurden in den Integrationstests injiziert; die Tests verwenden
+keine echten Apertus-Aufrufe und liefern keine neue Qualitätsmessung. Im Browser
+wurden zwei lokale Satzvorschläge ausgewählt und der angezeigte Startumfang
+kontrolliert. Keine echte NLI-Anfrage in dieser Erweiterung.
+
+![Ausgewählte Aussagen vor dem ausdrücklichen Start](assets/streamlit-batch-selection.png)

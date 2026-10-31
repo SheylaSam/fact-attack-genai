@@ -11,6 +11,7 @@ import time
 import re
 import html
 import sqlite3
+import hashlib
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import streamlit as st
@@ -29,6 +30,7 @@ from src.evaluator import BenchmarkEvaluator
 from src.results_summary import build_summary
 from src.text_utils import best_snippet, guess_language
 from src import config
+from src.batch_check import suggest_statements, run_checks, MAX_CHECKS
 from src.ui_i18n import LANGUAGES, translate, translate_static_html, date_label
 from src.check_history import save_check, load_checks, matching_source, set_removed, export_checks
 from src.booklet_catalog import load_catalog, available_sources, date_options, languages_for_date, filter_sources
@@ -1514,9 +1516,47 @@ with tab_factcheck:
             st.file_uploader(t("Eigenes PDF laden"), type=["pdf"], key="uploaded_pdf",
                 help=t("Die Datei wird lokal gespeichert; beim Prüfen werden ausgewählte Textstellen an Apertus gesendet."))
 
+        with st.expander(t("Mehrere Aussagen aus einem Text prüfen"), expanded=False):
+            batch_text = st.text_area(t("Text mit mehreren Aussagen"), key="batch_text", height=140, max_chars=20000)
+            st.caption(t("Lokale Satzvorschläge, keine automatische Faktenauswahl. Bitte Text und Auswahl prüfen; Abkürzungen können falsch getrennt werden."))
+            candidates = suggest_statements(batch_text)
+            if len(candidates) > 30:
+                st.info(t("Bitte kürze den Text auf höchstens 30 Satzvorschläge."))
+                candidates = []
+            if st.session_state.get("batch_selected"):
+                st.session_state["batch_selected"] = [value for value in st.session_state["batch_selected"] if value in candidates]
+            selected_claims = st.multiselect(t("Aussagen auswählen"), candidates, key="batch_selected", max_selections=MAX_CHECKS)
+            st.caption(t("{n} Einzelprüfungen ausgewählt (maximal 5). Jede kann mehrere API-Anfragen auslösen. Alle verwenden die oben gewählte Quelle und Vorlage.").format(n=len(selected_claims)))
+            batch_clicked = st.button(t("Ausgewählte Aussagen prüfen"), key="run_batch",
+                                      disabled=not selected_claims or (no_source_matches and uploaded_file is None))
+        batch_signature = (tuple(selected_claims), str(pdf_path),
+                           hashlib.sha256(pdf_path.read_bytes()).hexdigest() if pdf_path.exists() else None,
+                           vote, strat, claim_lang_choice)
+
+    if batch_clicked:
+        with col_out:
+            if not pdf_path.exists():
+                st.error(t("Die gewählte PDF-Datei ist nicht verfügbar."))
+            elif strat in ("vector", "vector_hybrid") and not rag_available():
+                st.error(t("Die lokale Vektorsuche ist in dieser Installation noch nicht verfügbar."))
+            elif engine.client.mock:
+                st.error(t("Keine Live-Verbindung konfiguriert. Die Mehrfachprüfung wurde nicht gestartet."))
+            else:
+                def verify_one(statement):
+                    language = guess_language(statement) if claim_lang_choice == "Automatisch" else claim_lang_choice.lower()
+                    return engine.verify_claim(claim=statement, booklet_pdf=pdf_path,
+                                               claim_language=language, strategy=strat, vote=vote)
+                def save_one(prediction):
+                    save_check(HISTORY_PATH, result=prediction.model_dump(mode="json"), source_path=pdf_path,
+                               date=selected_date, language=lang_code, vote=vote)
+                with st.spinner(t("Die ausgewählten Aussagen werden einzeln geprüft…")):
+                    outcomes = run_checks(selected_claims, verify_one, save_one if save_history else None)
+                st.session_state["batch_check"] = {"signature": batch_signature, "outcomes": outcomes}
+
     # ── Verification ─────────────────────────────────────────────────────────
     signature = (claim.strip(), str(pdf_path), vote, strat, claim_lang)
     if verify_clicked and claim.strip():
+        st.session_state.pop("batch_check", None)
         if not pdf_path.exists():
             with col_out:
                 st.error(t('PDF nicht gefunden: `{v0}`. Bitte `python -m src download` ausführen.').format(v0=pdf_path.name))
@@ -1559,7 +1599,29 @@ with tab_factcheck:
 
     # ── RIGHT: result ────────────────────────────────────────────────────────
     with col_out:
-        if result is None:
+        batch_check = st.session_state.get("batch_check")
+        current_batch = batch_check if batch_check and batch_check["signature"] == batch_signature else None
+        if current_batch:
+            st.markdown("### " + t("Ergebnisse der Mehrfachprüfung"))
+            for index, outcome in enumerate(current_batch["outcomes"]):
+                with st.expander(f"{index + 1}. {outcome['claim'][:100]}", expanded=True):
+                    st.text(outcome["claim"])
+                    if outcome["error"]:
+                        st.error(t("Diese Aussage konnte nicht geprüft werden.") + " " + outcome["error"])
+                        continue
+                    prediction = outcome["result"]
+                    st.markdown("#### " + t(VERDICTS[prediction.label][2]))
+                    if outcome["save_error"]:
+                        st.warning(t("Das Ergebnis ist verfügbar, konnte aber nicht im lokalen Verlauf gespeichert werden."))
+                    if prediction.label == 1:
+                        st.info(t("Im geprüften Kontext wurde keine bestätigende oder widersprechende Belegstelle gefunden."))
+                    for source in prediction.evidence_sources if prediction.label != 1 else []:
+                        st.caption(t("Beleg {v0} · PDF-Seite {v1}").format(v0=index + 1, v1=source.page_number))
+                        st.text(best_snippet(source.quote, outcome["claim"]))
+            st.caption(t("Erfolgreiche Prüfungen werden einzeln im Verlauf gespeichert, wenn die lokale Speicherung aktiviert ist. Ein erneuter Start prüft alle ausgewählten Aussagen nochmals."))
+        elif batch_check:
+            st.info(t("Quelle oder Auswahl geändert. Die bisherigen Mehrfachergebnisse passen nicht mehr zur aktuellen Auswahl."))
+        if result is None and not current_batch:
             stale = bool(last_check and claim.strip())
             st.markdown(th(f"""
             <div class="result-placeholder">
@@ -1572,7 +1634,7 @@ with tab_factcheck:
                 <div class="disclaimer">Bei gestützten oder widersprochenen Aussagen kannst du die Belegstelle direkt nachlesen.</div>
             </div>
             """), unsafe_allow_html=True)
-        else:
+        elif result is not None and not current_batch:
             if result.strategy in ("vector", "vector_hybrid"):
                 st.caption("Experimentelles Ergebnis · " + ("Vektorsuche" if result.strategy == "vector" else "BM25 + Vektor"))
             if last_check.get("notice"):

@@ -142,7 +142,23 @@ OFFIZIELLE QUELLEN · DE / FR / IT|SOURCES OFFICIELLES · DE / FR / IT|FONTI UFF
 Offizielle Quellen · DE / FR / IT|Sources officielles · DE / FR / IT|Fonti ufficiali · DE / FR / IT
 Noch keine offiziellen Büchlein installiert. Bitte im Projektordner `python -m src.booklet_catalog` ausführen.|Aucune brochure officielle installée. Exécutez `python -m src.booklet_catalog` dans le dossier du projet.|Nessun opuscolo ufficiale installato. Esegui `python -m src.booklet_catalog` nella cartella del progetto.
 """
-TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if (parts := row.split('|'))}
+_ROWS += """
+Mehrere Aussagen aus einem Text prüfen|Vérifier plusieurs affirmations d’un texte|Verifica più affermazioni da un testo
+Text mit mehreren Aussagen|Texte contenant plusieurs affirmations|Testo con più affermazioni
+Lokale Satzvorschläge, keine automatische Faktenauswahl. Bitte Text und Auswahl prüfen; Abkürzungen können falsch getrennt werden.|Suggestions de phrases locales, sans sélection automatique des faits. Vérifiez le texte et la sélection ; les abréviations peuvent être mal découpées.|Suggerimenti locali di frasi, non una selezione automatica dei fatti. Controlla testo e selezione; le abbreviazioni possono essere separate erroneamente.
+Bitte kürze den Text auf höchstens 30 Satzvorschläge.|Réduisez le texte à 30 phrases suggérées au maximum.|Riduci il testo a un massimo di 30 frasi suggerite.
+Aussagen auswählen|Sélectionner les affirmations|Seleziona le affermazioni
+{n} Einzelprüfungen ausgewählt (maximal 5). Jede kann mehrere API-Anfragen auslösen. Alle verwenden die oben gewählte Quelle und Vorlage.|{n} vérifications sélectionnées (maximum 5). Chacune peut déclencher plusieurs appels API. Toutes utilisent la source et l’objet choisis ci-dessus.|{n} verifiche selezionate (massimo 5). Ognuna può generare più chiamate API. Tutte usano la fonte e l’oggetto scelti sopra.
+Ausgewählte Aussagen prüfen|Vérifier les affirmations sélectionnées|Verifica le affermazioni selezionate
+Die gewählte PDF-Datei ist nicht verfügbar.|Le PDF sélectionné n’est pas disponible.|Il PDF selezionato non è disponibile.
+Keine Live-Verbindung konfiguriert. Die Mehrfachprüfung wurde nicht gestartet.|Aucune connexion en direct configurée. La vérification multiple n’a pas démarré.|Nessuna connessione in tempo reale configurata. La verifica multipla non è stata avviata.
+Die ausgewählten Aussagen werden einzeln geprüft…|Les affirmations sélectionnées sont vérifiées une par une…|Le affermazioni selezionate vengono verificate una per una…
+Ergebnisse der Mehrfachprüfung|Résultats de la vérification multiple|Risultati della verifica multipla
+Diese Aussage konnte nicht geprüft werden.|Cette affirmation n’a pas pu être vérifiée.|Non è stato possibile verificare questa affermazione.
+Erfolgreiche Prüfungen werden einzeln im Verlauf gespeichert, wenn die lokale Speicherung aktiviert ist. Ein erneuter Start prüft alle ausgewählten Aussagen nochmals.|Les vérifications réussies sont enregistrées individuellement si l’historique local est activé. Un nouveau démarrage vérifie à nouveau toutes les affirmations sélectionnées.|Le verifiche riuscite sono salvate singolarmente se la cronologia locale è attiva. Un nuovo avvio verifica nuovamente tutte le affermazioni selezionate.
+Quelle oder Auswahl geändert. Die bisherigen Mehrfachergebnisse passen nicht mehr zur aktuellen Auswahl.|La source ou la sélection a changé. Les résultats précédents ne correspondent plus à la sélection actuelle.|La fonte o la selezione è cambiata. I risultati precedenti non corrispondono più alla selezione attuale.
+"""
+TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
 
 
 def translate(text, language='de'):

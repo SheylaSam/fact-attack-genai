@@ -189,3 +189,47 @@ def test_ui_language_does_not_rewrite_saved_claims_or_evidence(isolated_history)
         assert any('Réponse de démonstration enregistrée' in info.value for info in app.info)
         assert any('Markiert' not in caption.value and 'surligné' in caption.value for caption in app.caption)
         remote.assert_not_called()
+
+
+def test_batch_selection_is_local_and_requires_explicit_start():
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        app.text_area(key='batch_text').set_value('Die Vorlage verändert das Rentenalter. La proposition change les impôts.').run()
+        assert not app.exception
+        choices = app.multiselect(key='batch_selected').options
+        assert len(choices) == 2
+        assert app.button(key='run_batch').disabled
+        app.multiselect(key='batch_selected').set_value(choices).run()
+        assert not app.button(key='run_batch').disabled
+        app.selectbox(key='ui_language').set_value('fr').run()
+        assert not app.exception
+        assert app.multiselect(key='batch_selected').value == choices
+        remote.assert_not_called()
+
+
+def test_batch_results_are_separate_persisted_and_not_rechecked_on_rerun(isolated_history):
+    import streamlit as st
+    from src.inference import PredictionResult
+    from src.check_history import load_checks
+    st.cache_resource.clear()
+    def prediction(**kwargs):
+        return PredictionResult(claim=kwargs['claim'], label=1, label_name='Neutral', reasoning='Injected UI test',
+                                evidence=[], strategy=kwargs['strategy'], booklet_path=str(kwargs['booklet_pdf']),
+                                tokens_prompt=0, tokens_completion=0, tokens_total=0, latency_ms=0)
+    with patch('src.config.LLM_API_KEY', 'ui-test-placeholder'), patch('src.config.MOCK_APERTUS', False), \
+         patch('src.inference.ClaimVerificationEngine.verify_claim', side_effect=prediction) as verify, \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No actual API')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        app.text_area(key='batch_text').set_value('Die Vorlage verändert das Rentenalter. La proposition change les impôts.').run()
+        app.multiselect(key='batch_selected').set_value(app.multiselect(key='batch_selected').options).run()
+        app.button(key='run_batch').click().run()
+        assert not app.exception
+        assert verify.call_count == 2
+        assert len(load_checks(isolated_history)) == 2
+        app.run()
+        assert verify.call_count == 2
+        app.multiselect(key='batch_selected').set_value([]).run()
+        assert any('bisherigen Mehrfachergebnisse' in info.value for info in app.info)
+        assert verify.call_count == 2
+        remote.assert_not_called()
+    st.cache_resource.clear()
