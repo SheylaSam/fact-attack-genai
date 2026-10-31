@@ -29,6 +29,7 @@ from src.evaluator import BenchmarkEvaluator
 from src.results_summary import build_summary
 from src.text_utils import best_snippet, guess_language
 from src import config
+from src.ui_i18n import LANGUAGES, translate, translate_static_html, date_label
 from src.check_history import save_check, load_checks, matching_source, set_removed, export_checks
 from src.booklet_catalog import load_catalog, available_sources, date_options, languages_for_date, filter_sources
 from src.ui_strategies import STANDARD, strategy_options, strategy_from_label, rag_available, store_uploaded_source, load_completed_dev42
@@ -40,6 +41,24 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+UI_LANGUAGE = st.session_state.get("ui_language", "de")
+# Streamlit keeps the wire label of keyed selections; resend canonical values
+# when only their display language changes.
+if st.session_state.get("_last_ui_language") != UI_LANGUAGE:
+    for selection_key in ("source_year", "ballot", "vote", "claim_lang", "strategy_option", "history_view"):
+        if selection_key in st.session_state:
+            st.session_state[selection_key] = st.session_state[selection_key]
+    st.session_state["_last_ui_language"] = UI_LANGUAGE
+
+
+def t(text):
+    return translate(text, UI_LANGUAGE)
+
+
+def th(markup):
+    return translate_static_html(markup, UI_LANGUAGE)
+
 
 # =============================================================================
 # DESIGN SYSTEM — Premium minimal Swiss-inspired dark UI
@@ -1145,20 +1164,20 @@ def original_page_preview(pdf_bytes, page_number, quote, label):
 
 
 def show_original_page(pdf_path, source, snippet, label, page_text):
-    with st.expander(f"Originalseite {source.page_number} öffnen", expanded=False):
-        st.caption(f"PDF-Seite {source.page_number} · Die gedruckte Seitenzahl kann abweichen.")
+    with st.expander(t('Originalseite {v0} öffnen').format(v0=source.page_number), expanded=False):
+        st.caption(t('PDF-Seite {v0} · Die gedruckte Seitenzahl kann abweichen.').format(v0=source.page_number))
         try:
             preview = original_page_preview(pdf_path.read_bytes(), source.page_number, snippet.removesuffix(" …"), label)
             if preview.highlighted:
-                st.caption(preview.reason)
+                st.caption(t(preview.reason))
             else:
-                st.info(preview.reason)
+                st.info(t(preview.reason))
             st.image(preview.png, caption=f"Original-PDF · Seite {source.page_number}", width="stretch")
         except Exception:
-            st.warning("Die Originalseite lässt sich gerade nicht darstellen. Der Lesetext und das Original-PDF bleiben verfügbar.")
-        with st.expander("Lesetext der Seite", expanded=False):
+            st.warning(t("Die Originalseite lässt sich gerade nicht darstellen. Der Lesetext und das Original-PDF bleiben verfügbar."))
+        with st.expander(t("Lesetext der Seite"), expanded=False):
             st.markdown(highlight_evidence_in_page(page_text, snippet.removesuffix(" …"), label), unsafe_allow_html=True)
-        st.download_button("Original-PDF herunterladen", data=pdf_path.read_bytes(),
+        st.download_button(t("Original-PDF herunterladen"), data=pdf_path.read_bytes(),
                            file_name=pdf_path.name, mime="application/pdf",
                            key=f"original_pdf_{source.page_number}_{source.quote[:30]}")
 
@@ -1345,7 +1364,7 @@ def find_cached_case(claim: str, booklet_file: str, vote: Optional[str]) -> Opti
 st.markdown('<div class="ambient-glow"></div>', unsafe_allow_html=True)
 
 # ── Top Bar ──────────────────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(th("""
 <div class="topbar">
     <div class="topbar-brand">
         <div class="logo-mark">+</div>
@@ -1355,24 +1374,27 @@ st.markdown("""
         <span class="topbar-tag">Offizielle Quellen · DE / FR / IT</span>
     </div>
 </div>
-""", unsafe_allow_html=True)
+"""), unsafe_allow_html=True)
+
+st.selectbox("Sprache / Langue / Lingua", list(LANGUAGES), format_func=LANGUAGES.get, key="ui_language")
+st.caption(t("Die Sprache der Oberfläche ändert weder die Behauptung noch die Quelle. Forschungsnotizen, Beispieltitel und Exporte behalten ihre Originalsprache."))
 
 # ── Hero Section ─────────────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(th("""
 <div class="hero-section">
     <h1>Was steht wirklich im Büchlein?</h1>
     <p>Prüfe eine politische Behauptung am offiziellen Abstimmungsbüchlein. Mit Belegstelle zum Nachlesen.</p>
 </div>
-""", unsafe_allow_html=True)
+"""), unsafe_allow_html=True)
 
 
 # ── Navigation Tabs ──────────────────────────────────────────────────────────
 HISTORY_PATH = config.DATA_DIR / ".local-history/checks.sqlite3"
 tab_factcheck, tab_history, tab_benchmark, tab_methodology = st.tabs([
-    "Faktencheck",
-    "Prüfverlauf",
-    "Ergebnisse & Vergleiche",
-    "So funktioniert’s",
+    t("Faktencheck"),
+    t("Prüfverlauf"),
+    t("Ergebnisse & Vergleiche"),
+    t("So funktioniert’s"),
 ])
 
 
@@ -1381,7 +1403,7 @@ tab_factcheck, tab_history, tab_benchmark, tab_methodology = st.tabs([
 # =============================================================================
 with tab_factcheck:
     if not BOOKLET_CATALOG:
-        st.warning("Noch keine offiziellen Büchlein installiert. Bitte im Projektordner `python -m src.booklet_catalog` ausführen.")
+        st.warning(t("Noch keine offiziellen Büchlein installiert. Bitte im Projektordner `python -m src.booklet_catalog` ausführen."))
         st.stop()
     if "ballot" not in st.session_state:
         st.session_state["ballot"] = next((name for name, date in BOOKLET_CATALOG.items()
@@ -1398,14 +1420,14 @@ with tab_factcheck:
 
     # ── LEFT: input ──────────────────────────────────────────────────────────
     with col_in:
-        st.markdown('<div class="flow-heading"><span>1</span> Was möchtest du prüfen?</div>', unsafe_allow_html=True)
+        st.markdown(th('<div class="flow-heading"><span>1</span> Was möchtest du prüfen?</div>'), unsafe_allow_html=True)
         claim = st.text_area(
-            "Behauptung", key="claim_input", height=130,
-            placeholder="Zum Beispiel: Die Vorlage erhöht das Rentenalter auf 67 Jahre.",
+            t("Behauptung"), key="claim_input", height=130,
+            placeholder=t("Zum Beispiel: Die Vorlage erhöht das Rentenalter auf 67 Jahre."),
             label_visibility="collapsed",
         )
-        with st.expander("Keine eigene Behauptung? Beispiel auswählen", expanded=False):
-            st.caption("Ein Beispiel füllt Behauptung und Quelle aus. Die Prüfung startest du anschliessend selbst.")
+        with st.expander(t("Keine eigene Behauptung? Beispiel auswählen"), expanded=False):
+            st.caption(t("Ein Beispiel füllt Behauptung und Quelle aus. Die Prüfung startest du anschliessend selbst."))
             for case in DEMO_CASES:
                 if f"{case['booklet_date']}_{case['booklet_language']}.pdf" not in AVAILABLE_SOURCES:
                     continue
@@ -1416,37 +1438,37 @@ with tab_factcheck:
         if active_case:
             st.caption(active_case["story"])
 
-        st.markdown('<div class="flow-heading"><span>2</span> Quelle wählen</div>', unsafe_allow_html=True)
+        st.markdown(th('<div class="flow-heading"><span>2</span> Quelle wählen</div>'), unsafe_allow_html=True)
         c_search, c_year = st.columns([2, 1])
         with c_search:
-            source_query = st.text_input("Thema oder Vorlage suchen", key="source_query",
-                                        placeholder="z. B. Mietrecht, Rente, biodiversité",
-                                        help="Sucht lokal in den Vorlagentiteln auf DE, FR und IT; keine Volltextsuche im PDF.")
+            source_query = st.text_input(t("Thema oder Vorlage suchen"), key="source_query",
+                                        placeholder=t("z. B. Mietrecht, Rente, biodiversité"),
+                                        help=t("Sucht lokal in den Vorlagentiteln auf DE, FR und IT; keine Volltextsuche im PDF."))
         with c_year:
             years = ["Alle Jahre"] + sorted({entry["date"][:4] for entry in AVAILABLE_SOURCES.values()}, reverse=True)
             if st.session_state.get("source_year", "Alle Jahre") not in years:
                 st.session_state["source_year"] = "Alle Jahre"
-            source_year = st.selectbox("Jahr", years, key="source_year")
+            source_year = st.selectbox(t("Jahr"), years, key="source_year", format_func=t)
         filtered_sources = filter_sources(AVAILABLE_SOURCES, source_query, source_year)
         filtered_dates = date_options(filtered_sources)
         no_source_matches = not filtered_dates
         if no_source_matches:
-            st.info("Keine passende Quelle gefunden. Versuche einen anderen Begriff oder setze die Filter zurück. Die bisherige Quelle bleibt ausgewählt.")
+            st.info(t("Keine passende Quelle gefunden. Versuche einen anderen Begriff oder setze die Filter zurück. Die bisherige Quelle bleibt ausgewählt."))
             filtered_dates = {st.session_state["ballot"]: BOOKLET_CATALOG[st.session_state["ballot"]]}
         elif st.session_state.get("ballot") not in filtered_dates:
             st.session_state["ballot"] = next(iter(filtered_dates))
         if source_query.strip() or source_year != "Alle Jahre":
-            st.caption(f"{len(date_options(filtered_sources))} von {len(BOOKLET_CATALOG)} Terminen gefunden · Suche in Vorlagentiteln")
-            st.button("Quellenfilter zurücksetzen", on_click=_reset_source_filters)
+            st.caption(t('{v0} von {v1} Terminen gefunden · Suche in Vorlagentiteln').format(v0=len(date_options(filtered_sources)), v1=len(BOOKLET_CATALOG)))
+            st.button(t("Quellenfilter zurücksetzen"), on_click=_reset_source_filters)
         c_ballot, c_lang = st.columns([1.5, 1])
         with c_ballot:
-            selected_ballot_name = st.selectbox("Abstimmung", list(filtered_dates), key="ballot", disabled=no_source_matches)
+            selected_ballot_name = st.selectbox(t("Abstimmung"), list(filtered_dates), key="ballot", disabled=no_source_matches, format_func=lambda label: date_label(label, UI_LANGUAGE))
             selected_date = BOOKLET_CATALOG[selected_ballot_name]
         with c_lang:
             language_options = languages_for_date(AVAILABLE_SOURCES, selected_date)
             if st.session_state.get("booklet_lang") not in language_options:
                 st.session_state["booklet_lang"] = language_options[0]
-            selected_lang = st.radio("Sprache des Büchleins", language_options, horizontal=True, key="booklet_lang")
+            selected_lang = st.radio(t("Sprache des Büchleins"), language_options, horizontal=True, key="booklet_lang")
             lang_code = selected_lang.lower()
 
         uploaded_file = st.session_state.get("uploaded_pdf")
@@ -1454,50 +1476,50 @@ with tab_factcheck:
         if uploaded_file is not None:
             uploaded_bytes = bytes(uploaded_file.getbuffer())
             pdf_path = store_uploaded_source(config.BOOKLETS_DIR, uploaded_bytes)
-            st.success(f"✓ {uploaded_file.name} geladen")
+            st.success(t('✓ {v0} geladen').format(v0=uploaded_file.name))
 
         vote_options = [VOTE_AUTO] + ([] if uploaded_file is not None else DEMO_VOTES.get(pdf_path.name, SOURCE_METADATA.get(pdf_path.name, {}).get("votes", [])))
         if st.session_state.get("vote") not in vote_options:
             st.session_state["vote"] = VOTE_AUTO
-        selected_vote = st.selectbox("Vorlage", vote_options, key="vote")
+        selected_vote = st.selectbox(t("Vorlage"), vote_options, key="vote", format_func=lambda label: t(label) if label == VOTE_AUTO else label)
         vote = None if selected_vote == VOTE_AUTO else selected_vote
         if uploaded_file is None:
-            st.caption(f"{len(BOOKLET_CATALOG)} Abstimmungstermine · {len(AVAILABLE_SOURCES)} Sprachfassungen lokal verfügbar")
-            st.link_button("Original bei der Bundeskanzlei öffnen ↗", SOURCE_METADATA[pdf_path.name]["url"])
+            st.caption(t('{v0} Abstimmungstermine · {v1} Sprachfassungen lokal verfügbar').format(v0=len(BOOKLET_CATALOG), v1=len(AVAILABLE_SOURCES)))
+            st.link_button(t("Original bei der Bundeskanzlei öffnen ↗"), SOURCE_METADATA[pdf_path.name]["url"])
 
-        with st.expander("Sprache der Behauptung", expanded=False):
-            claim_lang_choice = st.selectbox("Erkennung", ["Automatisch", "DE", "FR", "IT"], key="claim_lang")
-            st.caption("Deutsch, Französisch und Italienisch werden automatisch erkannt. Die Quelle darf eine andere Sprache haben.")
+        with st.expander(t("Sprache der Behauptung"), expanded=False):
+            claim_lang_choice = st.selectbox(t("Erkennung"), ["Automatisch", "DE", "FR", "IT"], key="claim_lang", format_func=t)
+            st.caption(t("Deutsch, Französisch und Italienisch werden automatisch erkannt. Die Quelle darf eine andere Sprache haben."))
         claim_lang = guess_language(claim) if claim_lang_choice == "Automatisch" else claim_lang_choice.lower()
-        save_history = st.checkbox("Prüfung lokal im Verlauf speichern", value=True, key="save_history",
-                                   help="Speichert Behauptung, Quelle und Ergebnis auf diesem Rechner. Der Verlauf ist für Nutzer dieser lokalen App-Installation sichtbar.")
-        verify_clicked = st.button("Behauptung prüfen", type="primary", width="stretch", disabled=not claim.strip() or (no_source_matches and uploaded_file is None))
-        st.caption("Beim Prüfen werden die Behauptung und ausgewählte Textstellen an Apertus auf CSCS gesendet.")
+        save_history = st.checkbox(t("Prüfung lokal im Verlauf speichern"), value=True, key="save_history",
+                                   help=t("Speichert Behauptung, Quelle und Ergebnis auf diesem Rechner. Der Verlauf ist für Nutzer dieser lokalen App-Installation sichtbar."))
+        verify_clicked = st.button(t("Behauptung prüfen"), type="primary", width="stretch", disabled=not claim.strip() or (no_source_matches and uploaded_file is None))
+        st.caption(t("Beim Prüfen werden die Behauptung und ausgewählte Textstellen an Apertus auf CSCS gesendet."))
         st.markdown(
-            '<div class="disclaimer">Vergleicht die Aussage mit dem Büchlein. Keine allgemeine Wahrheitsprüfung und keine Abstimmungsempfehlung.</div>',
+            th('<div class="disclaimer">Vergleicht die Aussage mit dem Büchlein. Keine allgemeine Wahrheitsprüfung und keine Abstimmungsempfehlung.</div>'),
             unsafe_allow_html=True,
         )
 
-        with st.expander("Weitere Optionen: Suche & eigenes PDF", expanded=False):
-            experiments = st.checkbox("Vektor-Experimente aktivieren", key="enable_vector_rag")
+        with st.expander(t("Weitere Optionen: Suche & eigenes PDF"), expanded=False):
+            experiments = st.checkbox(t("Vektor-Experimente aktivieren"), key="enable_vector_rag")
             options = strategy_options(experiments)
             if st.session_state.get("strategy_option") not in options:
                 st.session_state["strategy_option"] = STANDARD
-            st.radio("Kontext für Apertus", options, key="strategy_option")
+            st.radio(t("Kontext für Apertus"), options, key="strategy_option", format_func=t)
             strat = strategy_from_label(st.session_state["strategy_option"])
             if strat in ("vector", "vector_hybrid"):
-                st.caption("Experimentelle Suche. Im bisherigen Dev-Vergleich war die Standardstrategie besser.")
+                st.caption(t("Experimentelle Suche. Im bisherigen Dev-Vergleich war die Standardstrategie besser."))
                 if not rag_available():
-                    st.info("Die lokale Vektorsuche ist in dieser Installation noch nicht verfügbar.")
-            st.file_uploader("Eigenes PDF laden", type=["pdf"], key="uploaded_pdf",
-                help="Die Datei wird lokal gespeichert; beim Prüfen werden ausgewählte Textstellen an Apertus gesendet.")
+                    st.info(t("Die lokale Vektorsuche ist in dieser Installation noch nicht verfügbar."))
+            st.file_uploader(t("Eigenes PDF laden"), type=["pdf"], key="uploaded_pdf",
+                help=t("Die Datei wird lokal gespeichert; beim Prüfen werden ausgewählte Textstellen an Apertus gesendet."))
 
     # ── Verification ─────────────────────────────────────────────────────────
     signature = (claim.strip(), str(pdf_path), vote, strat, claim_lang)
     if verify_clicked and claim.strip():
         if not pdf_path.exists():
             with col_out:
-                st.error(f"PDF nicht gefunden: `{pdf_path.name}`. Bitte `python -m src download` ausführen.")
+                st.error(t('PDF nicht gefunden: `{v0}`. Bitte `python -m src download` ausführen.').format(v0=pdf_path.name))
         else:
             result, notice = None, None
             cached_case = find_cached_case(claim, pdf_path.name, vote)
@@ -1507,7 +1529,7 @@ with tab_factcheck:
                 if engine.client.mock:
                     raise RuntimeError("Kein LLM_API_KEY gesetzt")
                 with col_out:
-                    with st.spinner("Apertus prüft die Behauptung auf CSCS…"):
+                    with st.spinner(t("Apertus prüft die Behauptung auf CSCS…")):
                         live = engine.verify_claim(
                             claim=claim, booklet_pdf=pdf_path, claim_language=claim_lang, strategy=strat, vote=vote,
                         )
@@ -1521,7 +1543,7 @@ with tab_factcheck:
                               "Ergebnis dieses Beispiels (vorab live auf CSCS geprüft).")
                 else:
                     with col_out:
-                        st.error(f"Die Prüfung konnte nicht abgeschlossen werden ({exc}).")
+                        st.error(t('Die Prüfung konnte nicht abgeschlossen werden ({v0}).').format(v0=exc))
             if result is not None:
                 st.session_state["last_check"] = {"signature": signature, "result": result, "notice": notice}
                 if save_history:
@@ -1530,7 +1552,7 @@ with tab_factcheck:
                                    date=selected_date, language=lang_code, vote=vote, notice=notice)
                     except (OSError, ValueError, sqlite3.Error):
                         with col_out:
-                            st.warning("Das Ergebnis ist verfügbar, konnte aber nicht im lokalen Verlauf gespeichert werden.")
+                            st.warning(t("Das Ergebnis ist verfügbar, konnte aber nicht im lokalen Verlauf gespeichert werden."))
 
     last_check = st.session_state.get("last_check")
     result = last_check["result"] if last_check and last_check["signature"] == signature else None
@@ -1539,7 +1561,7 @@ with tab_factcheck:
     with col_out:
         if result is None:
             stale = bool(last_check and claim.strip())
-            st.markdown(f"""
+            st.markdown(th(f"""
             <div class="result-placeholder">
                 <div class="claim-stage-label">{'Eingabe geändert · erneut prüfen' if stale else 'Dein Ergebnis'}</div>
                 <p class="verdict-reasoning">{'«Behauptung prüfen» klicken, um das Ergebnis zu aktualisieren.' if stale else
@@ -1549,17 +1571,18 @@ with tab_factcheck:
                 <div class="outcome-row"><span class="outcome-dot dot-contradiction"></span><strong>Widerspruch</strong> — das Büchlein sagt etwas anderes</div>
                 <div class="disclaimer">Bei gestützten oder widersprochenen Aussagen kannst du die Belegstelle direkt nachlesen.</div>
             </div>
-            """, unsafe_allow_html=True)
+            """), unsafe_allow_html=True)
         else:
             if result.strategy in ("vector", "vector_hybrid"):
                 st.caption("Experimentelles Ergebnis · " + ("Vektorsuche" if result.strategy == "vector" else "BM25 + Vektor"))
             if last_check.get("notice"):
-                st.markdown(f'<div class="notice-box">ℹ️ {last_check["notice"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="notice-box">ℹ️ {t(last_check["notice"])}</div>', unsafe_allow_html=True)
 
             b_data = engine._get_booklet_data(pdf_path)
             total_pages = len(b_data["pages"])
             pages_read = len(result.context_pages) if result.context_pages else total_pages
             v_cls, v_icon, v_title, v_desc = VERDICTS[result.label]
+            v_title, v_desc = t(v_title), t(v_desc)
 
             def fmt(n: int) -> str:
                 return f"{n:,}".replace(",", "'")
@@ -1568,7 +1591,7 @@ with tab_factcheck:
             <div class="verdict-container verdict-{v_cls} animate-in">
                 <div class="verdict-label verdict-label-{v_cls}">
                     <span class="verdict-icon icon-{v_cls}">{v_icon}</span>
-                    Abgleich mit dem offiziellen Büchlein
+                    {t("Abgleich mit dem offiziellen Büchlein")}
                 </div>
                 <h3 class="verdict-title">{v_title}</h3>
                 <p class="verdict-reasoning">{v_desc}</p>
@@ -1608,7 +1631,7 @@ with tab_factcheck:
                     show_original_page(pdf_path, first, snippets[0], result.label,
                                        pages_by_no[first.page_number]["text"])
                 if len(result.evidence_sources) > 1:
-                    with st.expander(f"Weitere Belegstellen ({len(result.evidence_sources) - 1})", expanded=False):
+                    with st.expander(t('Weitere Belegstellen ({v0})').format(v0=len(result.evidence_sources) - 1), expanded=False):
                         for src, snippet in zip(result.evidence_sources[1:], snippets[1:]):
                             st.markdown(evidence_html(src, snippet), unsafe_allow_html=True)
                             if src.page_number in pages_by_no and src.page_number != first.page_number:
@@ -1621,14 +1644,14 @@ with tab_factcheck:
                 )
                 st.markdown(f"""
                 <div class="evidence-block animate-in">
-                    <p class="verdict-reasoning">Im geprüften Kontext wurde keine bestätigende oder widersprechende Belegstelle gefunden.
-                    Apertus hat diese Seiten geprüft:</p>
+                    <p class="verdict-reasoning">{t("Im geprüften Kontext wurde keine bestätigende oder widersprechende Belegstelle gefunden.")}
+                    {t("Apertus hat diese Seiten geprüft:")}</p>
                     <div class="page-chips">{chips}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-            with st.expander("Details zur Prüfung", expanded=False):
-                st.caption(f"Behauptung: {claim_lang.upper()} · Quelle: {lang_code.upper()} · {pages_read} von {total_pages} Quellseiten im Kontext")
+            with st.expander(t("Details zur Prüfung"), expanded=False):
+                st.caption(t('Behauptung: {v0} · Quelle: {v1} · {v2} von {v3} Quellseiten im Kontext').format(v0=claim_lang.upper(), v1=lang_code.upper(), v2=pages_read, v3=total_pages))
                 st.markdown(f"""
                 <div style="margin-bottom: 1.2rem;">
                     <div class="conf-row">
@@ -1648,18 +1671,18 @@ with tab_factcheck:
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-                st.caption("Konfidenzen schätzt Apertus selbst; sie sind nicht kalibriert.")
+                st.caption(t("Konfidenzen schätzt Apertus selbst; sie sind nicht kalibriert."))
                 t1, t2, t3 = st.columns(3)
-                t1.metric("Inferenzzeit", f"{result.latency_ms:.0f} ms")
-                t2.metric("Input-Tokens", fmt(result.tokens_prompt))
-                t3.metric("Output-Tokens", fmt(result.tokens_completion))
+                t1.metric(t("Inferenzzeit"), f"{result.latency_ms:.0f} ms")
+                t2.metric(t("Input-Tokens"), fmt(result.tokens_prompt))
+                t3.metric(t("Output-Tokens"), fmt(result.tokens_completion))
                 st.markdown('<div class="claim-stage-label">Ausgabe im offiziellen OST-Format</div>', unsafe_allow_html=True)
                 st.json(result.to_official_dict(), expanded=False)
                 if result.retrieval_query_metadata.get("embedding"):
-                    st.caption("Reproduzierbarkeit der experimentellen Suche")
+                    st.caption(t("Reproduzierbarkeit der experimentellen Suche"))
                     st.json(result.retrieval_query_metadata["embedding"], expanded=False)
 
-            with st.expander("Faktencheck-Karte zum Teilen", expanded=False):
+            with st.expander(t("Faktencheck-Karte zum Teilen"), expanded=False):
                 card_quote = primary_quote or "Im geprüften Kontext wurde keine bestätigende oder widersprechende Belegstelle gefunden."
                 card_svg = generate_fact_card_svg(
                     claim=claim, label=result.label, quote=card_quote,
@@ -1667,80 +1690,80 @@ with tab_factcheck:
                 )
                 st.markdown(f'<div class="fact-card-wrap">{card_svg}</div>', unsafe_allow_html=True)
                 st.download_button(
-                    label="SVG herunterladen", data=card_svg,
+                    label=t("SVG herunterladen"), data=card_svg,
                     file_name=f"faktencheck_{result.label_name.lower()}.svg", mime="image/svg+xml", width="stretch",
                 )
 
 
 with tab_history:
-    st.markdown("### Dein Prüfverlauf")
-    st.caption("Lokal auf diesem Rechner gespeichert · Öffnen löst keine neue Prüfung aus. Sichtbar für Nutzer dieser App-Installation.")
-    history_view = st.radio("Ansicht", ["Aktive Prüfungen", "Papierkorb"], horizontal=True, key="history_view")
+    st.markdown(t("### Dein Prüfverlauf"))
+    st.caption(t("Lokal auf diesem Rechner gespeichert · Öffnen löst keine neue Prüfung aus. Sichtbar für Nutzer dieser App-Installation."))
+    history_view = st.radio(t("Ansicht"), ["Aktive Prüfungen", "Papierkorb"], horizontal=True, key="history_view", format_func=t)
     in_trash = history_view == "Papierkorb"
     if st.session_state.get("history_message"):
-        st.success(st.session_state.pop("history_message"))
+        st.success(t(st.session_state.pop("history_message")))
     try:
         history = load_checks(HISTORY_PATH, removed=in_trash)
     except (OSError, ValueError, sqlite3.Error):
         history = []
-        st.warning("Der lokale Verlauf lässt sich gerade nicht lesen.")
+        st.warning(t("Der lokale Verlauf lässt sich gerade nicht lesen."))
     if not history:
-        st.info("Der Papierkorb ist leer." if in_trash else "Noch keine Prüfungen gespeichert. Aktiviere beim Faktencheck die lokale Speicherung.")
+        st.info(t("Der Papierkorb ist leer." if in_trash else "Noch keine Prüfungen gespeichert. Aktiviere beim Faktencheck die lokale Speicherung."))
     else:
         indexed = {record["id"]: record for record in history}
         if st.session_state.get("history_selected") not in indexed:
             st.session_state["history_selected"] = next(iter(indexed))
-        selected_id = st.selectbox("Gespeicherte Prüfung", list(indexed),
+        selected_id = st.selectbox(t("Gespeicherte Prüfung"), list(indexed),
             format_func=lambda key: f"{indexed[key]['created_at'][:16].replace('T', ' ')} UTC · {indexed[key]['result']['claim'][:90]}",
             key="history_selected")
         record = indexed[selected_id]
-        with st.expander("Export & Verlauf verwalten", expanded=False):
-            st.caption("JSON enthält Ergebnis und Belegzitate; CSV eine Übersicht. PDF-Dateien sind nicht enthalten.")
-            st.download_button("Diese Prüfung als JSON", data=export_checks([record]),
+        with st.expander(t("Export & Verlauf verwalten"), expanded=False):
+            st.caption(t("JSON enthält Ergebnis und Belegzitate; CSV eine Übersicht. PDF-Dateien sind nicht enthalten."))
+            st.download_button(t("Diese Prüfung als JSON"), data=export_checks([record]),
                                file_name=f"faktencheck_{record['id'][:8]}.json", mime="application/json")
-            st.download_button("Angezeigten Verlauf als CSV", data=export_checks(history, 'csv'),
+            st.download_button(t("Angezeigten Verlauf als CSV"), data=export_checks(history, 'csv'),
                                file_name="pruefverlauf.csv", mime="text/csv")
-            st.download_button("Angezeigten Verlauf als JSON", data=export_checks(history),
+            st.download_button(t("Angezeigten Verlauf als JSON"), data=export_checks(history),
                                file_name="pruefverlauf.json", mime="application/json")
             action = "Wiederherstellen" if in_trash else "In Papierkorb verschieben"
-            st.caption("Einträge im Papierkorb bleiben lokal gespeichert und können wiederhergestellt werden. Die PDF-Datei bleibt erhalten.")
-            if st.button(action, key="history_remove_restore"):
+            st.caption(t("Einträge im Papierkorb bleiben lokal gespeichert und können wiederhergestellt werden. Die PDF-Datei bleibt erhalten."))
+            if st.button(t(action), key="history_remove_restore"):
                 try:
                     if set_removed(HISTORY_PATH, selected_id, removed=not in_trash):
                         st.session_state["history_message"] = "Prüfung wiederhergestellt." if in_trash else "Prüfung in den Papierkorb verschoben."
                         st.rerun()
                     else:
-                        st.warning("Der Eintrag ist nicht mehr vorhanden. Bitte die Ansicht aktualisieren.")
+                        st.warning(t("Der Eintrag ist nicht mehr vorhanden. Bitte die Ansicht aktualisieren."))
                 except (OSError, sqlite3.Error):
-                    st.error("Der Verlauf konnte nicht geändert werden.")
+                    st.error(t("Der Verlauf konnte nicht geändert werden."))
         saved_result = PredictionResult(**record["result"])
-        st.markdown("#### " + VERDICTS[saved_result.label][2])
+        st.markdown("#### " + t(VERDICTS[saved_result.label][2]))
         st.text(saved_result.claim)
-        st.caption(f"Quelle: {record['date']} · {record['language'].upper()} · Strategie: {saved_result.strategy}")
+        st.caption(t('Quelle: {v0} · {v1} · Strategie: {v2}').format(v0=record['date'], v1=record['language'].upper(), v2=saved_result.strategy))
         if record["origin"] == "saved_demo":
-            st.info("Gespeicherte Demoantwort – bei dieser Prüfung wurde keine neue Liveantwort erzeugt.")
+            st.info(t("Gespeicherte Demoantwort – bei dieser Prüfung wurde keine neue Liveantwort erzeugt."))
         else:
-            st.caption("Gespeicherte Liveantwort · Keine erneute API-Anfrage beim Öffnen")
+            st.caption(t("Gespeicherte Liveantwort · Keine erneute API-Anfrage beim Öffnen"))
         if record.get("vote"):
-            st.text("Vorlage: " + record["vote"])
+            st.text(t("Vorlage") + ": " + record["vote"])
         source_path = matching_source(config.BOOKLETS_DIR, record)
         if source_path is None:
-            st.warning("Die ursprüngliche PDF-Datei fehlt oder hat sich verändert. Die gespeicherten Zitate bleiben lesbar; eine Originalvorschau wird nicht angezeigt.")
+            st.warning(t("Die ursprüngliche PDF-Datei fehlt oder hat sich verändert. Die gespeicherten Zitate bleiben lesbar; eine Originalvorschau wird nicht angezeigt."))
         if saved_result.label == 1:
-            st.info("Im damals geprüften Kontext wurde keine bestätigende oder widersprechende Belegstelle gefunden.")
+            st.info(t("Im damals geprüften Kontext wurde keine bestätigende oder widersprechende Belegstelle gefunden."))
         for index, source in enumerate(saved_result.evidence_sources if saved_result.label != 1 else []):
-            with st.expander(f"Beleg {index + 1} · PDF-Seite {source.page_number}", expanded=index == 0):
+            with st.expander(t('Beleg {v0} · PDF-Seite {v1}').format(v0=index + 1, v1=source.page_number), expanded=index == 0):
                 snippet = best_snippet(source.quote, saved_result.claim)
                 st.text(snippet)
                 if source_path and source.page_number:
                     try:
                         preview = original_page_preview(source_path.read_bytes(), source.page_number,
                                                         snippet.removesuffix(" …"), saved_result.label)
-                        st.caption(preview.reason)
+                        st.caption(t(preview.reason))
                         st.image(preview.png, width="stretch")
                     except Exception:
-                        st.info("Die Originalseite lässt sich gerade nicht darstellen.")
-        with st.expander("Gespeicherte Details", expanded=False):
+                        st.info(t("Die Originalseite lässt sich gerade nicht darstellen."))
+        with st.expander(t("Gespeicherte Details"), expanded=False):
             st.json(saved_result.to_official_dict())
 
 
@@ -1748,6 +1771,8 @@ with tab_history:
 # TAB 2: BENCHMARK DASHBOARD
 # =============================================================================
 with tab_benchmark:
+    if st.session_state.get("ui_language", "de") != "de":
+        st.info(t("Technische Forschungsnotizen und gespeicherte Benchmark-Auswertungen sind derzeit auf Deutsch dokumentiert."))
     summary = build_summary()
     head_adv = summary["headline"].get("advanced")
     head_beg = summary["headline"].get("beginner")
@@ -1762,18 +1787,18 @@ with tab_benchmark:
             latest[key] = r
     test_runs = sorted(latest.values(), key=lambda r: (r["task"], -r["macro_f1"]))
 
-    st.markdown("### Benchmark-Ergebnisse")
+    st.markdown(t("### Benchmark-Ergebnisse"))
     st.markdown(
-        "Gespeicherte OST-Auswertungen. Die bisherigen Datensatztermine einschliesslich des früheren Test-Splits "
+        t("Gespeicherte OST-Auswertungen. Die bisherigen Datensatztermine einschliesslich des früheren Test-Splits "
         "sind beobachtete Dev-/Regressionsdaten und haben die Entwicklung beeinflusst. "
-        "Die Zahlen sind kein unabhängiger Generalisierungsnachweis."
+        "Die Zahlen sind kein unabhängiger Generalisierungsnachweis.")
     )
 
     dev42 = load_completed_dev42(config.BASE_DIR / "results/genai/real_nli42.json")
     if dev42:
-        st.markdown("##### GenAI: gepaarter Dev-Vergleich mit 42 Fällen")
-        st.caption("Beobachtete Fälle eines Büchleindatums mit Abschnitts-Cues, kein unabhängiger Test. "
-                   "Gleicher JSON-Prompt; dieser Vergleich bildet nicht die vollständige Produktions-NLI ab.")
+        st.markdown(t("##### GenAI: gepaarter Dev-Vergleich mit 42 Fällen"))
+        st.caption(t("Beobachtete Fälle eines Büchleindatums mit Abschnitts-Cues, kein unabhängiger Test. "
+                   "Gleicher JSON-Prompt; dieser Vergleich bildet nicht die vollständige Produktions-NLI ab."))
         names = {"baseline_native": "Baseline", "vector": "Dense", "vector_hybrid": "Fusion"}
         st.dataframe([{"Suche": names[row["variant"]], "Fälle": row["count"],
                        "Macro-F1": f"{row['macro_f1']:.4f}",
@@ -1781,9 +1806,9 @@ with tab_benchmark:
                        "Ø Prompttokens": round(row["mean_prompt_tokens"])}
                       for row in dev42["summary"] if row["group"] == "all"],
                      hide_index=True, width="stretch")
-        st.caption("Evidence Hit@5: 31 Gold-Entailment-/Contradictionfälle. "
-                   "Die Baseline behält ihre Abschnittsauswahl und ihr natives Kontextbudget.")
-        st.markdown("##### Historische gespeicherte Konfigurationen")
+        st.caption(t("Evidence Hit@5: 31 Gold-Entailment-/Contradictionfälle. "
+                   "Die Baseline behält ihre Abschnittsauswahl und ihr natives Kontextbudget."))
+        st.markdown(t("##### Historische gespeicherte Konfigurationen"))
 
     def _kpi(value: str, label: str, color: str) -> str:
         return f'<div class="kpi-card"><div class="kpi-value" style="color: {color};">{value}</div><div class="kpi-label">{label}</div></div>'
@@ -1816,11 +1841,11 @@ with tab_benchmark:
     if kpis:
         st.markdown(f'<div class="kpi-grid">{"".join(kpis)}</div>', unsafe_allow_html=True)
     else:
-        st.info("Noch keine gespeicherten Regressionsläufe mit den aktuellen Standardeinstellungen in results/.")
+        st.info(t("Noch keine gespeicherten Regressionsläufe mit den aktuellen Standardeinstellungen in results/."))
 
     # ── Core finding: selected context beats the full booklet ───────────────
     if len(comparison) >= 2:
-        st.markdown("##### Ganzes Büchlein vs. ausgewählter Kontext (Advanced-Task, gleiche 150 beobachtete Paare)")
+        st.markdown(t("##### Ganzes Büchlein vs. ausgewählter Kontext (Advanced-Task, gleiche 150 beobachtete Paare)"))
 
         def bar_chart(title: str, field: str, fmt, max_value: float, note: str) -> str:
             rows = []
@@ -1843,7 +1868,7 @@ with tab_benchmark:
             max_tok = max(run["avg_prompt_tokens"] for _, run, _ in comparison)
             st.markdown(bar_chart("Ø Input-Tokens pro Behauptung", "avg_prompt_tokens",
                                   lambda v: f"{v:,.0f}".replace(",", "'"), max_tok, "tiefer ist besser"), unsafe_allow_html=True)
-        st.caption("Historische Konfigurationen mit unterschiedlicher Kontextauswahl und unterschiedlichen Prompts. Tokenzahlen sind keine Kostenabrechnung.")
+        st.caption(t("Historische Konfigurationen mit unterschiedlicher Kontextauswahl und unterschiedlichen Prompts. Tokenzahlen sind keine Kostenabrechnung."))
 
     # ── Language-pair matrix ────────────────────────────────────────────────
     if head_adv:
@@ -1866,11 +1891,11 @@ with tab_benchmark:
                     f'<span class="mx-val">{v["macro_f1"]:.2f}</span><span class="mx-n">n={v["count"]}</span></div>'
                 )
         st.markdown(f'<div class="mx-grid">{"".join(cells)}</div>', unsafe_allow_html=True)
-        st.caption("Diagonale = gleiche Sprache. Schwächstes Paar: italienische Behauptung gegen deutsches Büchlein.")
+        st.caption(t("Diagonale = gleiche Sprache. Schwächstes Paar: italienische Behauptung gegen deutsches Büchlein."))
 
     # ── Table view of all configurations ────────────────────────────────────
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-    st.markdown("##### Alle Konfigurationen (historischer Test-Split, inzwischen beobachtet)")
+    st.markdown(t("##### Alle Konfigurationen (historischer Test-Split, inzwischen beobachtet)"))
     if test_runs:
         st.dataframe(
             [
@@ -1890,31 +1915,31 @@ with tab_benchmark:
             width="stretch",
             hide_index=True,
         )
-        st.caption("Latenz clientseitig gemessen; frühe Läufe teilten sich den Endpunkt mit anderen Läufen und sind dadurch langsamer.")
+        st.caption(t("Latenz clientseitig gemessen; frühe Läufe teilten sich den Endpunkt mit anderen Läufen und sind dadurch langsamer."))
 
     # Live Evaluation
-    with st.expander("Live-Benchmark ausführen", expanded=False):
+    with st.expander(t("Live-Benchmark ausführen"), expanded=False):
         datasets = {"OST Regression (früherer Test-Split)": config.DATA_DIR / "hf" / "test.jsonl", "OST Dev-Split": config.DATA_DIR / "hf" / "dev.jsonl", "Demo (Juni 2026)": config.BENCHMARK_PATH}
         datasets = {k: v for k, v in datasets.items() if v.exists()}
         c_ds, c_task, c_strat, c_lim = st.columns([2, 1, 1, 1])
         with c_ds:
-            eval_dataset = st.selectbox("Datensatz", list(datasets))
+            eval_dataset = st.selectbox(t("Datensatz"), list(datasets))
         with c_task:
-            eval_task = st.selectbox("Task", ["advanced", "beginner"])
+            eval_task = st.selectbox(t("Task"), ["advanced", "beginner"])
         with c_strat:
-            eval_strat = st.selectbox("Strategie", ["hybrid", "retrieval", "full"])
+            eval_strat = st.selectbox(t("Strategie"), ["hybrid", "retrieval", "full"])
         with c_lim:
-            eval_lim = st.selectbox("Limit", [6, 15, 30, "Alle"], index=0)
+            eval_lim = st.selectbox(t("Limit"), [6, 15, 30, "Alle"], index=0)
 
-        if st.button("Evaluierung starten", key="btn_run_live_eval"):
+        if st.button(t("Evaluierung starten"), key="btn_run_live_eval"):
             lim_val = None if eval_lim == "Alle" else int(eval_lim)
-            with st.spinner(f"Evaluiere {eval_lim} Samples…"):
+            with st.spinner(t('Evaluiere {v0} Samples…').format(v0=eval_lim)):
                 evaluator = BenchmarkEvaluator()
                 live_report = evaluator.evaluate(
                     dataset_path=datasets[eval_dataset], strategy=eval_strat, task=eval_task, limit=lim_val, save=False,
                 )
 
-            st.success(f"Abgeschlossen — {live_report['sample_count']} Samples")
+            st.success(t('Abgeschlossen — {v0} Samples').format(v0=live_report['sample_count']))
             lr1, lr2, lr3, lr4 = st.columns(4)
             lr1.metric("Macro-F1", f"{live_report['macro_f1']:.4f}")
             grounded = live_report["evidence"]["evidence_grounded_rate"]
@@ -1944,7 +1969,9 @@ with tab_benchmark:
 # TAB 3: ARCHITEKTUR
 # =============================================================================
 with tab_methodology:
-    st.markdown("### So funktioniert Fact Attack")
+    if st.session_state.get("ui_language", "de") != "de":
+        st.info(t("Technische Forschungsnotizen und gespeicherte Benchmark-Auswertungen sind derzeit auf Deutsch dokumentiert."))
+    st.markdown(t("### So funktioniert Fact Attack"))
 
     st.markdown("""
     <div class="flow">
@@ -1977,35 +2004,35 @@ with tab_methodology:
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     col_a1, col_a2 = st.columns(2, gap="large")
     with col_a1:
-        st.markdown("##### Warum der Titel der Vorlage?")
+        st.markdown(t("##### Warum der Titel der Vorlage?"))
         st.markdown(
-            "Der Vorlagentitel steht in der Sprache des Büchleins. Er findet die richtige Stelle auch dann, wenn die "
+            t("Der Vorlagentitel steht in der Sprache des Büchleins. Er findet die richtige Stelle auch dann, wenn die "
             "Behauptung auf Italienisch und das Büchlein auf Deutsch ist. Ein harter Filter auf eine erkannte Vorlage "
-            "verlor dagegen die Übersichtsseiten vorne im Büchlein. Trefferquote des Gold-Abschnitts: 0.74 → 0.93."
+            "verlor dagegen die Übersichtsseiten vorne im Büchlein. Trefferquote des Gold-Abschnitts: 0.74 → 0.93.")
         )
-        st.markdown("##### Warum Seitennummern statt Zitate?")
+        st.markdown(t("##### Warum Seitennummern statt Zitate?"))
         st.markdown(
-            "Apertus nennt nur die Nummern der Belegseiten. So sind Belege immer wörtlicher Text aus dem Büchlein mit "
-            "korrekter Seitenzahl, und die Antwort ist rund dreimal kürzer als mit Begründung und Zitaten."
+            t("Apertus nennt nur die Nummern der Belegseiten. So sind Belege immer wörtlicher Text aus dem Büchlein mit "
+            "korrekter Seitenzahl, und die Antwort ist rund dreimal kürzer als mit Begründung und Zitaten.")
         )
     with col_a2:
-        st.markdown("##### Warum Abschnitte?")
+        st.markdown(t("##### Warum Abschnitte?"))
         st.markdown(
-            "Ein Büchlein enthält bewusst beide Seiten. «Das Komitee argumentiert …» wird nur am Text des Komitees "
-            "geprüft — Gegenargumente des Bundesrats sind kein Widerspruch."
+            t("Ein Büchlein enthält bewusst beide Seiten. «Das Komitee argumentiert …» wird nur am Text des Komitees "
+            "geprüft — Gegenargumente des Bundesrats sind kein Widerspruch.")
         )
-        st.markdown("##### Was wir verworfen haben")
+        st.markdown(t("##### Was wir verworfen haben"))
         st.markdown(
-            "- **Ganzes Büchlein senden:** F1 0.73 bei ~60'000 Tokens\n"
+            t("- **Ganzes Büchlein senden:** F1 0.73 bei ~60'000 Tokens\n"
             "- **Harter Zahlen-Override:** 5 von 5 Eingriffen falsch\n"
             "- **Nur Label-Ziffer abfragen:** schwach bei «Neutral» (F1 0.72)\n"
             "- **Kleine Textstücke statt Seiten:** präzisere Belege, aber F1 0.83 statt 0.91\n"
             "- **Zweitprüfung bei «Widerspruch»:** 0 von 23 Fehlern behoben, 24 neue\n"
-            "- **Apertus 8B statt 70B:** 3,5× schneller, aber F1 0.85 statt 0.91"
+            "- **Apertus 8B statt 70B:** 3,5× schneller, aber F1 0.85 statt 0.91")
         )
 
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-    st.markdown("##### Reproduzierbarkeit")
+    st.markdown(t("##### Reproduzierbarkeit"))
     st.code("""# OST-Datensatz, alle Büchlein und Dev/Test-Split laden
 python -m src.hf_dataset
 
@@ -2017,4 +2044,4 @@ python -m src benchmark -d data/hf/test.jsonl -t beginner""", language="bash")
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-st.caption("Hack Apertus 2026 — Team Fact Attack (Track 2A: OST) · Josip Jukic & Felipe Wüthrich · [Unser Entwicklungsbranch](https://github.com/SheylaSam/fact-attack-genai/tree/genai/vector-rag) · [Originalprojekt](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)")
+st.caption(t("Hack Apertus 2026 — Team Fact Attack (Track 2A: OST) · Josip Jukic & Felipe Wüthrich · [Unser Entwicklungsbranch](https://github.com/SheylaSam/fact-attack-genai/tree/genai/vector-rag) · [Originalprojekt](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)"))

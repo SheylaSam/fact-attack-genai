@@ -323,3 +323,35 @@ isolierte Demo-Datenbank mit blockierter API: entfernt und erfolgreich
 wiederhergestellt. Keine neuen Apertus-Aufrufe.
 
 ![Export und Wiederherstellung im Papierkorb](assets/streamlit-history-export-trash.png)
+
+
+## Oberfläche auf DE / FR / IT umstellen
+
+„Sprache / Langue / Lingua“ schaltet die Bedienoberfläche für Faktencheck,
+Quellensuche, Ergebnis, Originalvorschau und Verlauf zwischen Deutsch,
+Französisch und Italienisch um. Übersetzungen liegen in `src/ui_i18n.py`;
+die Wahl gilt für die aktuelle Streamlit-Sitzung. Widgetwerte für Datum,
+Vorlage, Behauptungssprache, Strategie und Verlaufsansicht bleiben kanonisch.
+Nur ihre Beschriftung wird übersetzt. Bei einem Sprachwechsel werden diese
+Werte erneut an die Oberfläche gesendet, damit Streamlit keine veralteten
+Auswahlbeschriftungen zeigt. Datumsbeschriftungen werden sprachgerecht formatiert.
+
+Behauptungen, Belegzitate, PDF-Inhalte, gespeicherte Ergebnisse und Exportdaten
+werden nicht maschinell übersetzt. Die UI-Sprache beeinflusst weder den
+Apertus-Prompt noch die Sprache des Büchleins. Modellantworten, Beispieltexte,
+Vorlagentitel und technische Schlüssel behalten ihre Originalsprache.
+Längere Forschungs-/Benchmark-Erläuterungen bleiben derzeit auf Deutsch; die
+FR-/IT-Ansichten weisen ausdrücklich darauf hin. Es handelt sich um die
+Lokalisierung der zentralen Bedienabläufe, nicht um eine Übersetzung aller
+historischen Forschungsnotizen oder eine fachliche Übersetzungsprüfung.
+
+Dreizehn gezielte Sprach-/Streamlit-Tests bestanden (fünf bestehende PDF-Warnungen).
+Geprüft wurden Sprachwechsel hin und zurück, unveränderte Eingaben/Strategie,
+französische und italienische Auswahlbeschriftungen sowie unveränderte lokale
+Ergebnis-/Belegdatensätze. Die Platzhalter in dynamischen Übersetzungen stimmen
+mit der Ausgangssprache überein. Beide Sprachansichten wurden im Browser geprüft.
+Keine zusätzlichen Apertus-Aufrufe oder Qualitätsmessungen.
+
+![Französische Bedienoberfläche](assets/streamlit-ui-fr.png)
+
+![Italienische Bedienoberfläche](assets/streamlit-ui-it.png)

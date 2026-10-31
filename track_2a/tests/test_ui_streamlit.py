@@ -157,3 +157,35 @@ def test_history_trash_and_restore_survive_new_app_run_without_api(isolated_hist
         assert not restarted.exception
         assert len(restarted.selectbox(key='history_selected').options) == 1
         remote.assert_not_called()
+
+
+@pytest.mark.parametrize('language,button_label', [('fr', 'Vérifier l’affirmation'), ('it', 'Verifica l’affermazione')])
+def test_ui_language_keeps_inputs_and_does_not_infer(language, button_label):
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No network')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        app.text_area(key='claim_input').set_value('Die Vorlage verändert das Rentenalter.').run()
+        before = {key: app.session_state[key] for key in ('claim_input', 'ballot', 'booklet_lang', 'vote', 'strategy_option', 'claim_lang')}
+        app.selectbox(key='ui_language').set_value(language).run()
+        assert not app.exception
+        assert {key: app.session_state[key] for key in before} == before
+        assert any(button.label == button_label for button in app.button)
+        assert app.selectbox(key='source_year').options[0] == ('Toutes les années' if language == 'fr' else 'Tutti gli anni')
+        app.selectbox(key='ui_language').set_value('de').run()
+        assert not app.exception
+        assert {key: app.session_state[key] for key in before} == before
+        remote.assert_not_called()
+
+
+def test_ui_language_does_not_rewrite_saved_claims_or_evidence(isolated_history):
+    from src.check_history import load_checks
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=RuntimeError('Offline')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        next(button for button in app.button if button.key.startswith('story_')).click().run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        original = load_checks(isolated_history)
+        app.selectbox(key='ui_language').set_value('fr').run()
+        assert not app.exception
+        assert load_checks(isolated_history) == original
+        assert any('Réponse de démonstration enregistrée' in info.value for info in app.info)
+        assert any('Markiert' not in caption.value and 'surligné' in caption.value for caption in app.caption)
+        remote.assert_not_called()
