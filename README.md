@@ -1,3 +1,5 @@
+> **GenAI-Fortsetzung (31.10.2026):** Optionaler Vektor-RAG-Prototyp auf dem Branch `genai/vector-rag`. [Startanleitung und Versuchsplan](docs/genai/START_VECTOR_RAG.md). Die folgende Hackathon-Dokumentation und Standardkonfiguration bleiben erhalten.
+
 # 🇨🇭 Fact Attack 2026 — Hack Apertus Track 2A (OST)
 ## Multilingual Natural Language Inference over Swiss Official Voting Booklets
 

@@ -1,0 +1,217 @@
+{
+  "kind": "retrieval_smoke_not_quality_evaluation",
+  "booklet": "data/booklets/2026-06-14_de.pdf",
+  "booklet_sha256": "13c434202d63d32ca57f03311fb9de5fc7477d5c49ea14b06984f5d3a8591115",
+  "claim": "Die Initiative begrenzt die ständige Wohnbevölkerung vor 2050 auf zehn Millionen.",
+  "vote": null,
+  "top_k": 5,
+  "embedding": {
+    "model": "intfloat/multilingual-e5-small",
+    "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "sentence_transformers": "6.2.0",
+    "prefixes": [
+      "query: ",
+      "passage: "
+    ],
+    "normalized": true,
+    "chunk_tokens": 384,
+    "overlap": 64,
+    "index_fingerprint": "504c752fe0857647963d49e7fa90c4413a051b8e78f3cb3e866438ba2da858a1",
+    "chunks": 56,
+    "fusion": "RRF(k=60)"
+  },
+  "index_and_model_load_ms": 11015.82737499848,
+  "variants": {
+    "bm25": {
+      "query_ms": 2.7809169987449422,
+      "hits": [
+        {
+          "id": 18,
+          "page_number": 20,
+          "proposal_id": 1,
+          "section_type": "legal_text",
+          "section": "Voting text (legal text)",
+          "text": "20 Abstimmungstext Bundesbeschluss zur Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» vom 19. Dezember 2025 Erste Vorlage: Nachhaltigkeitsinitiative Abstimmungstext Abstimmungstext Abstimmungstext 2 Abstimmungstext Bundesbeschluss zur Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» vom 19. Dezember 2025 Die Bundesversammlung der Schweizerischen Eidgenossenschaft, gestützt auf Artikel 139 Absatz 5 der Bundesverfassung1, nach Prüfung der am 3. April 20242 eingereichten Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)», nach Einsicht in die Botschaft des Bundesrates vom 21. März 20253, beschliesst: Art. 1 1 Die Volksinitiative vom 3. April 2024 «Keine 10-Millionen-Schweiz! (Nachhaltig- keitsinitiative)» ist gültig und wird Volk und Ständen zur Abstimmung unterbreitet. 2 Sie lautet: Die Bundesverfassung wird wie folgt geändert: Art. 73a Nachhaltige Bevölkerungsentwicklung 1 Die ständige Wohnbevölkerung der Schweiz darf zehn Millionen Menschen vor dem Jahr 2050 nicht überschreiten. Ab 2050 kann der Bun desrat den Grenzwert jährlich durch Verordnung um den Geburtenüberschuss anpassen. Der Bund stellt sicher, dass der Grenzwert eingehalten wird. 2 Bund und Kantone treffen im Rahmen ihrer Zuständig keiten Massnahmen für eine nachhaltige Bevölkerungsentwicklung, insbesondere zum Schutz der Umwelt und im Interesse der dauerhaften Erhaltung der natürlichen Lebensgrundlagen, der Leistungs- fähigkeit der Infrastrukturen, der Gesundheitsversorgung und der schweizerischen Sozialversicherungen. 3 Die ständige Wohnbevölkerung umfasst alle schweizerischen Staatsangehörigen mit einem Hauptwohnsitz in der Schweiz sowie alle ausländischen Staatsangehörigen mit einem Aufenthaltstitel für mindestens zwölf Monate oder mit einer Aufenthaltsdauer in der Schweiz von mindestens zwölf Monaten. 1 SR 101 2 BBl 2024 1036 3 BBl 2025 1262 2 Abstimmungstext Bundesbeschluss zur Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» vom 19. Dezember 2025 Die Bundesversammlung der Schweizerischen Eidgenossenschaft, gestützt auf Artikel 139 Absatz 5 der Bundesverfassung1, nach Prüfung der am 3. April 20242 eingereichten Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)», nach Einsicht in die Botschaft des Bundesrates vom 21. März 20253, beschliesst: Art. 1 1 Die Volksinitiative vom 3. April 2024 «Keine 10-Millionen-Schweiz! (Nachhaltig- keitsinitiative)» ist gültig und wird Volk und Ständen zur Abstimmung unterbreitet. 2 Sie lautet: Die Bundesverfassung wird wie folgt geändert: Art. 73a Nachhaltige Bevölkerungsentwicklung 1 Die ständige Wohnbevölkerung der Schweiz darf zehn Millionen Menschen vor dem Jahr 2050 nicht überschreiten. Ab 2050 kann der Bun desrat den Grenzwert jährlich durch Verordnung um den Geburtenüberschuss anpassen. Der Bund stellt sicher, dass der Grenzwert eingehalten wird. 2 Bund und Kantone treffen im Rahmen ihrer Zuständig keiten Massnahmen für eine nachhaltige Bevölkerungsentwicklung, insbesondere zum Schutz der Umwelt und im Interesse der dauerhaften Erhaltung der natürlichen Lebensgrundlagen, der Leistungs- fähigkeit der Infrastrukturen, der Gesundheitsversorgung und der schweizerischen Sozialversicherungen. 3 Die ständige Wohnbevölkerung umfasst alle schweizerischen Staatsangehörigen mit einem Hauptwohnsitz in der Schweiz sowie alle ausländischen Staatsangehörigen mit einem Aufenthaltstitel für mindestens zwölf Monate oder mit einer Aufenthaltsdauer in der Schweiz von mindestens zwölf Monaten. 1 SR 101 2 BBl 2024 1036 3 BBl 2025 1262",
+          "retrieval_score": 1.0
+        },
+        {
+          "id": 10,
+          "page_number": 11,
+          "proposal_id": 1,
+          "section_type": "detail",
+          "section": "Official explanation in detail",
+          "text": "11 Die Initiative «Keine 10-Millionen-Schweiz! (Nachhaltig - keitsinitiative)» verlangt, die ständige Wohnbevölkerung zu begrenzen: Sie darf vor 2050 10 Millionen Menschen nicht überschreiten. Die Initiantinnen und Initianten wollen die Zuwanderung zum Schutz der Umwelt und im Interesse der dauerhaften Erhaltung der natürlichen Lebensgrundlagen begrenzen und die Leistungsfähigkeit der Infrastrukturen, der Gesundheitsversorgung sowie der Sozialversicherungen erhal - ten. Bund und Kantone müssen nach Annahme der Initiative Massnahmen ergreifen, insbesondere wenn gewisse Grenzwer - te überschritten werden. Wenn vor 2050 die ständige Wohnbevölkerung der Schweiz die 9,5-Millionen-Grenze überschreitet, sieht die Initiative Folgendes vor: – Der Bundesrat und das Parlament müssen insbesondere im Asylbereich und beim Familiennachzug handeln. Welche weiteren Massnahmen ergriffen werden müssen, präzisiert die Initiative nicht. – Vorläufig aufgenommene Personen dürfen keine Aufent - halts- oder Niederlassungsbewilligung und auch kein anderes Bleiberecht mehr erhalten und können sich auch nicht einbürgern lassen. – Der Bundesrat muss bei internationalen Abkommen, die zum Bevölkerungswachstum beitragen, Ausnahme- oder Schutzklauseln anrufen oder aushandeln oder diese Abkommen neu verhandeln. Davon könnten zum Beispiel das Abkommen über die Personenfreizügigkeit mit der EU, die Europäische Menschenrechtskonvention, die Genfer Flüchtlingskonvention oder die UNO-Kinderrechts - konvention betroffen sein. Forderungen der Initiative Bis 2050 maximal 10 Millionen Menschen Massnahmen bei 9,5 Millionen Menschen",
+          "retrieval_score": 0.8976541687354218
+        },
+        {
+          "id": 3,
+          "page_number": 4,
+          "proposal_id": 1,
+          "section_type": "intro",
+          "section": null,
+          "text": "4 Erste Vorlage: Nachhaltigkeitsinitiative Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» Ende 2025 lebten rund 9,1 Millionen Personen in der Schweiz. Seit Einführung der Personenfreizügigkeit im Jahr 2002 ist die Bevölkerung um rund 1,7 Millionen Personen gewachsen. Das ist hauptsächlich auf die Zuwanderung zurückzuführen. Wie viele Menschen zuwandern, hängt vor allem vom Arbeitsmarkt ab. Floriert die Wirtschaft, so finden Unternehmen nicht genü- gend Arbeitskräfte in der Schweiz. Unternehmen, aber auch öffentliche Einrichtungen wie Spitäler und Pflegeheime rekru - tieren dann fehlende Fachkräfte häufig im EU-Raum. Die Initiative «Keine 10-Millionen-Schweiz! (Nachhaltig - keitsinitiative)» verlangt, die ständige Wohnbevölkerung zu begrenzen: Vor 2050 müsste die Bevölkerung der Schweiz unter 10 Millionen Menschen bleiben. Würde die ständige Wohnbevölkerung 9,5 Millionen Personen vor 2050 überschrei - ten, so müssten Bundesrat und Parlament insbesondere im Asylbereich und beim Familiennachzug Massnahmen ergreifen. Der Bundesrat müsste zudem bei internationalen Abkommen, die zum Bevölkerungswachstum beitragen, Ausnahmebestim - mungen und Schutzklauseln anrufen oder aushandeln. Würde die 10-Millionen-Grenze überschritten, so müsste die Schweiz diese Abkommen kündigen, nach zwei Jahren auch das Ab - kommen mit der EU über die Personenfreizügigkeit. Dadurch würden auch die anderen Verträge der Bilateralen I wegfallen. Auch die Beteiligung der Schweiz an den Schengen- und Dublin-Abkommen der EU wäre infrage gestellt und damit die enge Zusammenarbeit im Sicherheits- und Asylbereich. Die Initiative Ausgangslage In KürzeIn Kürze In Kürze Vorlage im Detail 8 Argumente 16 Abstimmungstext 20",
+          "retrieval_score": 0.8274856304596583
+        },
+        {
+          "id": 11,
+          "page_number": 12,
+          "proposal_id": 1,
+          "section_type": "detail",
+          "section": "Official explanation in detail",
+          "text": "12 Erste Vorlage: Nachhaltigkeitsinitiative Gemäss Vorausschätzungen des Bundes dürfte die Schwelle von 9,5 Millionen Menschen im Jahr 2031 überschrit - ten werden.6 Wenn die ständige Wohnbevölkerung der Schweiz die 10-Millionen-Grenze überschreitet, sieht die Initiative Folgen - des vor: – Bundesrat und Parlament müssen alle zur Verfügung stehenden Massnahmen ergreifen, damit die ständige Wohnbevölkerung wieder unter die 10-Millionen-Grenze fällt. – Internationale Abkommen, die zum Bevölkerungswachs - tum beitragen, müssen auf den nächstmöglichen Termin gekündigt werden. Ab 2050 kann der Bundesrat den Grenzwert von 10 Millionen um einen allfälligen Geburtenüberschuss erhöhen. Falls die ständige Wohnbevölkerung zwei Jahre nach dem erstmaligen Überschreiten der 10-Millionen-Grenze noch immer über diesem Wert liegt, muss das Abkommen über die Personenfreizügigkeit mit der EU gekündigt werden. Die Schweiz könnte von einer Kündigung absehen, wenn bis dahin Ausnahme- oder Schutzklauseln angewendet oder angerufen werden konnten, mit denen die Einhaltung dieser 10-Millionen- Grenze erreicht wird. 6 Das Bundesamt für Statistik berechnet jeweils drei Szenarien zur Bevölkerungsentwicklung. Das Referenzszenario schreibt die Entwicklungen der letzten Jahre fort und gemäss diesem Szenario dürfte die Schwelle von 9,5 Millionen im Jahr 2031 überschritten werden. Das «hohe» Szenario enthält mehr Annahmen, die zu einem stärkeren Bevölkerungswachstum führen würden, und das «tiefe» Szenario solche, die zu einem geringeren Bevölkerungswachstum führen. «Szenarien zur Bevölkerungsentwicklung der Schweiz», Bundesamt für Statistik, April 2025 ( bfs.admin.ch > Statistiken > Bevölkerung > Zukünftige Entwicklung > Schweiz-Szenarien) Massnahmen bei 10 Millionen Menschen Kündigung der Personen­ freizügigkeit",
+          "retrieval_score": 0.780315020120915
+        },
+        {
+          "id": 15,
+          "page_number": 17,
+          "proposal_id": 1,
+          "section_type": "arguments",
+          "section": "Arguments of the initiative/referendum committee",
+          "text": "17 Der Text auf dieser Doppelseite stammt vom Initiativkomitee. Es ist für den Inhalt und die Wortwahl verantwortlich. Die Nachhaltigkeits-Initiative sorgt für eine vernünftige Zuwanderung: Die ständige Wohnbevölkerung darf bis 2050 die 10-Millionen-Grenze nicht überschreiten. Das heisst: Es könnten immer noch rund 40 000 Personen und Fachkräfte pro Jahr einwandern. Die Initiative verpflichtet die Politik zu einer massvollen Zuwanderung in die Schweiz: Ja zu einer nachhaltigen Bevölkerungsentwicklung statt zu einer ungebremsten Zuwanderung. Ja zum Schutz der Umwelt und der Landschaft. Ja zur Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» Darum empfiehlt das Initiativkomitee: Ja nachhaltigkeitsinitiative.ch Keine 10-Millionen- Schweiz Ja zu einer nachhaltigen Entwicklung Empfehlung des Initiativkomitees",
+          "retrieval_score": 0.749221074028186
+        }
+      ]
+    },
+    "vector": {
+      "query_ms": 8.887249990948476,
+      "hits": [
+        {
+          "id": 10,
+          "page_number": 11,
+          "proposal_id": 1,
+          "section_type": "detail",
+          "section": "Official explanation in detail",
+          "text": "11 Die Initiative «Keine 10-Millionen-Schweiz! (Nachhaltig - keitsinitiative)» verlangt, die ständige Wohnbevölkerung zu begrenzen: Sie darf vor 2050 10 Millionen Menschen nicht überschreiten. Die Initiantinnen und Initianten wollen die Zuwanderung zum Schutz der Umwelt und im Interesse der dauerhaften Erhaltung der natürlichen Lebensgrundlagen begrenzen und die Leistungsfähigkeit der Infrastrukturen, der Gesundheitsversorgung sowie der Sozialversicherungen erhal - ten. Bund und Kantone müssen nach Annahme der Initiative Massnahmen ergreifen, insbesondere wenn gewisse Grenzwer - te überschritten werden. Wenn vor 2050 die ständige Wohnbevölkerung der Schweiz die 9,5-Millionen-Grenze überschreitet, sieht die Initiative Folgendes vor: – Der Bundesrat und das Parlament müssen insbesondere im Asylbereich und beim Familiennachzug handeln. Welche weiteren Massnahmen ergriffen werden müssen, präzisiert die Initiative nicht. – Vorläufig aufgenommene Personen dürfen keine Aufent - halts- oder Niederlassungsbewilligung und auch kein anderes Bleiberecht mehr erhalten und können sich auch nicht einbürgern lassen. – Der Bundesrat muss bei internationalen Abkommen, die zum Bevölkerungswachstum beitragen, Ausnahme- oder Schutzklauseln anrufen oder aushandeln oder diese Abkommen neu verhandeln. Davon könnten zum Beispiel das Abkommen über die Personenfreizügigkeit mit der EU, die Europäische Menschenrechtskonvention, die Genfer Flüchtlingskonvention oder die UNO-Kinderrechts - konvention betroffen sein. Forderungen der Initiative Bis 2050 maximal 10 Millionen Menschen Massnahmen bei 9,5 Millionen Menschen",
+          "parent_index": 10,
+          "chunk_number": 0,
+          "retrieval_score": 0.8958206407814305,
+          "dense_score": 0.8958206407814305,
+          "retrieval_backend": "vector"
+        },
+        {
+          "id": 15,
+          "page_number": 17,
+          "proposal_id": 1,
+          "section_type": "arguments",
+          "section": "Arguments of the initiative/referendum committee",
+          "text": "17 Der Text auf dieser Doppelseite stammt vom Initiativkomitee. Es ist für den Inhalt und die Wortwahl verantwortlich. Die Nachhaltigkeits-Initiative sorgt für eine vernünftige Zuwanderung: Die ständige Wohnbevölkerung darf bis 2050 die 10-Millionen-Grenze nicht überschreiten. Das heisst: Es könnten immer noch rund 40 000 Personen und Fachkräfte pro Jahr einwandern. Die Initiative verpflichtet die Politik zu einer massvollen Zuwanderung in die Schweiz: Ja zu einer nachhaltigen Bevölkerungsentwicklung statt zu einer ungebremsten Zuwanderung. Ja zum Schutz der Umwelt und der Landschaft. Ja zur Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» Darum empfiehlt das Initiativkomitee: Ja nachhaltigkeitsinitiative.ch Keine 10-Millionen- Schweiz Ja zu einer nachhaltigen Entwicklung Empfehlung des Initiativkomitees",
+          "parent_index": 15,
+          "chunk_number": 0,
+          "retrieval_score": 0.8955585219353278,
+          "dense_score": 0.8955585219353278,
+          "retrieval_backend": "vector"
+        },
+        {
+          "id": 11,
+          "page_number": 12,
+          "proposal_id": 1,
+          "section_type": "detail",
+          "section": "Official explanation in detail",
+          "text": "12 Erste Vorlage: Nachhaltigkeitsinitiative Gemäss Vorausschätzungen des Bundes dürfte die Schwelle von 9,5 Millionen Menschen im Jahr 2031 überschrit - ten werden.6 Wenn die ständige Wohnbevölkerung der Schweiz die 10-Millionen-Grenze überschreitet, sieht die Initiative Folgen - des vor: – Bundesrat und Parlament müssen alle zur Verfügung stehenden Massnahmen ergreifen, damit die ständige Wohnbevölkerung wieder unter die 10-Millionen-Grenze fällt. – Internationale Abkommen, die zum Bevölkerungswachs - tum beitragen, müssen auf den nächstmöglichen Termin gekündigt werden. Ab 2050 kann der Bundesrat den Grenzwert von 10 Millionen um einen allfälligen Geburtenüberschuss erhöhen. Falls die ständige Wohnbevölkerung zwei Jahre nach dem erstmaligen Überschreiten der 10-Millionen-Grenze noch immer über diesem Wert liegt, muss das Abkommen über die Personenfreizügigkeit mit der EU gekündigt werden. Die Schweiz könnte von einer Kündigung absehen, wenn bis dahin Ausnahme- oder Schutzklauseln angewendet oder angerufen werden konnten, mit denen die Einhaltung dieser 10-Millionen- Grenze erreicht wird. 6 Das Bundesamt für Statistik berechnet jeweils drei Szenarien zur Bevölkerungsentwicklung. Das Referenzszenario schreibt die Entwicklungen der letzten Jahre fort und gemäss diesem Szenario dürfte die Schwelle von 9,5 Millionen im Jahr 2031 überschritten werden. Das «hohe» Szenario enthält mehr Annahmen, die zu einem stärkeren Bevölkerungswachstum führen würden, und das «tiefe» Szenario solche, die zu einem geringeren Bevölkerungswachstum führen. «Szenarien zur Bevölkerungsentwicklung der Schweiz», Bundesamt für Statistik, April 2025 ( bfs",
+          "parent_index": 11,
+          "chunk_number": 0,
+          "retrieval_score": 0.8938150173970922,
+          "dense_score": 0.8938150173970922,
+          "retrieval_backend": "vector"
+        },
+        {
+          "id": 18,
+          "page_number": 20,
+          "proposal_id": 1,
+          "section_type": "legal_text",
+          "section": "Voting text (legal text)",
+          "text": "20 Abstimmungstext Bundesbeschluss zur Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» vom 19. Dezember 2025 Erste Vorlage: Nachhaltigkeitsinitiative Abstimmungstext Abstimmungstext Abstimmungstext 2 Abstimmungstext Bundesbeschluss zur Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» vom 19. Dezember 2025 Die Bundesversammlung der Schweizerischen Eidgenossenschaft, gestützt auf Artikel 139 Absatz 5 der Bundesverfassung1, nach Prüfung der am 3. April 20242 eingereichten Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)», nach Einsicht in die Botschaft des Bundesrates vom 21. März 20253, beschliesst: Art. 1 1 Die Volksinitiative vom 3. April 2024 «Keine 10-Millionen-Schweiz! (Nachhaltig- keitsinitiative)» ist gültig und wird Volk und Ständen zur Abstimmung unterbreitet. 2 Sie lautet: Die Bundesverfassung wird wie folgt geändert: Art. 73a Nachhaltige Bevölkerungsentwicklung 1 Die ständige Wohnbevölkerung der Schweiz darf zehn Millionen Menschen vor dem Jahr 2050 nicht überschreiten. Ab 2050 kann der Bun desrat den Grenzwert jährlich durch Verordnung um den Geburtenüberschuss anpassen. Der Bund stellt sicher, dass der Grenzwert eingehalten wird. 2 Bund und Kantone treffen im Rahmen ihrer Zuständig keiten Massnahmen für eine nachhaltige Bevölkerungsentwicklung, insbesondere zum Schutz der Umwelt und im Interesse der dauerhaften Erhaltung der natürlichen Lebensgrundlagen, der Leistungs- fähigkeit der Infrastrukturen, der Gesundheitsversorgung und der schweizerischen Sozialversicherungen. 3 Die ständige Wohnbevölkerung umfasst alle schweizerischen Staatsangehörigen",
+          "parent_index": 18,
+          "chunk_number": 0,
+          "retrieval_score": 0.8837664852899684,
+          "dense_score": 0.8837664852899684,
+          "retrieval_backend": "vector"
+        },
+        {
+          "id": 3,
+          "page_number": 4,
+          "proposal_id": 1,
+          "section_type": "intro",
+          "section": null,
+          "text": "4 Erste Vorlage: Nachhaltigkeitsinitiative Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» Ende 2025 lebten rund 9,1 Millionen Personen in der Schweiz. Seit Einführung der Personenfreizügigkeit im Jahr 2002 ist die Bevölkerung um rund 1,7 Millionen Personen gewachsen. Das ist hauptsächlich auf die Zuwanderung zurückzuführen. Wie viele Menschen zuwandern, hängt vor allem vom Arbeitsmarkt ab. Floriert die Wirtschaft, so finden Unternehmen nicht genü- gend Arbeitskräfte in der Schweiz. Unternehmen, aber auch öffentliche Einrichtungen wie Spitäler und Pflegeheime rekru - tieren dann fehlende Fachkräfte häufig im EU-Raum. Die Initiative «Keine 10-Millionen-Schweiz! (Nachhaltig - keitsinitiative)» verlangt, die ständige Wohnbevölkerung zu begrenzen: Vor 2050 müsste die Bevölkerung der Schweiz unter 10 Millionen Menschen bleiben. Würde die ständige Wohnbevölkerung 9,5 Millionen Personen vor 2050 überschrei - ten, so müssten Bundesrat und Parlament insbesondere im Asylbereich und beim Familiennachzug Massnahmen ergreifen. Der Bundesrat müsste zudem bei internationalen Abkommen, die zum Bevölkerungswachstum beitragen, Ausnahmebestim - mungen und Schutzklauseln anrufen oder aushandeln. Würde die 10-Millionen-Grenze überschritten, so müsste die Schweiz diese Abkommen kündigen, nach zwei Jahren auch das Ab - kommen mit der EU über die Personenfreizügigkeit. Dadurch würden auch die anderen Verträge der Bilateralen I wegfallen. Auch die Beteiligung der Schweiz an den Schengen- und Dublin-Abkommen der EU wäre infrage gestellt und damit die enge Zusammenarbeit im Sicherheits- und Asylbereich. Die Initiative Ausgangslage In KürzeIn Kürze In Kürze Vorlage im Detail 8 Argumente",
+          "parent_index": 3,
+          "chunk_number": 0,
+          "retrieval_score": 0.8797656381256895,
+          "dense_score": 0.8797656381256895,
+          "retrieval_backend": "vector"
+        }
+      ]
+    },
+    "vector_hybrid": {
+      "query_ms": 7.812749987351708,
+      "hits": [
+        {
+          "id": 10,
+          "page_number": 11,
+          "proposal_id": 1,
+          "section_type": "detail",
+          "section": "Official explanation in detail",
+          "text": "11 Die Initiative «Keine 10-Millionen-Schweiz! (Nachhaltig - keitsinitiative)» verlangt, die ständige Wohnbevölkerung zu begrenzen: Sie darf vor 2050 10 Millionen Menschen nicht überschreiten. Die Initiantinnen und Initianten wollen die Zuwanderung zum Schutz der Umwelt und im Interesse der dauerhaften Erhaltung der natürlichen Lebensgrundlagen begrenzen und die Leistungsfähigkeit der Infrastrukturen, der Gesundheitsversorgung sowie der Sozialversicherungen erhal - ten. Bund und Kantone müssen nach Annahme der Initiative Massnahmen ergreifen, insbesondere wenn gewisse Grenzwer - te überschritten werden. Wenn vor 2050 die ständige Wohnbevölkerung der Schweiz die 9,5-Millionen-Grenze überschreitet, sieht die Initiative Folgendes vor: – Der Bundesrat und das Parlament müssen insbesondere im Asylbereich und beim Familiennachzug handeln. Welche weiteren Massnahmen ergriffen werden müssen, präzisiert die Initiative nicht. – Vorläufig aufgenommene Personen dürfen keine Aufent - halts- oder Niederlassungsbewilligung und auch kein anderes Bleiberecht mehr erhalten und können sich auch nicht einbürgern lassen. – Der Bundesrat muss bei internationalen Abkommen, die zum Bevölkerungswachstum beitragen, Ausnahme- oder Schutzklauseln anrufen oder aushandeln oder diese Abkommen neu verhandeln. Davon könnten zum Beispiel das Abkommen über die Personenfreizügigkeit mit der EU, die Europäische Menschenrechtskonvention, die Genfer Flüchtlingskonvention oder die UNO-Kinderrechts - konvention betroffen sein. Forderungen der Initiative Bis 2050 maximal 10 Millionen Menschen Massnahmen bei 9,5 Millionen Menschen",
+          "parent_index": 10,
+          "chunk_number": 0,
+          "retrieval_score": 0.03278688524590164,
+          "dense_score": 0.8958206407814305,
+          "retrieval_backend": "vector_hybrid"
+        },
+        {
+          "id": 18,
+          "page_number": 20,
+          "proposal_id": 1,
+          "section_type": "legal_text",
+          "section": "Voting text (legal text)",
+          "text": "20 Abstimmungstext Bundesbeschluss zur Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» vom 19. Dezember 2025 Erste Vorlage: Nachhaltigkeitsinitiative Abstimmungstext Abstimmungstext Abstimmungstext 2 Abstimmungstext Bundesbeschluss zur Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» vom 19. Dezember 2025 Die Bundesversammlung der Schweizerischen Eidgenossenschaft, gestützt auf Artikel 139 Absatz 5 der Bundesverfassung1, nach Prüfung der am 3. April 20242 eingereichten Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)», nach Einsicht in die Botschaft des Bundesrates vom 21. März 20253, beschliesst: Art. 1 1 Die Volksinitiative vom 3. April 2024 «Keine 10-Millionen-Schweiz! (Nachhaltig- keitsinitiative)» ist gültig und wird Volk und Ständen zur Abstimmung unterbreitet. 2 Sie lautet: Die Bundesverfassung wird wie folgt geändert: Art. 73a Nachhaltige Bevölkerungsentwicklung 1 Die ständige Wohnbevölkerung der Schweiz darf zehn Millionen Menschen vor dem Jahr 2050 nicht überschreiten. Ab 2050 kann der Bun desrat den Grenzwert jährlich durch Verordnung um den Geburtenüberschuss anpassen. Der Bund stellt sicher, dass der Grenzwert eingehalten wird. 2 Bund und Kantone treffen im Rahmen ihrer Zuständig keiten Massnahmen für eine nachhaltige Bevölkerungsentwicklung, insbesondere zum Schutz der Umwelt und im Interesse der dauerhaften Erhaltung der natürlichen Lebensgrundlagen, der Leistungs- fähigkeit der Infrastrukturen, der Gesundheitsversorgung und der schweizerischen Sozialversicherungen. 3 Die ständige Wohnbevölkerung umfasst alle schweizerischen Staatsangehörigen",
+          "parent_index": 18,
+          "chunk_number": 0,
+          "retrieval_score": 0.031754032258064516,
+          "dense_score": 0.8837664852899684,
+          "retrieval_backend": "vector_hybrid"
+        },
+        {
+          "id": 15,
+          "page_number": 17,
+          "proposal_id": 1,
+          "section_type": "arguments",
+          "section": "Arguments of the initiative/referendum committee",
+          "text": "17 Der Text auf dieser Doppelseite stammt vom Initiativkomitee. Es ist für den Inhalt und die Wortwahl verantwortlich. Die Nachhaltigkeits-Initiative sorgt für eine vernünftige Zuwanderung: Die ständige Wohnbevölkerung darf bis 2050 die 10-Millionen-Grenze nicht überschreiten. Das heisst: Es könnten immer noch rund 40 000 Personen und Fachkräfte pro Jahr einwandern. Die Initiative verpflichtet die Politik zu einer massvollen Zuwanderung in die Schweiz: Ja zu einer nachhaltigen Bevölkerungsentwicklung statt zu einer ungebremsten Zuwanderung. Ja zum Schutz der Umwelt und der Landschaft. Ja zur Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» Darum empfiehlt das Initiativkomitee: Ja nachhaltigkeitsinitiative.ch Keine 10-Millionen- Schweiz Ja zu einer nachhaltigen Entwicklung Empfehlung des Initiativkomitees",
+          "parent_index": 15,
+          "chunk_number": 0,
+          "retrieval_score": 0.03128054740957967,
+          "dense_score": 0.8955585219353278,
+          "retrieval_backend": "vector_hybrid"
+        },
+        {
+          "id": 11,
+          "page_number": 12,
+          "proposal_id": 1,
+          "section_type": "detail",
+          "section": "Official explanation in detail",
+          "text": "12 Erste Vorlage: Nachhaltigkeitsinitiative Gemäss Vorausschätzungen des Bundes dürfte die Schwelle von 9,5 Millionen Menschen im Jahr 2031 überschrit - ten werden.6 Wenn die ständige Wohnbevölkerung der Schweiz die 10-Millionen-Grenze überschreitet, sieht die Initiative Folgen - des vor: – Bundesrat und Parlament müssen alle zur Verfügung stehenden Massnahmen ergreifen, damit die ständige Wohnbevölkerung wieder unter die 10-Millionen-Grenze fällt. – Internationale Abkommen, die zum Bevölkerungswachs - tum beitragen, müssen auf den nächstmöglichen Termin gekündigt werden. Ab 2050 kann der Bundesrat den Grenzwert von 10 Millionen um einen allfälligen Geburtenüberschuss erhöhen. Falls die ständige Wohnbevölkerung zwei Jahre nach dem erstmaligen Überschreiten der 10-Millionen-Grenze noch immer über diesem Wert liegt, muss das Abkommen über die Personenfreizügigkeit mit der EU gekündigt werden. Die Schweiz könnte von einer Kündigung absehen, wenn bis dahin Ausnahme- oder Schutzklauseln angewendet oder angerufen werden konnten, mit denen die Einhaltung dieser 10-Millionen- Grenze erreicht wird. 6 Das Bundesamt für Statistik berechnet jeweils drei Szenarien zur Bevölkerungsentwicklung. Das Referenzszenario schreibt die Entwicklungen der letzten Jahre fort und gemäss diesem Szenario dürfte die Schwelle von 9,5 Millionen im Jahr 2031 überschritten werden. Das «hohe» Szenario enthält mehr Annahmen, die zu einem stärkeren Bevölkerungswachstum führen würden, und das «tiefe» Szenario solche, die zu einem geringeren Bevölkerungswachstum führen. «Szenarien zur Bevölkerungsentwicklung der Schweiz», Bundesamt für Statistik, April 2025 ( bfs",
+          "parent_index": 11,
+          "chunk_number": 0,
+          "retrieval_score": 0.03125763125763126,
+          "dense_score": 0.8938150173970922,
+          "retrieval_backend": "vector_hybrid"
+        },
+        {
+          "id": 3,
+          "page_number": 4,
+          "proposal_id": 1,
+          "section_type": "intro",
+          "section": null,
+          "text": "4 Erste Vorlage: Nachhaltigkeitsinitiative Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)» Ende 2025 lebten rund 9,1 Millionen Personen in der Schweiz. Seit Einführung der Personenfreizügigkeit im Jahr 2002 ist die Bevölkerung um rund 1,7 Millionen Personen gewachsen. Das ist hauptsächlich auf die Zuwanderung zurückzuführen. Wie viele Menschen zuwandern, hängt vor allem vom Arbeitsmarkt ab. Floriert die Wirtschaft, so finden Unternehmen nicht genü- gend Arbeitskräfte in der Schweiz. Unternehmen, aber auch öffentliche Einrichtungen wie Spitäler und Pflegeheime rekru - tieren dann fehlende Fachkräfte häufig im EU-Raum. Die Initiative «Keine 10-Millionen-Schweiz! (Nachhaltig - keitsinitiative)» verlangt, die ständige Wohnbevölkerung zu begrenzen: Vor 2050 müsste die Bevölkerung der Schweiz unter 10 Millionen Menschen bleiben. Würde die ständige Wohnbevölkerung 9,5 Millionen Personen vor 2050 überschrei - ten, so müssten Bundesrat und Parlament insbesondere im Asylbereich und beim Familiennachzug Massnahmen ergreifen. Der Bundesrat müsste zudem bei internationalen Abkommen, die zum Bevölkerungswachstum beitragen, Ausnahmebestim - mungen und Schutzklauseln anrufen oder aushandeln. Würde die 10-Millionen-Grenze überschritten, so müsste die Schweiz diese Abkommen kündigen, nach zwei Jahren auch das Ab - kommen mit der EU über die Personenfreizügigkeit. Dadurch würden auch die anderen Verträge der Bilateralen I wegfallen. Auch die Beteiligung der Schweiz an den Schengen- und Dublin-Abkommen der EU wäre infrage gestellt und damit die enge Zusammenarbeit im Sicherheits- und Asylbereich. Die Initiative Ausgangslage In KürzeIn Kürze In Kürze Vorlage im Detail 8 Argumente",
+          "parent_index": 3,
+          "chunk_number": 0,
+          "retrieval_score": 0.031009615384615385,
+          "dense_score": 0.8797656381256895,
+          "retrieval_backend": "vector_hybrid"
+        }
+      ]
+    }
+  },
+  "note": "BM25 uses baseline paragraphs; vector variants use token chunks. This smoke comparison does not isolate chunking effects."
+}
