@@ -30,3 +30,16 @@ Evaluations-Tests inklusive des neuen Nenner-Tests bestanden.
 Zwei echte lokale Embedding-Läufe mit 28 Fällen × 6 Armen × 2 Budgets abgeschlossen.
 Keine Apertus-API-Anfragen; strikte Mock-Abweisung zusätzlich am CLI geprüft.
 Details und Einschränkungen: [ERGEBNISSE_DEV.md](ERGEBNISSE_DEV.md).
+
+## Mehrsprachige Fortsetzung
+
+Vollständige Suite: **202 Tests + 6 Subtests bestanden**, fünf bestehende
+PDF-Deprecation-Warnungen, dieselbe Python-3.10-Umgebung. Geprüft wurden unter
+anderem unveränderte Quelllabels, Hash-Abweisung bei Datasetdrift, getrennte
+claimweise Annotationen trotz gemeinsamer Referenz, n-Gramm-Grenzen, gepaarte
+Fallidentität, Clustergewichtung und Cleanup bei Metadatenfehlern.
+
+Zwei neue echte Retrieval-Läufe mit je 42 Fällen × sechs Armen, einschliesslich
+27 crosslingualer Fälle. Zwei Chunkkonfigurationen und tatsächlich neuer
+Indexaufbau separat erfasst. Keine echten NLI-Aufrufe, keine neuen Goldseiten.
+Details: [ERGEBNISSE_CROSSLINGUAL_DEV.md](ERGEBNISSE_CROSSLINGUAL_DEV.md).

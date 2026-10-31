@@ -39,3 +39,40 @@ Keine Codex-Unteragenten wurden als Claude-Ersatz verwendet.
   können darüber hinausgehen. Aktuell gab es mangels API-Key null NLI-Anfragen.
 - Kein vollständiger Page-Gold-Recall ohne manuelle Seitenannotation; keine
   Labels oder Belegseiten aus Referenzähnlichkeit erfinden.
+
+## Fortsetzung: mehrsprachige Dev-Diagnose
+
+Zwei weitere tatsächliche read-only CLI-Reviews wurden in der Fortsetzung ausgeführt.
+Claude bestätigte die 42 unverändert übernommenen OST-Fälle (27 crosslingual, neun
+Sprachpaare) und fand keinen Daten-/Laufblocker. Sein lokaler Standard-Python hatte
+nicht alle Projektabhängigkeiten; die Testausführung erfolgte deshalb durch Codex
+in der bekannten externen `work/rag-venv`-Umgebung.
+
+Übernommen:
+
+- Native Baseline-Kontextreihenfolge ist keine Retrieval-Rangfolge. Neuer
+  `context_reference_hit` berücksichtigt alle tatsächlich gelieferten Passagen;
+  alte first-k-Felder bleiben als solche erhalten und werden klar eingeordnet.
+- Ranking und Budgeteffekt getrennt speichern, volle Treffertexte optional mit
+  Position, physischen Seiten, Chunk-ID, Score und Text-Hash erfassen.
+- Kurze abgeschnittene Texte können den Legacy-Fuzzy-Proxy fälschlich erfüllen.
+  Separater exakter Wort-5-Gramm-Abdeckungswert ergänzt die Diagnose. Keine
+  Umbenennung in semantische Belegqualität.
+- Gemeinsame Referenztexte als Cluster sichtbar machen, inklusive gleichgewichteter
+  Cluster-Mittelwerte. Dies sind keine nachgewiesen unabhängigen Claimfamilien.
+- `[]` als geprüft leere Seitenannotation akzeptieren, von `null` unterscheiden
+  und jeweils aus undefiniertem Seiten-Recall ausschliessen. Ungültige Seitentypen
+  und nicht vorhandene physische Seiten klar abweisen.
+- Auch Fehler beim Erzeugen der Report-Metadaten müssen Engine schliessen und
+  geänderte Konfigurationswerte wiederherstellen; gezielter Fehlertest ergänzt.
+
+Nicht übernommen / bewusst begrenzt:
+
+- Die Empfehlung, aus automatisch gefundenen Referenz-PDF-Übereinstimmungen
+  unmittelbar Goldseiten zu machen, wird ohne zusätzliche manuelle Prüfung nicht
+  als unabhängige Annotation übernommen. Es wurden keine Goldseiten erfunden.
+- Aus nur 28 beobachteten Fällen und einem Fuzzy-Proxy wird auch bei einem grossen
+  Abstand keine robuste allgemeine Modellrangfolge abgeleitet.
+- Kein voller Parametersweep und kein neues Embedding-Modell. Zunächst zwei
+  vorab festgelegte Chunkkonfigurationen auf denselben 42 Fällen, mit demselben
+  maximalen Kontextbudget und ausreichend Kandidaten zur Budgetfüllung.

@@ -46,3 +46,7 @@ des NLI-Evidence-Nenners: alle vier Evaluations-Tests bestanden. Bestehende fün
 PDF-Deprecation-Warnungen. Python 3.10; Python-3.12-Docker weiterhin offen.
 
 Startbefehle und genaue Messgrenzen: [EVALUATION.md](EVALUATION.md).
+
+Fortsetzung mit offiziellem mehrsprachigem Dev-Ausschnitt, verändertem Kandidatenlimit
+und zusätzlichen Diagnosen: [ERGEBNISSE_CROSSLINGUAL_DEV.md](ERGEBNISSE_CROSSLINGUAL_DEV.md).
+Die obigen historischen Demo-Zahlen sind nicht direkt mit diesem neuen Lauf vergleichbar.

@@ -88,3 +88,92 @@ Modellkonfiguration. Das ist ein kontrollierter NLI-Vergleich, bildet aber nicht
 gesamte optimierte Produktions-NLI inklusive aller Heuristiken nach. Der Report
 liefert dann NLI Macro-F1, offizielles Evidence Hit@5 auf Modellzitaten, tatsächliche
 Prompt-/Completiontokens und NLI-Zeiten. Ohne `--nli` bleiben diese Metriken `null`.
+
+## Fortsetzung: offizielle sprachübergreifende Dev-Fälle und Diagnose-Schema 2
+
+`data/genai/ost_june_dev.jsonl` übernimmt **alle 42 OST-Quellzeilen** für die lokal
+vorhandenen Juni-Büchlein, inklusive unveränderter Labels/Referenztexte/Vote-Titel.
+27 Fälle sind crosslingual, alle neun Sprachpaare sind vorhanden. Quelle und
+SHA-256 stehen in `ost_june_dev.manifest.json`. Die Auswahl nutzt nur die
+Büchlein-URL, keine Ergebnisse. Alle Zeilen sind beobachtete Dev-/Regressiondaten,
+nicht neu versiegelte Testdaten; sie bleiben konservativ in einer Datumsgruppe.
+Keine Übersetzung, Umformulierung oder Ableitung von Goldseiten findet statt.
+
+Aufbereitung aus dem extern gecachten offiziellen Parquet:
+
+```sh
+$PY scripts/prepare_rag_dev.py \
+  --parquet /Users/sheyla/Documents/ChatGPT/GenAI/work/data-cache/ost-train.parquet
+```
+
+Der öffentliche Download-Endpunkt und der erwartete Quellhash stehen im Script und
+Manifest. Auf anderen Maschinen Parquet dort herunterladen und den Pfad anpassen.
+Ein geänderter Quelldatensatz wird abgewiesen, bevor Fälle daraus geschrieben werden.
+
+Neue Läufe, jeweils 1536 maximale E5-Texttokens und 20 Kandidaten:
+
+```sh
+$PY -m src.rag_evaluation --dataset data/genai/ost_june_dev.jsonl \
+  --top-k 20 --budget 1536 --save-hits --index-dir .rag-index/ost-june-v2 \
+  --output results/genai/ost_june_chunk384.json
+$PY -m src.rag_evaluation --dataset data/genai/ost_june_dev.jsonl \
+  --chunk-tokens 128 --overlap 32 --top-k 20 --budget 1536 \
+  --save-hits --index-dir .rag-index/ost-june-v2 \
+  --output results/genai/ost_june_chunk128.json
+```
+
+Zwei vorab festgelegte Konfigurationen: 384/64 und 128/32 Tokens. Die höhere
+Kandidatengrenze gegenüber den früheren k=5-Läufen erleichtert die Budgetfüllung.
+Ergebnisse sind deshalb **nicht direkt** mit deren Roh-Trefferzahlen vergleichbar.
+Verglichen werden innerhalb jeder Konfiguration BM25, Dense und Fusion auf
+identischen Chunks; zwischen Konfigurationen ist der gesamte bereitgestellte
+Kontext bei gleichem Maximalbudget die relevante Diagnose, nicht nur Hit@5-Chunks.
+Eine Seite und ein Chunk sind unterschiedlich grosse Einheiten.
+
+Schema 2 ergänzt:
+
+- `pre_budget`: Treffer-/Abdeckungsdiagnosen vor Kürzung, einschliesslich
+  Seitenmetriken bei vorhandenen geprüften Goldseiten.
+- `pre_budget_hits` / `context_hits` mit `--save-hits`: volle Texte und Quellen,
+  Position und Score vor bzw. nach Kürzung. Bei Baseline-Teilen bezeichnet Position
+  die Produktionskontext-Reihenfolge, keinen Suchrang.
+- `budget_lost_reference_hit`: der Legacy-Proxy war vor Kürzung erfüllt, danach
+  nicht mehr. Das ist eine Fehlersuchhilfe, kein kausaler Qualitätsnachweis.
+- `context_reference_hit`: Legacy-Proxy über alle gelieferten Kontextpassagen.
+  Die alten `reference_hit_at_k`-/`at_5`-Felder prüfen dagegen erste Einheiten und
+  sind bei einer Baseline in Lesereihenfolge keine Retrieval-Hit@k-Werte.
+- `reference_5gram_recall` / `precision`: Überschneidung exakter Wortfolgen aus
+  fünf Wörtern mit der Referenz. Keine Wortfolgen über Passagegrenzen hinweg;
+  sehr kurze Treffer können damit keine vollen Belegtreffer vortäuschen.
+  PDF-Trennungen/Normalisierung beeinflussen diese rein lexikalische Diagnose;
+  sie ersetzt keine manuell annotierten Belegspans oder semantische Prüfung.
+- Mono-/Crosslingual-Gruppen, Referenztext-Clusterzahl und gleichgewichtete
+  Cluster-Mittelwerte des Legacy-Proxys. Ein Cluster ist kein bewiesener unabhängiger
+  Inhalt; überlappende Referenzen können weiter zusammenhängen.
+- `gold_page_annotation_status`: `unknown`, `reviewed_empty` oder `pages_supplied`.
+  Leere geprüfte Seitenlisten zählen getrennt und haben keinen definierten Recall.
+  `context_page_hit`/`recall` verwenden alle Kontextseiten; die bisherigen
+  `retrieval_*_at_k`-Felder verwenden erste k gelieferten Einheiten, mit deduplizierten
+  Seiten **innerhalb** dieser Einheiten, nicht die ersten k unterschiedlichen Seiten.
+
+Automatische Query-/Claimübersetzung bleibt für sämtliche Arme deaktiviert. Die
+native Baseline bezeichnet hier ihr natives Kontextbudget/ihre Auswahl, keinen
+vollständigen Online-Lauf mit eventuell übersetzten Retrievalanfragen.
+
+Gepaarte Diagnose und manuelles Prüfpaket reproduzieren:
+
+```sh
+$PY scripts/analyze_rag_pairs.py results/genai/ost_june_chunk384.json \
+  --output results/genai/ost_june_chunk384_pairs.json
+$PY scripts/analyze_rag_pairs.py results/genai/ost_june_chunk128.json \
+  --output results/genai/ost_june_chunk128_pairs.json
+$PY scripts/prepare_evidence_review.py --dataset data/genai/ost_june_dev.jsonl \
+  --report results/genai/ost_june_chunk384.json \
+  --output data/genai/evidence_review_packet.jsonl
+```
+
+Die Paaranalyse verweigert nicht übereinstimmende Fall-IDs/Referenzidentitäten.
+Das Prüfpaket bindet sich an den Dataset-Hash, gruppiert nur die Referenzanzeige
+und behält separate Annotationen für jeden einzelnen Claim. Kein automatischer
+Import ungeprüfter Seitenvorschläge als Goldlabels. Tatsächliche neue Ergebnisse:
+[ERGEBNISSE_CROSSLINGUAL_DEV.md](ERGEBNISSE_CROSSLINGUAL_DEV.md).
