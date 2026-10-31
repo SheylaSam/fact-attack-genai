@@ -220,9 +220,10 @@ class FakeIndex:
 
 
 class FakeEngine:
-    def __init__(self, apertus_client=None, verify_error=None):
+    def __init__(self, apertus_client=None, verify_error=None, close_error=None):
         self.client = apertus_client
         self.verify_error = verify_error
+        self.close_error = close_error
         self.closed = False
 
     def retrieve_passages(self, claim, booklet_pdf, vote=None, claim_language=None, booklet_language=None, top_k=8):
@@ -241,6 +242,8 @@ class FakeEngine:
 
     def close(self):
         self.closed = True
+        if self.close_error:
+            raise self.close_error
 
 
 class FakeClient:
@@ -428,6 +431,33 @@ class MainTests(unittest.TestCase):
             code, out, err = self.run_main(CLAIM, '--mock', '--trace-dir', str(self.trace_dir))
         self.assertEqual(code, 1)
         self.assertIn('kaputt', err)
+        self.assertNotIn('Journal', err)  # a mock run has no request journal
+        self.assertTrue(self.index.closed)
+        self.assertTrue(self.engines[0].closed)
+
+    def test_main_closes_the_index_even_when_closing_the_engine_fails(self):
+        self.engine_options = {'close_error': RuntimeError('Vektorindex klemmt')}
+        code, out, err = self.run_main(CLAIM, '--mock', '--quelle', V1.vote_id, '--trace-dir', str(self.trace_dir))
+        self.assertEqual(code, 1)
+        self.assertIn('Vektorindex klemmt', err)
+        self.assertTrue(self.engines[0].closed)
+        self.assertTrue(self.index.closed)
+
+    def test_main_names_the_request_journal_when_a_real_run_fails(self):
+        env_file = Path(self.tmp.name) / 'test.env'
+        env_file.write_text('LLM_API_KEY=test-key\n')
+        os.environ['FACT_ATTACK_ENV_FILE'] = str(env_file)
+        with mock.patch.object(config, 'LLM_API_KEY', 'test-key'), \
+                mock.patch.object(agent_cli, 'install_on_apertus', lambda client, budget: None), \
+                mock.patch.object(agent_cli, 'make_decider', lambda mode, budget, fixed_vote_id=None: object()), \
+                mock.patch('src.agent.graph.run_check', side_effect=RuntimeError('kaputt')):
+            code, out, err = self.run_main(CLAIM, '--max-requests', '3', '--trace-dir', str(self.trace_dir))
+        self.assertEqual(code, 1)
+        self.assertIn('kaputt', err)
+        journal = re.search(r'Journal: (\S+\.requests\.jsonl)', err)
+        self.assertIsNotNone(journal, err)
+        self.assertEqual(Path(journal.group(1)).parent, self.trace_dir)
+        self.assertIn('0 von 3', err)
         self.assertTrue(self.index.closed)
         self.assertTrue(self.engines[0].closed)
 

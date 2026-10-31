@@ -7,9 +7,12 @@ Wiring only: arguments, the offline or the real run, output and exit code. The a
   is a hard cap on the HTTP requests of the check, counted for the agent LLM and for the NLI client alike.
 
 Exit code: 0 for a result (also `rueckfrage` and `quelle_fehlt`), 2 for `technischer_fehler`, 1 for a wrong call or a
-setup that failed before any check ran (argparse's own usage exit code 2 is replaced to keep 2 unambiguous).
+setup that failed before any check ran (argparse's own usage exit code 2 is replaced to keep 2 unambiguous). The engine
+and the index are closed even if one of them fails to close; an unexpected failure of a real run names its request
+journal on stderr.
 """
 import argparse
+import contextlib
 from datetime import datetime, timezone
 import json
 import os
@@ -107,36 +110,42 @@ def _run(args: argparse.Namespace) -> int:
                      "Bitte track_2a/requirements-agent.txt installieren.") from None
     trace_dir = args.trace_dir.expanduser()
     run_id = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S}-{os.getpid()}"
-    index = SourceIndex(load_catalog(config.DATA_DIR / "booklet_catalog.json"), config.BOOKLETS_DIR,
-                        index_dir=args.index_dir.expanduser())  # one process per local index: closed in `finally`
-    engine = None
+    budget: Optional[RequestBudget] = None
     try:
-        engine = ClaimVerificationEngine(apertus_client=ApertusClient(mock=args.mock))
-        journal = None if args.mock else trace_dir / f"{run_id}.requests.jsonl"
-        budget = RequestBudget(limit=args.max_requests, journal_path=journal)  # one budget per check
-        if not args.mock:
-            install_on_apertus(engine.client, budget)  # the NLI client; the agent LLM is counted in make_decider
-        try:
-            tools = AgentTools(index, engine, config.BOOKLETS_DIR, fixed_vote_id=args.quelle)
-        except ValueError as exc:
-            raise _Abort(f"{exc}. Die Vorlagen-IDs stehen im Quellenindex (Form 2024-11-24_de#1).") from None
-        decider = make_decider(mode, budget, fixed_vote_id=args.quelle)
-        tracer = Tracer(trace_dir / f"{run_id}.trace.jsonl")
-        result = run_check(claim, tools=tools, decider=decider, engine=engine, tracer=tracer, budget=budget)
-    finally:
-        if engine is not None:
-            engine.close()
-        index.close()
-    requests = (f"{budget.used} von {budget.limit} (Journal: {journal})" if journal
-                else "keine (Mock-Lauf ohne Netz)")
-    footer = f"Anfragen: {requests}\nTrace: {tracer.jsonl_path}"
-    if args.json:
-        print(json.dumps(result_to_dict(result), ensure_ascii=False, indent=2))
-        print(footer, file=sys.stderr)
-    else:
-        label = "Mock (skriptgesteuert, ohne Netz)" if args.mock else f"echt, Entscheider {mode}"
-        print(f"Behauptung: {' '.join(claim.split())}\nModus: {label}\n\nSchritte:\n{format_steps(result.events)}\n\n"
-              f"{format_result(result)}\n\n{footer}")
+        with contextlib.ExitStack() as cleanup:  # closes the engine, then the index, even if a close fails
+            index = SourceIndex(load_catalog(config.DATA_DIR / "booklet_catalog.json"), config.BOOKLETS_DIR,
+                                index_dir=args.index_dir.expanduser())  # one process per local index
+            cleanup.callback(index.close)
+            engine = ClaimVerificationEngine(apertus_client=ApertusClient(mock=args.mock))
+            cleanup.callback(engine.close)
+            journal = None if args.mock else trace_dir / f"{run_id}.requests.jsonl"
+            budget = RequestBudget(limit=args.max_requests, journal_path=journal)  # one budget per check
+            if not args.mock:
+                install_on_apertus(engine.client, budget)  # the NLI client; the agent LLM is counted in make_decider
+            try:
+                tools = AgentTools(index, engine, config.BOOKLETS_DIR, fixed_vote_id=args.quelle)
+            except ValueError as exc:
+                raise _Abort(f"{exc}. Die Vorlagen-IDs stehen im Quellenindex (Form 2024-11-24_de#1).") from None
+            decider = make_decider(mode, budget, fixed_vote_id=args.quelle)
+            tracer = Tracer(trace_dir / f"{run_id}.trace.jsonl")
+            result = run_check(claim, tools=tools, decider=decider, engine=engine, tracer=tracer, budget=budget)
+        requests = (f"{budget.used} von {budget.limit} (Journal: {journal})" if journal
+                    else "keine (Mock-Lauf ohne Netz)")
+        footer = f"Anfragen: {requests}\nTrace: {tracer.jsonl_path}"
+        if args.json:
+            print(json.dumps(result_to_dict(result), ensure_ascii=False, indent=2))
+            print(footer, file=sys.stderr)
+        else:
+            label = "Mock (skriptgesteuert, ohne Netz)" if args.mock else f"echt, Entscheider {mode}"
+            print(f"Behauptung: {' '.join(claim.split())}\nModus: {label}\n\nSchritte:\n"
+                  f"{format_steps(result.events)}\n\n{format_result(result)}\n\n{footer}")
+    except _Abort:
+        raise
+    except Exception:
+        if budget is not None and budget.journal_path is not None:  # a real run: requests may have been sent
+            print(f"Anfragen bis zum Fehler: {budget.used} von {budget.limit} (Journal: {budget.journal_path})",
+                  file=sys.stderr)
+        raise
     return EXIT_TECHNICAL if result.outcome == "technischer_fehler" else EXIT_RESULT
 
 
