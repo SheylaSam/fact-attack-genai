@@ -19,7 +19,8 @@
   cannot be checked: technical error, never `nicht_belegt`.
 * `run_check` refuses `EVIDENCE_POLICY=legacy` before any LLM call: its quotes are not original PDF text.
 
-Every node emits a `TraceEvent`; any exception in a node ends the run as `technischer_fehler` with a message.
+Every node emits a `TraceEvent`; an `act` event with a tool result carries its `Observation.data` (vote candidates,
+passages and pool status, error kind). Any exception in a node ends the run as `technischer_fehler` with a message.
 Sync only (`invoke`): the request budget counts only synchronous requests.
 """
 from dataclasses import dataclass, field
@@ -200,7 +201,7 @@ class _Nodes:
             if observation.error and observation.data.get("error_kind") != ERROR_INVALID_ARGS:  # a tool failure
                 message = f"Werkzeug {tool} fehlgeschlagen: {observation.error}"
                 self.emit(step, "act", started, tool=tool, args=args, summary=_short(observation.text),
-                          error=message)
+                          error=message, data=observation.data)
                 return {"history": history + [observation], "error": message, "route": "finish"}
         search_steps = state.get("search_steps", 0) + 1
         shown = observation
@@ -211,7 +212,7 @@ class _Nodes:
         messages = list(state["messages"]) + self.decider.observation_messages(action, shown)
         self.emit(step, "act", started, tool=tool, args=args,
                   summary=_short(observation.text.splitlines()[0] if observation.text else ""),
-                  error=observation.error)
+                  error=observation.error, data=observation.data)  # the candidates, passages and pool the model saw
         return {"messages": messages, "history": history + [observation], "search_steps": search_steps,
                 "route": "decide"}
 

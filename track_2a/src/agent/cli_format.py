@@ -17,6 +17,7 @@ if TYPE_CHECKING:  # the graph needs langgraph (requirements-agent.txt); formatt
 
 OK, QUESTION, FAILED = "✓", "?", "✗"
 ARG_CHARS = 50  # one argument value in the step list; the trace file has it whole
+TOP_CANDIDATES = 3  # vote candidates of suche_vorlagen in the step list; the trace keeps all of them
 INDENT = " " * 6  # under the text that follows "NN. ✓ "
 NODE_LABELS = {"decide": "Entscheidung", "act": "Aktion", "verify": "Prüfung", "check_evidence": "Belegprüfung",
                "finish": "Abschluss"}
@@ -82,9 +83,32 @@ def _cost(group: List[TraceEvent]) -> str:
     return ", ".join(parts)
 
 
+def _score(value: Any) -> str:
+    return f"{value:.3f}" if isinstance(value, (int, float)) and not isinstance(value, bool) else str(value)
+
+
+def _candidates(data: Any) -> Optional[str]:
+    """The best vote candidates of a suche_vorlagen event (its `data`), or None if it has none."""
+    candidates = data.get("candidates") if isinstance(data, dict) else None
+    if not isinstance(candidates, list) or not candidates:
+        return None
+    best = "; ".join(f"{found.get('vote_id')} (Score {_score(found.get('score'))}, {found.get('hits')} Treffer)"
+                     for found in candidates[:TOP_CANDIDATES] if isinstance(found, dict))
+    rest = len(candidates) - TOP_CANDIDATES
+    return f"{len(candidates)} Vorlagen, beste: {best}" + (f"; {rest} weitere" if rest > 0 else "")
+
+
+def _summary(group: List[TraceEvent]) -> str:
+    """The action's summary (for suche_vorlagen: its best candidates), else that of the group's last event."""
+    act = next((item for item in group if item.node == "act"), None)
+    if act is None:
+        return _flat(group[-1].summary)
+    return (act.tool == "suche_vorlagen" and _candidates(act.data)) or _flat(act.summary)
+
+
 def format_steps(events: List[TraceEvent]) -> str:
-    """The run as a numbered list, one step per line: mark, tool or node, arguments; below it the summary with time and
-    tokens, and the error text if there is one."""
+    """The run as a numbered list, one step per line: mark, tool or node, arguments; below it the summary (for
+    suche_vorlagen the best candidates with score and hits) with time and tokens, and the error text if there is one."""
     groups = _groups(events)
     if not groups:
         return "Keine Schritte aufgezeichnet."
@@ -94,7 +118,7 @@ def format_steps(events: List[TraceEvent]) -> str:
         head = f"{number:>2}. {_mark(group)} {_label(group):<{width}}"
         arguments = _arguments(group)
         lines.append(f"{head}  {arguments}" if arguments else head.rstrip())
-        summary = _flat(next((item.summary for item in group if item.node == "act"), group[-1].summary))
+        summary = _summary(group)
         lines.append(f"{INDENT}{summary} ({_cost(group)})" if summary else f"{INDENT}({_cost(group)})")
         for error in dict.fromkeys(item.error for item in group if item.error):
             lines.append(f"{INDENT}Fehler: {_flat(error)}")

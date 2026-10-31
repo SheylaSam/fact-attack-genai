@@ -2,7 +2,7 @@
 from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 
 @dataclass
@@ -16,18 +16,25 @@ class TraceEvent:
     tokens_prompt: int = 0
     tokens_completion: int = 0
     error: Optional[str] = None
+    data: dict = field(default_factory=dict)  # structured result the model saw (`Observation.data`); JSON-safe
+
+
+def _json_safe(data: Any) -> dict:
+    """A JSON-safe copy: later changes of the caller's dict do not reach the event, and --json can print it as it is."""
+    return json.loads(json.dumps(data or {}, ensure_ascii=False, default=str))
 
 
 class Tracer:
     """Collects the events of a run. With `jsonl_path` every event is also appended to that file as one JSON line,
-    before `emit` returns; a write error propagates (the graph reports it as a technical error)."""
+    before `emit` returns; a write error propagates (the graph reports it as a technical error). `data` is stored as a
+    JSON-safe copy (values JSON cannot hold become text)."""
 
     def __init__(self, jsonl_path: Optional[Path] = None):
         self.jsonl_path = Path(jsonl_path) if jsonl_path is not None else None
         self.events: List[TraceEvent] = []
 
     def emit(self, **fields) -> TraceEvent:
-        event = TraceEvent(**fields)
+        event = TraceEvent(**{**fields, "data": _json_safe(fields.get("data"))})
         self.events.append(event)
         if self.jsonl_path is not None:
             self.jsonl_path.parent.mkdir(parents=True, exist_ok=True)

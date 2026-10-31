@@ -114,6 +114,29 @@ class FormatStepsTests(unittest.TestCase):
         self.assertIn('TimeoutError: kein Ergebnis', text)
         self.assertIn('Werkzeug suche_passagen fehlgeschlagen', text)
 
+    def test_vote_search_step_shows_the_best_three_candidates(self):
+        candidates = [{'vote_id': f'2024-11-24_de#{k}', 'title': f'Vorlage {k}', 'date': '2024-11-24',
+                       'score': score, 'hits': hits, 'best_page': 2}
+                      for k, score, hits in ((3, 0.873, 15), (2, 0.8661, 15), (1, 0.85, 9), (4, 0.84, 2), (5, 0.8, 1))]
+        events = [event(1, 'decide', 'suche_vorlagen', 'suche_vorlagen gewählt', args={'anfrage': CLAIM}),
+                  event(1, 'act', 'suche_vorlagen', 'Gefundene Vorlagen, beste zuerst. Score = ähnlichste Textstelle',
+                        args={'anfrage': CLAIM}, data={'candidates': candidates})]
+        text = cli_format.format_steps(events)
+        summary = text.splitlines()[1]
+        for expected in ('2024-11-24_de#3 (Score 0.873, 15 Treffer)', '2024-11-24_de#2 (Score 0.866, 15 Treffer)',
+                         '2024-11-24_de#1 (Score 0.850, 9 Treffer)', '5 Vorlagen', '2 weitere'):
+            self.assertIn(expected, summary)
+        self.assertLess(summary.index('#3'), summary.index('#2'))
+        self.assertNotIn('2024-11-24_de#4', text)  # at most three; the trace keeps all of them
+        self.assertNotIn('Gefundene Vorlagen', text)
+
+    def test_vote_search_step_without_candidates_keeps_the_summary(self):
+        for data in ({'candidates': []}, {}):
+            with self.subTest(data=data):
+                events = [event(1, 'decide', 'suche_vorlagen', 'suche_vorlagen gewählt'),
+                          event(1, 'act', 'suche_vorlagen', 'Keine Vorlage gefunden.', data=data)]
+                self.assertIn('Keine Vorlage gefunden.', cli_format.format_steps(events))
+
     def test_format_steps_without_events(self):
         self.assertIn('Keine Schritte', cli_format.format_steps([]))
 
@@ -163,7 +186,8 @@ class FormatResultTests(unittest.TestCase):
             tokens_prompt=100, tokens_completion=7, tokens_total=107, latency_ms=12.0)
         result = AgentResult(outcome='gestuetzt', vote=V1, evidence=[EvidenceItem(page=2, quote=QUOTE)],
                              options=[V2], prediction=prediction, steps=2,
-                             events=[event(1, 'decide', 'pruefen', 'pruefen gewählt', args={'vorlage_id': V1.vote_id})])
+                             events=[event(1, 'decide', 'pruefen', 'pruefen gewählt', args={'vorlage_id': V1.vote_id}),
+                                     event(1, 'act', 'suche_vorlagen', data={'candidates': [{'vote_id': V1.vote_id}]})])
         data = json.loads(json.dumps(cli_format.result_to_dict(result), ensure_ascii=False))
         self.assertEqual(data['outcome'], 'gestuetzt')
         self.assertEqual(data['vote']['vote_id'], V1.vote_id)
@@ -172,6 +196,7 @@ class FormatResultTests(unittest.TestCase):
         self.assertEqual(data['options'][0]['vote_id'], V2.vote_id)
         self.assertEqual(data['prediction']['label'], 0)
         self.assertEqual(data['events'][0]['args'], {'vorlage_id': V1.vote_id})
+        self.assertEqual(data['events'][1]['data'], {'candidates': [{'vote_id': V1.vote_id}]})
         self.assertEqual(data['steps'], 2)
         self.assertIsNone(data['error'])
         empty = cli_format.result_to_dict(AgentResult(outcome='quelle_fehlt'))

@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src import config
 from src.agent import settings
 from src.agent.source_index import VoteCandidate, VoteRef
-from src.agent.tools import ERROR_INVALID_ARGS, TERMINAL_TOOLS, AgentTools
+from src.agent.tools import ERROR_INVALID_ARGS, ERROR_TOOL_FAILURE, TERMINAL_TOOLS, AgentTools
 from src.agent.trace import TraceEvent, Tracer
 from src.inference import EvidenceSource, PredictionResult
 from src.text_utils import official_normalize
@@ -187,7 +187,19 @@ class TracerTests(unittest.TestCase):
         self.assertEqual(json.loads(lines[0]), asdict(first))
         self.assertEqual(json.loads(lines[1]), {'step': 1, 'node': 'act', 'tool': None, 'args': {}, 'summary': 'Fehler',
                                                 'duration_ms': 0.0, 'tokens_prompt': 0, 'tokens_completion': 0,
-                                                'error': 'kaputt'})
+                                                'error': 'kaputt', 'data': {}})
+
+    def test_tracer_keeps_a_json_safe_copy_of_the_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'trace.jsonl'
+            data = {'candidates': [{'vote_id': V1.vote_id, 'score': 0.873, 'hits': 12}], 'pfad': Path('/x/y.pdf')}
+            event = Tracer(path).emit(step=1, node='act', tool='suche_vorlagen', data=data)
+            data['candidates'].clear()  # the caller's dict changes later: the event keeps what was seen
+            line = json.loads(path.read_text(encoding='utf-8'))
+        self.assertEqual(event.data, {'candidates': [{'vote_id': V1.vote_id, 'score': 0.873, 'hits': 12}],
+                                      'pfad': '/x/y.pdf'})
+        self.assertEqual(line, asdict(event))
+        json.dumps(asdict(event))  # no default needed: --json prints the events as they are
 
     def test_tracer_without_path_keeps_events_in_memory(self):
         tracer = Tracer()
@@ -230,6 +242,31 @@ class GraphTests(unittest.TestCase):
         self.assertEqual((verify.tokens_prompt, verify.tokens_completion), (100, 7))
         self.assertTrue(all(e.duration_ms >= 0 for e in result.events))
         self.assertTrue(all(e.error is None for e in result.events))
+
+    def test_act_events_carry_what_the_model_saw(self):
+        decider = PresetDecider(search_votes(), act('suche_passagen', vorlage_id='../../.env', anfrage='Miete'),
+                                search_passages(), act('pruefen', vorlage_id=V1.vote_id))
+        result, _, _ = check(decider)
+        self.assertEqual(result.outcome, 'gestuetzt')
+        votes, rejected, passages, accepted = [e for e in result.events if e.node == 'act']
+        self.assertEqual(votes.data, {'candidates': [
+            {'vote_id': V1.vote_id, 'title': V1.title, 'date': V1.date, 'score': 0.873, 'hits': 10, 'best_page': 2},
+            {'vote_id': V2.vote_id, 'title': V2.title, 'date': V2.date, 'score': 0.801, 'hits': 10, 'best_page': 2}]})
+        self.assertEqual(rejected.data, {'error_kind': ERROR_INVALID_ARGS})
+        self.assertEqual(passages.data, {'vote_id': V1.vote_id, 'found': 1, 'new': 1, 'dropped': 0, 'pool_size': 1,
+                                         'passages': [{'page_number': 2, 'section': 'COM', 'status': 'neu'}]})
+        self.assertEqual(accepted.data, {})
+        self.assertIsNot(votes.data, decider.calls[1]['history'][0].data)  # a copy, not the observation's dict
+        json.dumps([asdict(e) for e in result.events])  # JSON-safe as they are
+
+    def test_invalid_action_and_failed_tool_events_carry_the_error_kind(self):
+        broken = AgentAction(raw='Ich denke nach.', error='Keine Werkzeugwahl')
+        result, _, _ = check(PresetDecider(broken, act('quelle_fehlt', begruendung='Keine Vorlage passt.')))
+        self.assertEqual(next(e for e in result.events if e.node == 'act').data, {'error_kind': ERROR_INVALID_ARGS})
+        index = FakeIndex(error=RuntimeError('Qdrant nicht erreichbar'))
+        result, _, _ = check(PresetDecider(search_votes()), index=index)
+        self.assertEqual(next(e for e in result.events if e.node == 'act').data,
+                         {'error_kind': ERROR_TOOL_FAILURE, 'exception': 'RuntimeError'})
 
     def test_run_writes_one_jsonl_line_per_event(self):
         with tempfile.TemporaryDirectory() as tmp:
