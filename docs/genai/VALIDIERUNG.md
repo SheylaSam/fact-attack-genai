@@ -95,3 +95,30 @@ Reale Streamlit-AppTests und Browserprüfung erfolgreich. Sechs Produktions-IDs-
 Fälle sichern Originalquellenbelege trotz übersetzter Modellzitate; echtes lokales
 E5/Qdrant in beiden Vektormodi zusätzlich mit injizierter NLI geprüft. Null neue
 kostenpflichtige NLI-Anfragen in dieser Phase. [Start und Grenzen](UI_UND_PYTHON312.md).
+
+## Agentenschicht Stufe 1
+
+Vollständige Suite: **495 Tests bestanden**, 112 Subtests, 8 Warnungen (bestehende Fork-/
+Thread-Warnungen in den Tests), CPython 3.12.13 auf macOS ARM64, Python aus `.venv312` mit dem
+Hash-Lock. Das sind die 286 Tests von vor der Agentenschicht (inklusive der Byte-Identität der
+Apertus-Requests in `tests/test_apertus_client.py`) plus 209 neue in `tests/test_agent_*.py`;
+`requirements.txt` und der Wettbewerbspfad sind unverändert. Docker/Python-3.12.6-Linux wurde
+nicht reproduziert.
+
+Echte Läufe mit hartem Anfrage-Deckel und Journal, alle nur Beobachtung und keine
+Qualitätsmessung:
+
+- **Tool-Calling-Smoke:** 6 von 6 Anfragen. Nativ 0/3 gültig (HTTP 400, der Server hat kein
+  Auto-Tool-Choice), JSON 3/3 gültig, 2/3 mit dem erwarteten Werkzeug; Standard bleibt `json`.
+  `agent_tool_smoke.json`.
+- **Drei Ende-zu-Ende-Läufe der CLI:** 9 Anfragen (4, 4 und 1; Deckel je 12, genehmigt waren
+  höchstens 36). Mietrecht-Behauptung: `gestuetzt` auf der Eigenbedarf-Vorlage, erwartet war
+  `rueckfrage`, der Agent hat bei zwei gleichauf liegenden Vorlagen geraten. Zivildienst-
+  Behauptung: `gestuetzt` auf der richtigen Vorlage. Euro-Behauptung: `quelle_fehlt`, aber ohne
+  dass der Agent den Index befragt hat. `agent_stage1_runs.json` mit Protokollen und Journalen
+  unter `agent_stage1_traces/`.
+- Die Artefakte (Ergebnisse, Journale, Protokolle) wurden auf Schlüsselmaterial geprüft: keines
+  gefunden.
+
+Ohne Qualitätsaussage: Es gibt noch kein gesperrtes Testset und keinen Vergleich mit dem
+bewährten Pfad. Details, Schrittlisten und Grenzen: [AGENT_STUFE1.md](AGENT_STUFE1.md).
