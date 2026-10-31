@@ -11,6 +11,9 @@ MAX_CLAIM_CHARS = 1000  # the claim is data, never part of the system prompt
 LLM_TIMEOUT_S: float = 180.0  # read/write limit of one agent LLM request; connecting is capped at 10 s (decider.py)
 LANGUAGES = ("de",)
 
+# "json": the capped smoke of 2026-10-31 (results/genai/agent_tool_smoke.json, 6 requests) found JSON actions valid in 3 of
+# 3 situations, while the endpoint rejects native tool calling with HTTP 400 ("auto" tool choice needs the server flags
+# --enable-auto-tool-choice and --tool-call-parser). "native" stays selectable for an endpoint that supports it.
 _TOOL_MODES = ("json", "native")
 TOOL_MODE = os.getenv("AGENT_TOOL_MODE", "json")
 if TOOL_MODE not in _TOOL_MODES:
