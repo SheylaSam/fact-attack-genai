@@ -188,3 +188,13 @@ gefunden und der erste echte, auf zwölf HTTP-Versuche begrenzte NLI-Smoke
 abgeschlossen: [APERTUS_ZUGANG_UND_SMOKE.md](APERTUS_ZUGANG_UND_SMOKE.md).
 Die früheren Hinweise „kein API-Schlüssel vorhanden“ beschreiben den damaligen
 Konfigurationsstand der beiden geprüften Checkouts, nicht sämtliche Projektkopien.
+
+## Vollständiger echter Dev42-Lauf
+
+Der autorisierte Drei-Arme-Vergleich ist abgeschlossen: alle 42 Fälle, 126 gepaarte
+Zeilen, 105 neue HTTP-Anfragen, keine Fehler. Baseline-Retrieval plus konstanter
+JSON-NLI-Prompt erreicht hier Macro-F1 1.0000, Dense 0.8503, Fusion 0.7226.
+Dies ist eine beobachtete, cue-geprägte Dev-Stichprobe, kein unabhängiger Test und
+keine isolierte Embedding-Ablation. [Ergebnisse, Beleganalyse und reproduzierbare
+Startbefehle](ERGEBNISSE_NLI42.md). Die kanonische Kampagnendatei verhindert eine
+unbeabsichtigte erneute Ausführung mit neuem Ausgabepfad; nicht blind wiederholen.

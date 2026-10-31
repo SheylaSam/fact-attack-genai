@@ -1,0 +1,11 @@
+{
+  "kind": "offline_serialized_payload_hash_audit",
+  "network_requests": 0,
+  "result_sha256": "8eeea81fd1c71463b9857ba151fe6031fee0663938ebe7e303cc0d3302a8a490",
+  "auditor_sha256": "0f93017d8db1764727cdd48ffaeb44afbddce67b7146a3fa880c35e2ff5abd48",
+  "new_request_hashes_verified": 105,
+  "prior_reused_request_hashes_verified": 6,
+  "unique_inputs_rebuilt": 111,
+  "temperature_verified": 0.0,
+  "max_tokens_verified": 512
+}

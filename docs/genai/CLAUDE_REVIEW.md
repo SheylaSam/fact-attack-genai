@@ -119,3 +119,33 @@ Erster echter Smoke abgeschlossen: elf Anfragen, zwölf Ergebnisse mit einer
 identisch wiederverwendeten Antwort. Kein Modellwechsel oder Mock. Danach reine
 Offline-Korrektur der Neutral-Evidence-Darstellung, keine wiederholte Inferenz.
 Details: [APERTUS_ZUGANG_UND_SMOKE.md](APERTUS_ZUGANG_UND_SMOKE.md).
+
+## Vollständiger 42-Fälle-NLI-Vergleich
+
+Drei tatsächliche read-only Reviews für diesen Schritt: Anforderungen des langen
+Laufs, Prüfung des neuen `run_nli42.py` vor den Anfragen sowie unabhängiger Audit
+der fertigen 126 Ergebniszeilen. Keine Env-Datei wurde an Claude übergeben und
+Claude führte keine kostenpflichtigen Modellaufrufe aus.
+
+Übernommene Punkte: fortsetzen nach einzelnen Formatfehlern ohne Neutral-Fallback;
+Abbruch bei systemischen HTTP-/Modellfehlern; Kampagnendatei gegen erneuten
+Budgetverbrauch; rotierende Armreihenfolge; Raw-Response-Prüfung der Cachetreffer;
+striktes Wahrscheinlichkeits-/Belegschema; vollständige Paarung als Primäranalyse;
+sekundäre Auswertung mit Fehlern als verfehlte Vorhersagen. In diesem realen Lauf
+gab es null Fehler; alle 42 Fälle blieben in sämtlichen Armen enthalten.
+
+Die im Review noch offenen tatsächlichen Promptparameter wurden anschliessend
+rein offline gegen die protokollierten HTTP-Payloadhashes geprüft: 105/105 neue
+Anfragen und alle sechs verwendeten früheren Antworten stimmen bytegenau mit den
+rekonstruierten aktuellen Eingaben überein. Es gab keine zusätzlichen API-Aufrufe.
+
+Claude bestätigte die Macro-F1-Werte, die 42/37/33 korrekten Labels, Cache-/Journal-
+Zählung und fehlende Label-/Referenzübergabe an NLI. Wichtige Einschränkungen stehen
+im Ergebnisbericht. Zwei Reviewdetails wurden nachgeprüft und präzisiert: sechs
+übersetzte Vote-Titelstrings bezeichnen **zwei** Vorlagen; nach Deduplikation bleiben
+**sechs** Contradictionfälle, nicht fünf. Die 37 eindeutigen Eingaben verteilen sich
+auf 22 Entailment, neun Neutral und sechs Contradiction.
+
+Keine inferenzstatistische Signifikanz aus naivem Fall-Bootstrap/McNemar abgeleitet:
+Die beobachteten Fälle teilen Claims/Referenzen und ein Büchleindatum. Keine weiteren
+API-Läufe oder neue Promptoptimierung nach Sichtung dieser Ergebnisse.

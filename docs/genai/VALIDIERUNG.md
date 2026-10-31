@@ -68,3 +68,17 @@ Realer Smoke erfolgreich: elf tatsächliche POST-Anfragen, elf Antworten, zwölf
 gepaarte Zeilen mit einer identischen wiederverwendeten Antwort, kein Mock und
 bestätigtes Servermodell. Artefakte wurden auf enthaltene Zugangsschlüssel geprüft:
 keine gefunden. Details: [APERTUS_ZUGANG_UND_SMOKE.md](APERTUS_ZUGANG_UND_SMOKE.md).
+
+## Echter gepaarter 42-Fälle-Lauf
+
+**224 Tests + 6 Subtests bestanden**; fünf bestehende PDF-Deprecation-Warnungen.
+Neu geprüft: harte Grenze bei HTTP-Versuch 126, Ausschluss eines fehlgeschlagenen
+Falls für sämtliche Arme, doppelte Paar-IDs, inkompatible Cachequellen, fehlende
+42er-Paarung und striktes NLI-Antwortschema.
+
+Realer Lauf: 42 vollständige Paare, 126 Zeilen, 105 neue Anfragen, 15 Wiederverwendungen
+innerhalb des Laufs und sechs geprüfte frühere Antworten. Null Anfrage-/Schemafehler.
+Unabhängige sklearn- und offizielle Evidence-Nachrechnung stimmen überein. Rein
+offline wurden sämtliche 105 neuen und sechs verwendeten früheren HTTP-Payloadhashes
+bytegenau gegen rekonstruierte Eingaben geprüft. Keine zusätzlichen Modellaufrufe.
+[Ergebnisbericht](ERGEBNISSE_NLI42.md).
