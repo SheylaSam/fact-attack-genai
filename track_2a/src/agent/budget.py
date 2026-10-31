@@ -4,7 +4,8 @@
   request per `handle_request`, so SDK retries and redirect hops count as well.
 * The NLI client (ApertusClient -> HTTPChatClient on http.client): `install_on_apertus` wraps, on the instance only,
   every connection `HTTPChatClient` opens, like `CountedConnection` in scripts/fixed_context_nli_smoke.py. The
-  resend after a dropped kept-alive connection is a second `request` and counts as a second request.
+  resend after a dropped kept-alive connection is a second `request` and counts as a second request. A spent budget
+  is never retried there (see `install_on_apertus`).
 
 A request is reserved (counted, and journaled with fsync when a journal is given) before it is sent. A refused or
 unjournaled request never reaches the network. `RequestBudget.exceeded` stays True once a request was refused, because
@@ -23,6 +24,7 @@ import httpx
 from src.agent import settings
 
 _ORIGINALS = "_budget_originals"  # (connection factory, get) of an HTTPChatClient before the first install
+_ORIGINAL_RETRY_LIMIT = "_budget_original_retry_limit"  # _retry_limit of an ApertusClient before the first install
 
 
 class BudgetExceeded(RuntimeError):
@@ -118,15 +120,21 @@ class _CountedConnection:
 def install_on_apertus(client: Any, budget: RequestBudget) -> None:
     """Count every HTTP request of `client.client` (HTTPChatClient) on `budget`; a mock client stays unchanged.
 
-    Wraps the instance only (src/http_chat.py is untouched): `_connection` for the POSTs, `get` for the /models
-    listing that ApertusClient._switch_model may fetch, which opens its own connection. Installing again replaces the
-    budget instead of stacking a second counter.
+    Wraps the instance only (src/http_chat.py and src/apertus_client.py are untouched):
+    * `_connection` for the POSTs, `get` for the /models listing that ApertusClient._switch_model may fetch, which
+      opens its own connection.
+    * `ApertusClient._retry_limit`: `BudgetExceeded` has no status_code, so the original treats it as transient and
+      would retry it six times with 2-30 s of backoff each, for a request that can never go out. It now gets 0 retries,
+      every other error keeps the original answer.
+    Installing again replaces the budget instead of stacking a second counter.
     """
     http_client = getattr(client, "client", None)
     if http_client is None:
         return
     connection, get = getattr(http_client, _ORIGINALS, None) or (http_client._connection, http_client.get)
     setattr(http_client, _ORIGINALS, (connection, get))
+    retry_limit = getattr(client, _ORIGINAL_RETRY_LIMIT, None) or client._retry_limit
+    setattr(client, _ORIGINAL_RETRY_LIMIT, retry_limit)
 
     def counted_connection(timeout: float) -> _CountedConnection:
         return _CountedConnection(connection(timeout), budget)
@@ -135,5 +143,9 @@ def install_on_apertus(client: Any, budget: RequestBudget) -> None:
         budget.reserve(b"")
         return get(*args, **kwargs)
 
+    def retry_limit_without_budget(error: Exception) -> int:
+        return 0 if isinstance(error, BudgetExceeded) else retry_limit(error)
+
     http_client._connection = counted_connection
     http_client.get = counted_get
+    client._retry_limit = retry_limit_without_budget

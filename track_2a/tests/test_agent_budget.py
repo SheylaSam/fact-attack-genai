@@ -15,9 +15,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import httpx
 
+from src import config
 from src.agent import settings
 from src.agent.budget import BudgetExceeded, RequestBudget, budget_http_client, install_on_apertus
 from src.apertus_client import ApertusClient
+from src.http_chat import APIError
+import src.apertus_client as apertus_module
 
 APERTUS_MODEL = "swiss-ai/Apertus-v1.5-test"
 ANSWER = {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
@@ -32,8 +35,10 @@ def post_once(client: httpx.Client, text: str = "hallo") -> httpx.Response:
 
 
 class FakeResponse:
-    status = 200
     headers = {}
+
+    def __init__(self, status=200):
+        self.status = status
 
     def read(self):
         return json.dumps(ANSWER).encode()
@@ -47,14 +52,15 @@ class FakeConnection:
     instances = []
     sent = []
     drop_first = 0
+    status = 200
 
     def __init__(self, host, port=None, timeout=None):
         self.timeout, self.sock = timeout, None
         FakeConnection.instances.append(self)
 
     @classmethod
-    def reset(cls, drop_first=0):
-        cls.instances, cls.sent, cls.drop_first = [], [], drop_first
+    def reset(cls, drop_first=0, status=200):
+        cls.instances, cls.sent, cls.drop_first, cls.status = [], [], drop_first, status
 
     def request(self, method, url, body=None, headers=None, **kwargs):
         if len(FakeConnection.sent) < FakeConnection.drop_first:
@@ -63,7 +69,7 @@ class FakeConnection:
         FakeConnection.sent.append((method, url, body))
 
     def getresponse(self):
-        return FakeResponse()
+        return FakeResponse(FakeConnection.status)
 
     def close(self):
         pass
@@ -256,14 +262,67 @@ class InstallOnApertusTests(unittest.TestCase):
         budget = RequestBudget(limit=1)
         install_on_apertus(self.client, budget)
         budget.reserve(b"burn")
-        self.client._retry_limit = lambda error: 0  # skip the backoff sleeps of _create_with_retry
-        self.assertIsNone(self.client.translate("The rent rises.", "de")[0])
-        out = self.client.infer("", "Die Miete steigt.", passages=["Die Miete ist gleich geblieben."])
+        with patch.object(apertus_module.time, "sleep") as sleep:
+            self.assertIsNone(self.client.translate("The rent rises.", "de")[0])
+            out = self.client.infer("", "Die Miete steigt.", passages=["Die Miete ist gleich geblieben."])
+        sleep.assert_not_called()
         self.assertEqual(out.label, 1)
         self.assertTrue(out.error.startswith("api: "))
         self.assertIn("Anfrage-Budget", out.error)
         self.assertTrue(budget.exceeded)
         self.assertEqual(FakeConnection.sent, [])
+
+    def test_budget_exhaustion_is_not_retried_with_backoff(self):
+        # Without the override, _create_with_retry treats BudgetExceeded (no status_code) as transient: 6 retries with
+        # 2..30 s of sleeping each, per call, for requests that can never go out.
+        budget = RequestBudget(limit=1)
+        install_on_apertus(self.client, budget)
+        messages = [{"role": "user", "content": "hallo"}]
+        with patch.object(apertus_module.time, "sleep") as sleep:
+            response, error = self.client._chat(messages, max_tokens=5)
+            self.assertIsNotNone(response)  # the one request of the budget
+            self.assertIsNone(error)
+            response, error = self.client._chat(messages, max_tokens=5)
+            out = self.client.infer("", "Die Miete steigt.", passages=["Die Miete ist gleich geblieben."])
+            label_out = self.client.infer_label(["Die Miete ist gleich geblieben."], "Die Miete steigt.")
+        self.assertIsNone(response)
+        self.assertIsInstance(error, BudgetExceeded)
+        self.assertTrue(out.error.startswith("api: "))
+        self.assertTrue(label_out.error.startswith("api: "))
+        sleep.assert_not_called()
+        self.assertEqual(len(FakeConnection.sent), 1)
+        self.assertTrue(budget.exceeded)
+
+    def test_other_errors_keep_the_original_retry_limit_and_backoff(self):
+        FakeConnection.reset(status=500)
+        budget = RequestBudget(limit=12)
+        install_on_apertus(self.client, budget)
+        with patch.object(config, "LLM_MAX_RETRIES", 2), patch.object(apertus_module.time, "sleep") as sleep:
+            response, error = self.client._chat([{"role": "user", "content": "hallo"}], max_tokens=5)
+        self.assertIsNone(response)
+        self.assertIsInstance(error, APIError)
+        self.assertEqual(error.status_code, 500)
+        self.assertEqual(len(FakeConnection.sent), 3)  # the first try and two retries, each a counted request
+        self.assertEqual(sleep.call_count, 2)  # the backoff stays for real transient errors
+        self.assertEqual(budget.used, 3)
+        self.assertFalse(budget.exceeded)
+
+    def test_retry_limit_defers_to_the_original_for_every_other_error(self):
+        reference = ApertusClient(base_url="http://llm.invalid/v1", api_key="test", model_name=APERTUS_MODEL, mock=False)
+        install_on_apertus(self.client, RequestBudget(limit=1))
+        install_on_apertus(self.client, RequestBudget(limit=1))  # reinstalling must not change the answers
+        self.assertEqual(self.client._retry_limit(BudgetExceeded("Anfrage-Budget erschöpft")), 0)
+        for status in (None, 400, 401, 403, 404, 408, 429, 500, 503):
+            with self.subTest(status=status):
+                error = APIError("fehler", status_code=status)
+                self.assertEqual(self.client._retry_limit(error), reference._retry_limit(error))
+        self.assertEqual(self.client._retry_limit(APIError("fehler", status_code=500)), config.LLM_MAX_RETRIES)
+
+    def test_retry_limit_override_keeps_an_earlier_instance_override(self):
+        self.client._retry_limit = lambda error: 3
+        install_on_apertus(self.client, RequestBudget(limit=1))
+        self.assertEqual(self.client._retry_limit(APIError("fehler", status_code=500)), 3)
+        self.assertEqual(self.client._retry_limit(BudgetExceeded("x")), 0)
 
     def test_mock_client_stays_unchanged(self):
         mock_client = ApertusClient(mock=True)
@@ -281,6 +340,8 @@ class InstallOnApertusTests(unittest.TestCase):
         other = ApertusClient(base_url="http://llm.invalid/v1", api_key="test", model_name=APERTUS_MODEL, mock=False)
         self.assertNotIn("_connection", vars(other.client))
         self.assertNotIn("get", vars(other.client))
+        self.assertNotIn("_retry_limit", vars(other))  # nor the ApertusClient of another check
+        self.assertEqual(other._retry_limit(APIError("fehler", status_code=500)), config.LLM_MAX_RETRIES)
 
 
 if __name__ == "__main__":
