@@ -12,17 +12,27 @@ import unittest
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import httpx
-
 from src import config
-from src.agent import decider as decider_module
 from src.agent import settings
-from src.agent.budget import BudgetExceeded, RequestBudget, budget_http_client
-from src.agent.decider import (AgentAction, JsonActionDecider, NativeToolDecider, ScriptedDecider, make_chat_model,
-                               make_decider, parse_json_action)
 from src.agent.tools import TOOL_SPECS, Observation, validate_args
 
-HAS_LANGCHAIN = importlib.util.find_spec('langchain_openai') is not None
+
+def installed(*packages):
+    """True if every package can be imported; an import hook that blocks a package may raise instead of saying no."""
+    try:
+        return all(importlib.util.find_spec(package) is not None for package in packages)
+    except (ImportError, ValueError):
+        return False
+
+
+HAS_HTTPX = installed('httpx')  # requirements-agent.txt; the competition lock (requirements-lock.txt) has no httpx
+HAS_LANGCHAIN = HAS_HTTPX and installed('langchain_openai')
+if HAS_HTTPX:
+    import httpx
+    from src.agent import decider as decider_module
+    from src.agent.budget import BudgetExceeded, RequestBudget, budget_http_client
+    from src.agent.decider import (AgentAction, JsonActionDecider, NativeToolDecider, ScriptedDecider,
+                                   make_chat_model, make_decider, parse_json_action)
 if HAS_LANGCHAIN:
     import openai
     from langchain_core.messages import AIMessage
@@ -81,6 +91,7 @@ class StubChat:
         return self.reply
 
 
+@unittest.skipUnless(HAS_HTTPX, 'Install requirements-agent.txt')
 class ParseJsonActionTests(unittest.TestCase):
     def test_parse_json_after_thinking(self):
         action = parse_json_action(THINKING + json.dumps(SEARCH), TOOL_SPECS)
@@ -312,6 +323,7 @@ class JsonActionDeciderTests(unittest.TestCase):
         self.assertEqual(json.loads(messages[0]['content']), SEARCH)
 
 
+@unittest.skipUnless(HAS_HTTPX, 'Install requirements-agent.txt')
 class ScriptedDeciderTests(unittest.TestCase):
     def test_scripted_starts_with_the_vote_search(self):
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, [])
@@ -408,6 +420,7 @@ class ScriptedDeciderTests(unittest.TestCase):
                                     {'role': 'user', 'content': 'Ergebnis von suche_vorlagen: Ergebnistext'}])
 
 
+@unittest.skipUnless(HAS_HTTPX, 'Install requirements-agent.txt')
 class MakeDeciderTests(unittest.TestCase):
     def test_make_decider_scripted_needs_no_chat_model(self):
         with patch.object(decider_module, 'make_chat_model', side_effect=AssertionError('no model')):

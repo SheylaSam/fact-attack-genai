@@ -15,20 +15,30 @@ import unittest
 from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import httpx
-
 from src import config
 from src.agent import cli_format
-from src.agent import decider as decider_module
-from src.agent.budget import RequestBudget, budget_http_client
-from src.agent.decider import make_chat_model
 from src.agent.source_index import VoteCandidate, VoteRef
 from src.agent.trace import TraceEvent
 from src.inference import EvidenceSource, PredictionResult
 
-HAS_LANGGRAPH = importlib.util.find_spec('langgraph') is not None
-HAS_LANGCHAIN = importlib.util.find_spec('langchain_openai') is not None
+
+def installed(*packages):
+    """True if every package can be imported; an import hook that blocks a package may raise instead of saying no."""
+    try:
+        return all(importlib.util.find_spec(package) is not None for package in packages)
+    except (ImportError, ValueError):
+        return False
+
+
+HAS_HTTPX = installed('httpx')  # requirements-agent.txt; the competition lock (requirements-lock.txt) has no httpx
+HAS_LANGGRAPH = HAS_HTTPX and installed('langgraph')
+HAS_LANGCHAIN = HAS_HTTPX and installed('langchain_openai')
 SMOKE_SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'agent_tool_smoke.py'
+if HAS_HTTPX:
+    import httpx
+    from src.agent import decider as decider_module
+    from src.agent.budget import RequestBudget, budget_http_client
+    from src.agent.decider import make_chat_model
 if HAS_LANGGRAPH:
     from src.agent import __main__ as agent_cli
     from src.agent.graph import AgentResult, EvidenceItem
@@ -404,6 +414,7 @@ def load_smoke():
     return module
 
 
+@unittest.skipUnless(HAS_HTTPX, 'Install requirements-agent.txt')  # the smoke script imports the decider
 class ToolSmokeRefusalTests(unittest.TestCase):
     """The paid tool-calling smoke starts only on purpose; every refusal happens before a budget or a model exists."""
 
@@ -482,6 +493,7 @@ def smoke_row(situation, mode, valid=True, expected=True):
     return {'situation': situation, 'mode': mode, 'valid_action': valid, 'expected_tool_chosen': expected}
 
 
+@unittest.skipUnless(HAS_HTTPX, 'Install requirements-agent.txt')  # the smoke script imports the decider
 class ToolSmokeDecisionTests(unittest.TestCase):
     def setUp(self):
         self.smoke = load_smoke()

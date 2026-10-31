@@ -10,6 +10,15 @@ from src.agent import settings
 from src.agent.source_index import VoteCandidate, VoteRef
 from src.agent.tools import TERMINAL_TOOLS, TOOL_SPECS, AgentTools, Observation, validate_args
 
+
+def installed(*packages):
+    """True if every package can be imported; an import hook that blocks a package may raise instead of saying no."""
+    try:
+        return all(importlib.util.find_spec(package) is not None for package in packages)
+    except (ImportError, ValueError):
+        return False
+
+
 BOOKLETS = Path('/booklets')
 V1 = VoteRef('2024-11-24_de#1', '2024-11-24_de', '2024-11-24', 'de',
              'Änderung des Obligationenrechts (Mietrecht: Untermiete)', (2, 3))
@@ -431,7 +440,7 @@ class ToolSpecTests(unittest.TestCase):
                     self.assertNotIn('title', schema)
                     self.assertTrue(schema['description'].strip())
 
-    @unittest.skipUnless(importlib.util.find_spec('langchain_core'), 'Install requirements-agent.txt')
+    @unittest.skipUnless(installed('langchain_core'), 'Install requirements-agent.txt')
     def test_specs_bind_as_openai_tools(self):
         from langchain_core.utils.function_calling import convert_to_openai_tool
         for spec in TOOL_SPECS:

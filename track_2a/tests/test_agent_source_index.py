@@ -8,7 +8,16 @@ import unittest
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-HAS_QDRANT = importlib.util.find_spec('qdrant_client') is not None
+
+def installed(*packages):
+    """True if every package can be imported; an import hook that blocks a package may raise instead of saying no."""
+    try:
+        return all(importlib.util.find_spec(package) is not None for package in packages)
+    except (ImportError, ValueError):
+        return False
+
+
+HAS_QDRANT = installed('qdrant_client')
 if HAS_QDRANT:
     from src.agent.source_index import SourceIndex, VoteCandidate, VoteRef
 

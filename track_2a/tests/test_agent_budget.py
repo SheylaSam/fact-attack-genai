@@ -4,6 +4,7 @@ No real network: httpx.MockTransport and a fake http.client connection stand in 
 """
 import hashlib
 import http.client
+import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -13,24 +14,35 @@ import unittest
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import httpx
-
 from src import config
 from src.agent import settings
-from src.agent.budget import BudgetExceeded, RequestBudget, budget_http_client, install_on_apertus
 from src.apertus_client import ApertusClient
 from src.http_chat import APIError
 import src.apertus_client as apertus_module
+
+
+def installed(*packages):
+    """True if every package can be imported; an import hook that blocks a package may raise instead of saying no."""
+    try:
+        return all(importlib.util.find_spec(package) is not None for package in packages)
+    except (ImportError, ValueError):
+        return False
+
+
+HAS_HTTPX = installed("httpx")  # requirements-agent.txt; the competition lock (requirements-lock.txt) has no httpx
+if HAS_HTTPX:
+    import httpx
+    from src.agent.budget import BudgetExceeded, RequestBudget, budget_http_client, install_on_apertus
 
 APERTUS_MODEL = "swiss-ai/Apertus-v1.5-test"
 ANSWER = {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
 
 
-def ok_handler(request: httpx.Request) -> httpx.Response:
+def ok_handler(request):
     return httpx.Response(200, json=ANSWER)
 
 
-def post_once(client: httpx.Client, text: str = "hallo") -> httpx.Response:
+def post_once(client, text="hallo"):
     return client.post("http://llm.invalid/v1/chat/completions", json={"messages": [{"role": "user", "content": text}]})
 
 
@@ -75,6 +87,7 @@ class FakeConnection:
         pass
 
 
+@unittest.skipUnless(HAS_HTTPX, "Install requirements-agent.txt")
 class BudgetTests(unittest.TestCase):
     def test_limit_bounds(self):
         for bad in (0, -1, 13, settings.MAX_REQUESTS + 1, True, 2.0):
@@ -194,6 +207,7 @@ class BudgetTests(unittest.TestCase):
         self.assertEqual(budget.used, 12)
 
 
+@unittest.skipUnless(HAS_HTTPX, "Install requirements-agent.txt")
 class InstallOnApertusTests(unittest.TestCase):
     def setUp(self):
         FakeConnection.reset()

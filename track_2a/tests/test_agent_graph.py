@@ -13,19 +13,29 @@ import tempfile
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import httpx
-
 from src import config
 from src.agent import settings
-from src.agent.budget import BudgetExceeded, RequestBudget
-from src.agent.decider import AgentAction, ScriptedDecider
 from src.agent.source_index import VoteCandidate, VoteRef
 from src.agent.tools import TERMINAL_TOOLS, AgentTools
 from src.agent.trace import TraceEvent, Tracer
 from src.inference import EvidenceSource, PredictionResult
 from src.text_utils import official_normalize
 
-HAS_LANGGRAPH = importlib.util.find_spec('langgraph') is not None
+
+def installed(*packages):
+    """True if every package can be imported; an import hook that blocks a package may raise instead of saying no."""
+    try:
+        return all(importlib.util.find_spec(package) is not None for package in packages)
+    except (ImportError, ValueError):
+        return False
+
+
+HAS_HTTPX = installed('httpx')  # requirements-agent.txt; the competition lock (requirements-lock.txt) has no httpx
+HAS_LANGGRAPH = HAS_HTTPX and installed('langgraph')
+if HAS_HTTPX:
+    import httpx
+    from src.agent.budget import BudgetExceeded, RequestBudget
+    from src.agent.decider import AgentAction, ScriptedDecider
 if HAS_LANGGRAPH:
     from src.agent.graph import EvidenceItem, build_graph, run_check
     from src.agent.prompts import system_prompt
