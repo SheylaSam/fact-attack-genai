@@ -333,3 +333,111 @@ def test_history_origin_sort_and_localized_report_use_filtered_records(isolated_
         assert len(app.selectbox(key='history_selected').options) == 2
         assert app.selectbox(key='history_origin').value == 'Alle Antwortarten'
         remote.assert_not_called()
+
+
+def test_failed_recheck_does_not_show_previous_success(isolated_history):
+    import streamlit as st
+    from src.inference import PredictionResult
+    from src.check_history import load_checks
+    st.cache_resource.clear()
+    result = PredictionResult(claim='Eine eigene Aussage.', label=1, label_name='Neutral', reasoning='Injected',
+                              evidence=[], strategy='hybrid', booklet_path='', tokens_prompt=0,
+                              tokens_completion=0, tokens_total=0, latency_ms=0)
+    with patch('src.config.LLM_API_KEY', 'ui-test'), patch('src.config.MOCK_APERTUS', False), \
+         patch('src.inference.ClaimVerificationEngine.verify_claim', side_effect=[result, RuntimeError('Offline')]), \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')):
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        app.text_area(key='claim_input').set_value(result.claim).run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert 'last_check' in app.session_state
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert not app.exception and 'last_check' not in app.session_state
+        assert app.error and not any('<div class="verdict-container' in item.value for item in app.markdown)
+        assert len(load_checks(isolated_history)) == 1
+    st.cache_resource.clear()
+
+
+def test_changed_pdf_invalidates_single_result_and_demo_fallback(tmp_path):
+    import shutil
+    import streamlit as st
+    from src.inference import PredictionResult
+    source = tmp_path / '2026-06-14_fr.pdf'
+    shutil.copyfile(APP.parent / 'data/booklets/2026-06-14_fr.pdf', source)
+    st.cache_resource.clear()
+    with patch('src.config.BOOKLETS_DIR', tmp_path), \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        next(button for button in app.button if button.key.startswith('story_')).click().run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert not app.exception and 'last_check' in app.session_state
+        with source.open('ab') as stream:
+            stream.write(b'\n% test content change\n')
+        app.run()
+        assert not any('<div class="verdict-container' in item.value for item in app.markdown)
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert not app.exception and 'last_check' not in app.session_state
+        assert app.error
+        remote.assert_not_called()
+    st.cache_resource.clear()
+
+
+def test_displayed_evidence_comes_from_selected_quote_not_other_page_text():
+    import streamlit as st
+    from src.inference import PredictionResult, EvidenceSource
+    st.cache_resource.clear()
+    quote = 'L’Assemblea federale raccomanda al Popolo e ai Cantoni di respingere l’iniziativa.'
+    distractor = 'Die Vorlage kostet hundert Milliarden Franken und wird sofort umgesetzt.'
+    result = PredictionResult(claim=distractor, label=0, label_name='Entailment', reasoning='Injected UI fixture',
+                              evidence=[quote], evidence_sources=[EvidenceSource(page_number=22, quote=quote)],
+                              strategy='hybrid', booklet_path='', tokens_prompt=0, tokens_completion=0,
+                              tokens_total=0, latency_ms=0)
+    booklet = {'pages': [{'page_number': 22, 'text': quote + ' ' + distractor}],
+               'paragraphs': [], 'full_text': quote + ' ' + distractor}
+    with patch('src.config.LLM_API_KEY', 'ui-test'), patch('src.config.MOCK_APERTUS', False), \
+         patch('src.inference.ClaimVerificationEngine.verify_claim', return_value=result), \
+         patch('src.inference.ClaimVerificationEngine._get_booklet_data', return_value=booklet), \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')):
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        app.radio(key='booklet_lang').set_value('IT').run()
+        app.text_area(key='claim_input').set_value(distractor).run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert not app.exception
+        quotes = [item.value for item in app.markdown if 'class="evidence-quote"' in item.value]
+        assert quotes and quote in quotes[0] and distractor not in quotes[0]
+    st.cache_resource.clear()
+
+
+def test_uploaded_pdf_has_no_official_date_in_history_or_report(tmp_path, isolated_history):
+    import hashlib
+    import streamlit as st
+    from types import SimpleNamespace
+    from streamlit.runtime.state.session_state_proxy import SessionStateProxy
+    from src.inference import PredictionResult
+    from src.check_history import load_checks
+    from src.check_report import render_check_report
+    pdf = (APP.parent / 'data/booklets/2026-06-14_fr.pdf').read_bytes()
+    source = tmp_path / f'custom_{hashlib.sha256(pdf).hexdigest()}.pdf'
+    source.write_bytes(pdf)
+    upload = SimpleNamespace(name='mein-dokument.pdf', getbuffer=lambda: memoryview(pdf))
+    original_get = SessionStateProxy.get
+    def session_get(self, key, default=None):
+        return upload if key == 'uploaded_pdf' else original_get(self, key, default)
+    result = PredictionResult(claim='Une affirmation personnelle.', label=1, label_name='Neutral', reasoning='Injected',
+                              evidence=[], strategy='hybrid', booklet_path=str(source), tokens_prompt=0,
+                              tokens_completion=0, tokens_total=0, latency_ms=0)
+    st.cache_resource.clear()
+    with patch.object(SessionStateProxy, 'get', session_get), \
+         patch('src.ui_strategies.store_uploaded_source', return_value=source), \
+         patch('src.config.LLM_API_KEY', 'ui-test'), patch('src.config.MOCK_APERTUS', False), \
+         patch('src.inference.ClaimVerificationEngine.verify_claim', return_value=result), \
+         patch('src.check_report.render_check_report', wraps=render_check_report) as reports, \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')):
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        assert not app.exception and app.selectbox(key='ballot').disabled
+        assert any('Aktive Quelle: eigenes PDF' in item.value for item in app.info)
+        app.text_area(key='claim_input').set_value(result.claim).run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert not app.exception
+        assert load_checks(isolated_history)[0]['date'] is None
+        assert all(record['date'] is None for call in reports.call_args_list for record in call.args[0])
+    st.cache_resource.clear()

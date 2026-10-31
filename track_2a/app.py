@@ -1477,23 +1477,25 @@ with tab_factcheck:
         if source_query.strip() or source_year != "Alle Jahre":
             st.caption(t('{v0} von {v1} Terminen gefunden · Suche in Vorlagentiteln').format(v0=len(date_options(filtered_sources)), v1=len(BOOKLET_CATALOG)))
             st.button(t("Quellenfilter zurücksetzen"), on_click=_reset_source_filters)
+        uploaded_file = st.session_state.get("uploaded_pdf")
         c_ballot, c_lang = st.columns([1.5, 1])
         with c_ballot:
-            selected_ballot_name = st.selectbox(t("Abstimmung"), list(filtered_dates), key="ballot", disabled=no_source_matches, format_func=lambda label: date_label(label, UI_LANGUAGE))
+            selected_ballot_name = st.selectbox(t("Abstimmung"), list(filtered_dates), key="ballot", disabled=no_source_matches or uploaded_file is not None, format_func=lambda label: date_label(label, UI_LANGUAGE))
             selected_date = BOOKLET_CATALOG[selected_ballot_name]
         with c_lang:
-            language_options = languages_for_date(AVAILABLE_SOURCES, selected_date)
+            language_options = ["DE", "FR", "IT"] if uploaded_file is not None else languages_for_date(AVAILABLE_SOURCES, selected_date)
             if st.session_state.get("booklet_lang") not in language_options:
                 st.session_state["booklet_lang"] = language_options[0]
             selected_lang = st.radio(t("Sprache des Büchleins"), language_options, horizontal=True, key="booklet_lang")
             lang_code = selected_lang.lower()
 
-        uploaded_file = st.session_state.get("uploaded_pdf")
+        source_date = None if uploaded_file is not None else selected_date
         pdf_path = config.BOOKLETS_DIR / f"{selected_date}_{lang_code}.pdf"
         if uploaded_file is not None:
             uploaded_bytes = bytes(uploaded_file.getbuffer())
             pdf_path = store_uploaded_source(config.BOOKLETS_DIR, uploaded_bytes)
             st.success(t('✓ {v0} geladen').format(v0=uploaded_file.name))
+            st.info(t("Aktive Quelle: eigenes PDF. Das Abstimmungsdatum ist unbekannt; die offizielle Datumsauswahl ist deaktiviert."))
 
         vote_options = [VOTE_AUTO] + ([] if uploaded_file is not None else DEMO_VOTES.get(pdf_path.name, SOURCE_METADATA.get(pdf_path.name, {}).get("votes", [])))
         if st.session_state.get("vote") not in vote_options:
@@ -1570,7 +1572,7 @@ with tab_factcheck:
                                                claim_language=language, strategy=strat, vote=vote)
                 def save_one(prediction):
                     save_check(HISTORY_PATH, result=prediction.model_dump(mode="json"), source_path=pdf_path,
-                               date=selected_date, language=lang_code, vote=vote)
+                               date=source_date, language=lang_code, vote=vote)
                 progress = st.progress(0, text=t("Mehrfachprüfung wird gestartet…"))
                 def update_progress(done, total, statement):
                     progress.progress(done / total, text=t("{done} von {total} Einzelprüfungen abgeschlossen · {claim}").format(
@@ -1582,15 +1584,16 @@ with tab_factcheck:
                     else:
                         outcomes = run_checks(selected_claims, verify_one, save_one if save_history else None, update_progress)
                 context = {"source_file": pdf_path.name, "source_sha256": batch_signature[2],
-                           "date": selected_date, "language": lang_code, "vote": vote, "strategy": strat,
+                           "date": source_date, "language": lang_code, "vote": vote, "strategy": strat,
                            "created_at": datetime.now(timezone.utc).isoformat()}
                 st.session_state["batch_check"] = {"signature": batch_signature, "outcomes": outcomes, "context": context}
                 st.rerun()
 
     # ── Verification ─────────────────────────────────────────────────────────
-    signature = (claim.strip(), str(pdf_path), vote, strat, claim_lang)
+    signature = (claim.strip(), str(pdf_path), batch_signature[2], vote, strat, claim_lang)
     if verify_clicked and claim.strip():
         st.session_state.pop("batch_check", None)
+        st.session_state.pop("last_check", None)
         if not pdf_path.exists():
             with col_out:
                 st.error(t('PDF nicht gefunden: `{v0}`. Bitte `python -m src download` ausführen.').format(v0=pdf_path.name))
@@ -1611,7 +1614,7 @@ with tab_factcheck:
                     raise RuntimeError(live.error)
                 result = live
             except Exception as exc:
-                if cached_case and strat == "hybrid":
+                if cached_case and strat == "hybrid" and SOURCE_METADATA.get(pdf_path.name, {}).get("sha256") == batch_signature[2]:
                     result = PredictionResult(**cached_case["cached_result"])
                     notice = ("Die Live-Verbindung zu Apertus ist gerade nicht verfügbar. Angezeigt wird das gespeicherte "
                               "Ergebnis dieses Beispiels (vorab live auf CSCS geprüft).")
@@ -1624,7 +1627,7 @@ with tab_factcheck:
                 if save_history:
                     try:
                         save_check(HISTORY_PATH, result=result.model_dump(mode="json"), source_path=pdf_path,
-                                   date=selected_date, language=lang_code, vote=vote, notice=notice)
+                                   date=source_date, language=lang_code, vote=vote, notice=notice)
                     except (OSError, ValueError, sqlite3.Error):
                         with col_out:
                             st.warning(t("Das Ergebnis ist verfügbar, konnte aber nicht im lokalen Verlauf gespeichert werden."))
@@ -1646,7 +1649,7 @@ with tab_factcheck:
             st.caption(t("Erfolgreich bedeutet technisch abgeschlossen, unabhängig davon, ob das Büchlein die Aussage stützt, offenlässt oder ihr widerspricht."))
             with st.expander(t("Mehrfachergebnisse exportieren"), expanded=False):
                 context = current_batch.get("context", {"source_file": pdf_path.name, "source_sha256": batch_signature[2],
-                           "date": selected_date, "language": lang_code, "vote": vote, "strategy": strat})
+                           "date": source_date, "language": lang_code, "vote": vote, "strategy": strat})
                 st.download_button(t("Mehrfachprüfung als JSON"), data=export_batch(current_batch["outcomes"], context),
                                    file_name="mehrfachpruefung.json", mime="application/json", key="batch_json")
                 st.download_button(t("Mehrfachprüfung als CSV"), data=export_batch(current_batch["outcomes"], context, 'csv'),
@@ -1715,7 +1718,7 @@ with tab_factcheck:
 
             report_record = {"result": result.model_dump(mode="json"), "source_file": pdf_path.name,
                              "source_sha256": hashlib.sha256(pdf_path.read_bytes()).hexdigest(),
-                             "date": selected_date, "language": lang_code, "vote": vote,
+                             "date": source_date, "language": lang_code, "vote": vote,
                              "created_at": last_check.get("created_at"),
                              "origin": "saved_demo" if last_check.get("notice") else "live"}
             st.download_button(t("Prüfbericht herunterladen (HTML)"),
@@ -1748,7 +1751,7 @@ with tab_factcheck:
                 snippets = []
                 for src in result.evidence_sources:
                     page_obj = pages_by_no.get(src.page_number)
-                    snippets.append(best_snippet(page_obj["text"] if page_obj else src.quote, claim))
+                    snippets.append(best_snippet(src.quote, claim))
                 first = result.evidence_sources[0]
                 primary_quote, primary_page = snippets[0], first.page_number
                 st.markdown(evidence_html(first, snippets[0]), unsafe_allow_html=True)
@@ -1811,7 +1814,7 @@ with tab_factcheck:
                 card_quote = primary_quote or "Im geprüften Kontext wurde keine bestätigende oder widersprechende Belegstelle gefunden."
                 card_svg = generate_fact_card_svg(
                     claim=claim, label=result.label, quote=card_quote,
-                    page_number=primary_page, proposal_id=None, date_str=selected_date,
+                    page_number=primary_page, proposal_id=None, date_str=source_date or t("Eigenes PDF"),
                 )
                 st.markdown(f'<div class="fact-card-wrap">{card_svg}</div>', unsafe_allow_html=True)
                 st.download_button(
@@ -1898,7 +1901,7 @@ with tab_history:
         saved_result = PredictionResult(**record["result"])
         st.markdown("#### " + t(VERDICTS[saved_result.label][2]))
         st.text(saved_result.claim)
-        st.caption(t('Quelle: {v0} · {v1} · Strategie: {v2}').format(v0=record['date'], v1=record['language'].upper(), v2=saved_result.strategy))
+        st.caption(t('Quelle: {v0} · {v1} · Strategie: {v2}').format(v0=record['date'] or t('Eigenes PDF'), v1=record['language'].upper(), v2=saved_result.strategy))
         if record["origin"] == "saved_demo":
             st.info(t("Gespeicherte Demoantwort – bei dieser Prüfung wurde keine neue Liveantwort erzeugt."))
         else:

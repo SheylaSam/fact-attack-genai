@@ -225,6 +225,10 @@ Keine Belegstelle in diesem Bericht.|Aucun passage justificatif dans ce rapport.
 Offizielle Originalquelle|Source officielle originale|Fonte ufficiale originale
 Das Ergebnis konnte nicht im Verlauf gespeichert werden.|Le résultat n’a pas pu être enregistré dans l’historique.|Non è stato possibile salvare il risultato nella cronologia.
 """
+_ROWS += """
+Eigenes PDF|PDF personnel|PDF personale
+Aktive Quelle: eigenes PDF. Das Abstimmungsdatum ist unbekannt; die offizielle Datumsauswahl ist deaktiviert.|Source active : PDF personnel. La date de votation est inconnue ; la sélection de date officielle est désactivée.|Fonte attiva: PDF personale. La data di votazione è sconosciuta; la selezione della data ufficiale è disattivata.
+"""
 TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
 
 

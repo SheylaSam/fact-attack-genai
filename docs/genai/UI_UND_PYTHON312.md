@@ -522,3 +522,41 @@ Regressionsnachweis: `results/genai/ui_report_regression.json`.
 ![Französischer Demo-Bericht](assets/streamlit-printable-report.png)
 
 ![Bericht-Downloads im Verlauf](assets/streamlit-report-downloads.png)
+
+
+## Gefundene Fehler korrigiert
+
+Nach einer eigenen Code-/Fehlerpfadprüfung wurden folgende konkrete Probleme
+behoben, ohne neue Produktfunktionen hinzuzufügen:
+
+- **Veraltete Antwort nach fehlgeschlagener erneuter Prüfung:** Vor einem neuen
+  Einzelprüfversuch wird die bisherige Sitzungsantwort entfernt. Scheitert der
+  Versuch, steht keine alte Antwort mit altem Download als aktuelles Ergebnis
+  neben der Fehlermeldung. Ein zuvor gespeicherter Verlaufseintrag bleibt erhalten.
+- **Einzelprüfung erkannte nur den PDF-Pfad:** Die Signatur enthält nun wie beim
+  Batch den Inhalts-Hash. Ein anderer Inhalt unter demselben Dateinamen invalidiert
+  die sichtbare Einzelantwort. Zusätzlich braucht der Demo-Fallback den bekannten
+  SHA-256 der Originalquelle; die 60 Hashes des geprüften Downloadinventars sind
+  dafür in den Quellenkatalog übernommen. Kein Fallback nur wegen gleichem Namen.
+- **Eigenes PDF erhielt ein offizielles Abstimmungsdatum:** Eigene Uploads werden
+  als aktive persönliche Quelle bezeichnet. Die offizielle Datumsauswahl ist dann
+  deaktiviert; die drei Dokumentsprachen bleiben manuell wählbar. Verlauf, Batch-
+  und Einzelberichte speichern kein erfundenes Abstimmungsdatum (`date: null`).
+  Quellenansicht und Teilkarte bezeichnen dies als eigenes PDF. Alte bereits
+  gespeicherte Einträge werden nicht rückwirkend umgeschrieben.
+- **Belegauszug konnte aus einem anderen Satz der Seite stammen:** Die Auswahl
+  des sichtbaren Auszugs erfolgt jetzt aus `EvidenceSource.quote`, nicht aus der
+  gesamten Seite. Ein Satz mit mehr Wortüberschneidung zur Behauptung kann dadurch
+  keinen fremden Beleg verdrängen. Originalvorschau und Bericht behalten ihre
+  bisherigen Eindeutigkeits- bzw. Quellenprüfungen.
+
+Die Regressionstests reproduzieren erneute Prüfung mit Verbindungsfehler, einen
+in einer temporären Kopie ausgetauschten PDF-Inhalt, einen persönlichen Upload
+mit fehlendem Datum und eine Belegseite mit einem absichtlich ablenkenden Satz.
+**286 Tests plus 6 Subtests bestanden**, acht bestehende PDF-/Fork-Warnungen.
+Die Browserprüfung simulierte erst eine Antwort und dann einen Verbindungsfehler:
+die alte Einordnung und ihr Bericht-Download waren danach verschwunden.
+Keine echte Apertus-Anfrage, keine Änderung echter privater Uploads und keine
+neue fachliche Qualitätsmessung. Nachweis: `results/genai/ui_fixes_regression.json`.
+
+![Erneute Prüfung mit simuliertem Fehler ohne veraltete Antwort](assets/streamlit-recheck-error-fixed.png)
