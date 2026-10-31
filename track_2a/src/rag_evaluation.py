@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import time
 from collections import defaultdict
@@ -40,6 +41,33 @@ def reference_metrics(hits, reference, tokenizer, k):
             'reference_token_coverage': len(gold & found) / len(gold) if gold else None}
 
 
+def lexical_overlap(hits, reference, n=5):
+    """Exact word n-gram overlap with the reference, not semantic evidence recall."""
+    def grams(text):
+        words = re.findall(r"\w+", text.casefold())
+        return {tuple(words[i:i+n]) for i in range(len(words)-n+1)}
+    gold = grams(reference)
+    found = set().union(*(grams(hit['text']) for hit in hits)) if hits else set()
+    shared = gold & found
+    return {'reference_5gram_recall': len(shared)/len(gold) if gold else None,
+            'reference_5gram_precision': len(shared)/len(found) if found else None}
+
+
+def validate_gold_pages(value):
+    if value is not None and (not isinstance(value, list) or
+            any(type(page) is not int or page < 1 for page in value)):
+        raise ValueError('gold_evidence_pages must be null or a list of positive physical PDF pages')
+    return value
+
+
+def hit_trace(hits):
+    return [{'position': i, 'page_number': p['page_number'],
+             'parent_index': p.get('parent_index'), 'chunk_number': p.get('chunk_number'),
+             'score': float(p['retrieval_score']) if p.get('retrieval_score') is not None else None,
+             'text_sha256': hashlib.sha256(p['text'].encode()).hexdigest(), 'text': p['text']}
+            for i, p in enumerate(hits, 1)]
+
+
 def mean_available(rows, key):
     values = [r[key] for r in rows if r[key] is not None]
     return sum(values)/len(values) if values else None
@@ -54,10 +82,7 @@ def run(args):
     raw_records = [json.loads(line) for line in args.dataset.read_text().splitlines() if line.strip()]
     records = load_records(args.dataset)
     for rec, raw in zip(records, raw_records):
-        rec['gold_evidence_pages'] = raw.get('gold_evidence_pages')
-        if rec['gold_evidence_pages'] is not None and (not rec['gold_evidence_pages'] or
-                any(type(p) is not int or p < 1 for p in rec['gold_evidence_pages'])):
-            raise ValueError('gold_evidence_pages must contain positive physical PDF page integers')
+        rec['gold_evidence_pages'] = validate_gold_pages(raw.get('gold_evidence_pages'))
     if args.limit:
         records = records[:args.limit]
     if not records or len({r['id'] for r in records}) != len(records):
@@ -73,25 +98,24 @@ def run(args):
     previous_query_mode, previous_translate = config.RETRIEVAL_QUERY_MODE, config.TRANSLATE_CLAIM
     config.RETRIEVAL_QUERY_MODE = 'original'
     config.TRANSLATE_CLAIM = False
-    engine = ClaimVerificationEngine(apertus_client=ApertusClient(mock=True), prompt_mode='ids')
-    # Capture production retrieval before any NLI. No monkey patch of shared class/state.
-    engine._compact_predict = lambda **kwargs: SimpleNamespace(passages=kwargs['passages'], tokens_prompt=0, tokens_completion=0, tokens_total=0, latency_ms=0)
-    started = time.perf_counter()
+    engine = None
     try:
-        encoder = E5Encoder(revision=args.revision)
-    except BaseException:
-        engine.close()
-        config.RETRIEVAL_QUERY_MODE, config.TRANSLATE_CLAIM = previous_query_mode, previous_translate
-        raise
-    tokenizer = encoder.model.tokenizer
-    report = {'kind': 'paired_dev_regression', 'dataset_sha256': hashlib.sha256(args.dataset.read_bytes()).hexdigest(),
-              'git_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
-              'nli': {'enabled': args.nli, 'client_mock': client.mock, 'model': client.model_name,
-                      'prompt': 'ApertusClient.infer JSON identical across variants; not production NLI pipeline'},
-              'embedding': encoder.identity, 'model_load_ms': (time.perf_counter()-started)*1000,
-              'baseline_config': {k: getattr(config, k) for k in ('PART_CONTEXT', 'PART_CONTEXT_CHARS', 'PART_CONTEXT_CHARS_LEGAL', 'PAGE_MAX_CHARS', 'SPEAKER_AWARE', 'SPEAKER_BOOST', 'DEFAULT_TOP_K')},
-              'top_k': args.top_k, 'context_budget_e5_tokens': args.budget, 'setup': [], 'rows': []}
-    try:
+        engine = ClaimVerificationEngine(apertus_client=ApertusClient(mock=True), prompt_mode='ids')
+        # Capture production retrieval before any NLI. No monkey patch of shared class/state.
+        engine._compact_predict = lambda **kwargs: SimpleNamespace(passages=kwargs['passages'], tokens_prompt=0, tokens_completion=0, tokens_total=0, latency_ms=0)
+        started = time.perf_counter()
+        encoder = E5Encoder(revision=args.revision, chunk_tokens=getattr(args, 'chunk_tokens', 384),
+                            overlap=getattr(args, 'overlap', 64))
+        tokenizer = encoder.model.tokenizer
+        report = {'schema_version': 2, 'kind': 'paired_dev_regression', 'dataset_sha256': hashlib.sha256(args.dataset.read_bytes()).hexdigest(),
+                  'git_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+                  'nli': {'enabled': args.nli, 'client_mock': client.mock, 'model': client.model_name,
+                          'prompt': 'ApertusClient.infer JSON identical across variants; not production NLI pipeline'},
+                  'embedding': encoder.identity, 'model_load_ms': (time.perf_counter()-started)*1000,
+                  'baseline_config': {k: getattr(config, k) for k in ('PART_CONTEXT', 'PART_CONTEXT_CHARS', 'PART_CONTEXT_CHARS_LEGAL', 'PAGE_MAX_CHARS', 'SPEAKER_AWARE', 'SPEAKER_BOOST', 'DEFAULT_TOP_K')},
+                  'retrieval_policy': {'query_translation': 'disabled', 'claim_translation': 'disabled',
+                      'baseline_budget': 'native or shared E5 text budget; context order retained'},
+                  'top_k': args.top_k, 'context_budget_e5_tokens': args.budget, 'setup': [], 'rows': []}
         for pdf in sorted({r['booklet_pdf'] for r in records}):
             start = time.perf_counter()
             data = engine._get_booklet_data(pdf)
@@ -106,6 +130,9 @@ def run(args):
                 report['setup'].append({'booklet': pdf.name, 'sha256': hashlib.sha256(pdf.read_bytes()).hexdigest(),
                     'parse_or_cache_ms': parse_ms, 'index_build_or_open_ms': index_ms, 'index': vector.metadata})
                 for rec in (r for r in records if r['booklet_pdf'] == pdf):
+                    if rec['gold_evidence_pages'] and not set(rec['gold_evidence_pages']).issubset(
+                            {p['page_number'] for p in data['pages']}):
+                        raise ValueError('Gold page is outside the parsed physical PDF pages')
                     for variant in variants:
                         start = time.perf_counter()
                         if variant.startswith('baseline'):
@@ -118,19 +145,39 @@ def run(args):
                         else:
                             hits = vector.retrieve(rec['claim'], top_k=args.top_k, target_vote=rec['vote'], mode=variant)
                         retrieval_ms = (time.perf_counter()-start)*1000
+                        raw_hits = hits
+                        pre_budget = {**reference_metrics(raw_hits, rec['reference_string'], tokenizer, args.top_k),
+                                      **lexical_overlap(raw_hits, rec['reference_string'])}
                         if variant != 'baseline_native':
                             hits = budget_hits(hits if variant == 'baseline_budgeted' else hits[:args.top_k], tokenizer, args.budget)
                         row = {'id': rec['id'], 'variant': variant, 'group': 'cue' if claim_part(rec['claim']) else 'free',
+                            'reference_cluster': hashlib.sha256((rec['reference_language']+'\n'+rec['reference_string']).encode()).hexdigest(),
+                            'crosslingual': rec['claim_language'] != rec['reference_language'],
+                            'context_order': 'production_context_order' if variant.startswith('baseline') else 'retrieval_rank',
+                            'pre_budget': pre_budget,
                             'pair': f"{rec['claim_language']}->{rec['reference_language']}", 'retrieval_ms': retrieval_ms,
                             'context_e5_tokens': sum(len(tokenizer.encode(p['text'], add_special_tokens=False)) for p in hits),
                             'pages': [p['page_number'] for p in hits],
                             'distinct_pages': len({p['page_number'] for p in hits}),
                             'timing_scope': 'retrieval plus pipeline preprocessing' if variant.startswith('baseline') else 'retriever only',
-                            **reference_metrics(hits, rec['reference_string'], tokenizer, args.top_k)}
+                            **reference_metrics(hits, rec['reference_string'], tokenizer, args.top_k),
+                            **lexical_overlap(hits, rec['reference_string']),
+                            'context_reference_hit': any(evidence_hit5({'evidence': [{'text': p['text']}]}, rec['reference_string']) for p in hits)}
+                        row['budget_lost_reference_hit'] = pre_budget['reference_hit_at_k'] and not row['reference_hit_at_k']
+                        if getattr(args, 'save_hits', False):
+                            row['pre_budget_hits'] = hit_trace(raw_hits)
+                            row['context_hits'] = hit_trace(hits)
+                        row['gold_page_annotation_status'] = ('unknown' if rec['gold_evidence_pages'] is None else
+                            'reviewed_empty' if not rec['gold_evidence_pages'] else 'pages_supplied')
                         gold_pages = set(rec['gold_evidence_pages'] or [])
                         retrieved_pages = set(row['pages'][:args.top_k])
                         row['retrieval_hit_at_k'] = bool(gold_pages & retrieved_pages) if gold_pages else None
                         row['retrieval_recall_at_k'] = len(gold_pages & retrieved_pages)/len(gold_pages) if gold_pages else None
+                        raw_pages = {p['page_number'] for p in raw_hits[:args.top_k]}
+                        pre_budget['retrieval_hit_at_k'] = bool(gold_pages & raw_pages) if gold_pages else None
+                        pre_budget['retrieval_recall_at_k'] = len(gold_pages & raw_pages)/len(gold_pages) if gold_pages else None
+                        row['context_page_hit'] = bool(gold_pages & set(row['pages'])) if gold_pages else None
+                        row['context_page_recall'] = len(gold_pages & set(row['pages']))/len(gold_pages) if gold_pages else None
                         if args.nli:
                             out = client.infer(context='\n\n'.join(f"[Page {p['page_number']}] {p['text']}" for p in hits),
                                 claim=rec['claim'], claim_language=rec['claim_language'])
@@ -144,27 +191,46 @@ def run(args):
                 if vector is not None:
                     vector.close()
     finally:
-        engine.close()
-        config.RETRIEVAL_QUERY_MODE, config.TRANSLATE_CLAIM = previous_query_mode, previous_translate
+        try:
+            if engine is not None:
+                engine.close()
+        finally:
+            config.RETRIEVAL_QUERY_MODE, config.TRANSLATE_CLAIM = previous_query_mode, previous_translate
     groups = defaultdict(list)
     for row in report['rows']:
-        for group in ('all', row['group'], row['pair']):
+        for group in ('all', row['group'], row['pair'], 'crosslingual' if row['crosslingual'] else 'monolingual'):
             groups[(row['variant'], group)].append(row)
     report['summary'] = []
     for (variant, group), rows in sorted(groups.items()):
         keys = ['reference_hit_at_k', 'reference_hit_at_5', 'reference_token_coverage', 'retrieval_ms', 'context_e5_tokens']
         if args.nli:
             keys += ['prompt_tokens', 'completion_tokens', 'nli_ms']
+        clusters = defaultdict(list)
+        for row in rows:
+            clusters[row['reference_cluster']].append(row)
         report['summary'].append({'variant': variant, 'group': group, 'count': len(rows),
             **{k: sum(r[k] for r in rows)/len(rows) for k in keys},
+            'reference_cluster_count': len(clusters),
+            'cluster_mean_reference_hit_at_k': sum(sum(r['reference_hit_at_k'] for r in cluster)/len(cluster) for cluster in clusters.values())/len(clusters),
+            'reference_5gram_recall': mean_available(rows, 'reference_5gram_recall'),
+            'reference_5gram_precision': mean_available(rows, 'reference_5gram_precision'),
+            'pre_budget_reference_hit_at_k': sum(r['pre_budget']['reference_hit_at_k'] for r in rows)/len(rows),
+            'budget_lost_reference_hit_count': sum(r['budget_lost_reference_hit'] for r in rows),
+            'context_reference_hit': sum(r['context_reference_hit'] for r in rows)/len(rows),
             'retrieval_hit_at_k': mean_available(rows, 'retrieval_hit_at_k'),
             'retrieval_recall_at_k': mean_available(rows, 'retrieval_recall_at_k'),
-            'small_sample': len(rows) < 30,
+            'context_page_hit': mean_available(rows, 'context_page_hit'),
+            'context_page_recall': mean_available(rows, 'context_page_recall'),
+            'reviewed_empty_page_count': sum(r['gold_page_annotation_status']=='reviewed_empty' for r in rows),
+            'small_sample': len(rows) < 30 or len(clusters) < 30,
             'gold_page_count': sum(r['retrieval_hit_at_k'] is not None for r in rows),
             'nli_macro_f1': _macro_f1([r['gold'] for r in rows], [r['predicted'] for r in rows]) if args.nli else None,
             'evidence_hit_at_5': evidence_score(rows) if args.nli else None,
             'evidence_eligible_count': sum(r['gold'] != 1 for r in rows) if args.nli else 0})
-    report['limitations'] = ['Existing data are observed dev/regression, never held-out test.',
+    report['limitations'] = ['Baseline first-k proxy metrics use context order, not retrieval rank; context_reference_hit considers every supplied passage.',
+        'Short clipped passages may spuriously match the legacy fuzzy proxy. Exact 5-gram overlap is a separate lexical diagnostic, not evidence gold.',
+        'Reference clusters share reference text, not necessarily underlying claim/paraphrase families; no independence claim.',
+        'Existing data are observed dev/regression, never held-out test.',
         'Reference fuzzy hits and unique token coverage are proxies, not gold evidence Recall@k: no span annotations.',
         'bm25_chunks/vector/vector_hybrid isolate ranking on identical chunks and budget without speaker rules.',
         'baseline_native retains production context; baseline_budgeted applies an E5 text budget in production reading order, without top-k slicing of cue parts.',
@@ -192,11 +258,16 @@ def main():
     parser.add_argument('--limit', type=int)
     parser.add_argument('--top-k', type=int, default=5)
     parser.add_argument('--budget', type=int, default=1536)
+    parser.add_argument('--chunk-tokens', type=int, default=384)
+    parser.add_argument('--overlap', type=int, default=64)
+    parser.add_argument('--save-hits', action='store_true', help='Save full pre-budget and context texts for error analysis')
     parser.add_argument('--nli', action='store_true')
     parser.add_argument('--max-nli-calls', type=int, default=15)
     args = parser.parse_args()
     if args.top_k < 1 or args.budget < 1 or (args.limit is not None and args.limit < 1):
         parser.error('top-k, budget and limit must be positive')
+    if not 0 <= args.overlap < args.chunk_tokens:
+        parser.error('Require 0 <= overlap < chunk-tokens')
     run(args)
 
 

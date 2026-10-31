@@ -1,0 +1,27 @@
+{
+  "data_role": "observed_dev_regression",
+  "source_url": "https://huggingface.co/api/datasets/OSTswiss/MNLIoverSwissVotingBooklets/parquet/default/train/0.parquet",
+  "source_sha256": "444fe113115a1fa4134664f67ce572cb04b170b443bc741ae546a34c2f76b7c7",
+  "output_sha256": "232a84e32cf8ff5d0c7489d3cd2a63a764820b4b512da323fa677d79feca8459",
+  "selection": "All source rows with booklet URL 2026-06-14; no outcome-based selection",
+  "case_count": 42,
+  "by_pair": {
+    "de->de": 7,
+    "de->fr": 4,
+    "de->it": 4,
+    "fr->de": 5,
+    "fr->fr": 4,
+    "fr->it": 7,
+    "it->de": 2,
+    "it->fr": 5,
+    "it->it": 4
+  },
+  "crosslingual_count": 27,
+  "labels": {
+    "0": 25,
+    "1": 11,
+    "2": 6
+  },
+  "gold_page_annotations": 0,
+  "new_independent_test_data": false
+}
