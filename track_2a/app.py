@@ -27,6 +27,7 @@ from src.evaluator import BenchmarkEvaluator
 from src.results_summary import build_summary
 from src.text_utils import best_snippet, guess_language
 from src import config
+from src.ui_strategies import STANDARD, strategy_options, strategy_from_label, rag_available, store_uploaded_source
 
 # Page Configuration
 st.set_page_config(
@@ -1068,7 +1069,7 @@ st.markdown("""
 # =============================================================================
 # Cache Resources
 # =============================================================================
-@st.cache_resource
+@st.cache_resource(on_release=lambda resource: resource.close())
 def get_engine():
     return ClaimVerificationEngine()
 
@@ -1344,12 +1345,11 @@ with tab_factcheck:
             selected_lang = st.radio("Sprache des Büchleins", ["DE", "FR", "IT"], horizontal=True, key="booklet_lang")
             lang_code = selected_lang.lower()
 
-        strat = "full" if st.session_state.get("strategy_option", "").startswith("Ganzes") else "hybrid"
         uploaded_file = st.session_state.get("uploaded_pdf")
         pdf_path = config.BOOKLETS_DIR / f"{selected_date}_{lang_code}.pdf"
         if uploaded_file is not None:
-            pdf_path = config.BOOKLETS_DIR / f"custom_{uploaded_file.name}"
-            pdf_path.write_bytes(uploaded_file.getbuffer())
+            uploaded_bytes = bytes(uploaded_file.getbuffer())
+            pdf_path = store_uploaded_source(config.BOOKLETS_DIR, uploaded_bytes)
             st.success(f"✓ {uploaded_file.name} geladen")
 
         vote_options = [VOTE_AUTO] + ([] if uploaded_file is not None else DEMO_VOTES.get(pdf_path.name, []))
@@ -1393,8 +1393,18 @@ with tab_factcheck:
         )
 
         with st.expander("Erweitert: Kontext-Strategie & eigenes PDF", expanded=False):
-            st.radio("Kontext für Apertus", ["Hybrid-Retrieval (10 Seiten)", "Ganzes Büchlein"], horizontal=True, key="strategy_option")
-            st.file_uploader("Eigenes PDF laden", type=["pdf"], key="uploaded_pdf")
+            experiments = st.checkbox("Vektor-Experimente aktivieren", key="enable_vector_rag")
+            options = strategy_options(experiments)
+            if st.session_state.get("strategy_option") not in options:
+                st.session_state["strategy_option"] = STANDARD
+            st.radio("Kontext für Apertus", options, key="strategy_option")
+            strat = strategy_from_label(st.session_state["strategy_option"])
+            if strat in ("vector", "vector_hybrid"):
+                st.caption("Experimentelle Suche. Im bisherigen Dev-Vergleich war die Standardstrategie besser.")
+                if not rag_available():
+                    st.info("Die lokale Vektorsuche ist in dieser Installation noch nicht verfügbar.")
+            st.file_uploader("Eigenes PDF laden", type=["pdf"], key="uploaded_pdf",
+                help="Die Datei wird lokal gespeichert; beim Prüfen werden ausgewählte Textstellen an Apertus gesendet.")
 
     # ── Verification ─────────────────────────────────────────────────────────
     signature = (claim.strip(), str(pdf_path), vote, strat, claim_lang)
@@ -1407,6 +1417,8 @@ with tab_factcheck:
             result, notice = None, None
             cached_case = find_cached_case(claim, pdf_path.name, vote)
             try:
+                if strat in ("vector", "vector_hybrid") and not rag_available():
+                    raise ModuleNotFoundError("Optionale Abhängigkeiten für die lokale Vektorsuche fehlen")
                 if engine.client.mock:
                     raise RuntimeError("Kein LLM_API_KEY gesetzt")
                 with col_out:
@@ -1424,7 +1436,7 @@ with tab_factcheck:
                               "Ergebnis dieses Beispiels (vorab live auf CSCS geprüft).")
                 else:
                     with col_out:
-                        st.error(f"Apertus ist gerade nicht erreichbar ({exc}). Bitte später erneut versuchen.")
+                        st.error(f"Die Prüfung konnte nicht abgeschlossen werden ({exc}).")
             if result is not None:
                 st.session_state["last_check"] = {"signature": signature, "result": result, "notice": notice}
 
@@ -1447,6 +1459,8 @@ with tab_factcheck:
             </div>
             """, unsafe_allow_html=True)
         else:
+            if result.strategy in ("vector", "vector_hybrid"):
+                st.caption("Experimentelles Ergebnis · " + ("Vektorsuche" if result.strategy == "vector" else "BM25 + Vektor"))
             if last_check.get("notice"):
                 st.markdown(f'<div class="notice-box">ℹ️ {last_check["notice"]}</div>', unsafe_allow_html=True)
 
@@ -1469,7 +1483,7 @@ with tab_factcheck:
                 <p class="verdict-reasoning">{v_desc}</p>
                 <div class="verdict-stats">
                     <div><span class="vs-num">{claim_lang.upper()} → {lang_code.upper()}</span><span class="vs-lbl">Behauptung → Büchlein</span></div>
-                    <div><span class="vs-num">{pages_read} / {total_pages}</span><span class="vs-lbl">Seiten gelesen</span></div>
+                    <div><span class="vs-num">{pages_read} / {total_pages}</span><span class="vs-lbl">Quellseiten im Kontext</span></div>
                     <div><span class="vs-num">{fmt(result.tokens_prompt)}</span><span class="vs-lbl">Tokens statt ≈{fmt(full_tokens)}</span></div>
                     <div><span class="vs-num">{result.latency_ms / 1000:.1f} s</span><span class="vs-lbl">Antwortzeit</span></div>
                 </div>
@@ -1561,6 +1575,9 @@ with tab_factcheck:
                 t3.metric("Output-Tokens", fmt(result.tokens_completion))
                 st.markdown('<div class="claim-stage-label">Ausgabe im offiziellen OST-Format</div>', unsafe_allow_html=True)
                 st.json(result.to_official_dict(), expanded=False)
+                if result.retrieval_query_metadata.get("embedding"):
+                    st.caption("Reproduzierbarkeit der experimentellen Suche")
+                    st.json(result.retrieval_query_metadata["embedding"], expanded=False)
 
             with st.expander("Faktencheck-Karte zum Teilen", expanded=False):
                 card_quote = primary_quote or "Keine Stelle im Büchlein bestätigt oder widerlegt diese Behauptung."
@@ -1595,8 +1612,9 @@ with tab_benchmark:
 
     st.markdown("### Benchmark-Ergebnisse")
     st.markdown(
-        "Offizieller OST-Datensatz (1'495 Paare, 60 Büchlein, ~66 % sprachübergreifend). Der **Test-Split** umfasst "
-        "5 Abstimmungstermine, die nie zum Entwickeln verwendet wurden. Alle Zahlen stammen aus gespeicherten Läufen in `results/`."
+        "Gespeicherte OST-Auswertungen. Die bisherigen Datensatztermine einschliesslich des früheren Test-Splits "
+        "sind beobachtete Dev-/Regressionsdaten und haben die Entwicklung beeinflusst. "
+        "Die Zahlen sind kein unabhängiger Generalisierungsnachweis."
     )
 
     def _kpi(value: str, label: str, color: str) -> str:
@@ -1630,11 +1648,11 @@ with tab_benchmark:
     if kpis:
         st.markdown(f'<div class="kpi-grid">{"".join(kpis)}</div>', unsafe_allow_html=True)
     else:
-        st.info("Noch keine Test-Läufe mit den aktuellen Standardeinstellungen in results/.")
+        st.info("Noch keine gespeicherten Regressionsläufe mit den aktuellen Standardeinstellungen in results/.")
 
     # ── Core finding: selected context beats the full booklet ───────────────
     if len(comparison) >= 2:
-        st.markdown("##### Ganzes Büchlein vs. ausgewählter Kontext (Advanced-Task, gleiche 150 Test-Paare)")
+        st.markdown("##### Ganzes Büchlein vs. ausgewählter Kontext (Advanced-Task, gleiche 150 beobachtete Paare)")
 
         def bar_chart(title: str, field: str, fmt, max_value: float, note: str) -> str:
             rows = []
@@ -1684,7 +1702,7 @@ with tab_benchmark:
 
     # ── Table view of all configurations ────────────────────────────────────
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-    st.markdown("##### Alle Konfigurationen (Test-Split)")
+    st.markdown("##### Alle Konfigurationen (historischer Test-Split, inzwischen beobachtet)")
     if test_runs:
         st.dataframe(
             [
@@ -1708,7 +1726,7 @@ with tab_benchmark:
 
     # Live Evaluation
     with st.expander("Live-Benchmark ausführen", expanded=False):
-        datasets = {"OST Test-Split": config.DATA_DIR / "hf" / "test.jsonl", "OST Dev-Split": config.DATA_DIR / "hf" / "dev.jsonl", "Demo (Juni 2026)": config.BENCHMARK_PATH}
+        datasets = {"OST Regression (früherer Test-Split)": config.DATA_DIR / "hf" / "test.jsonl", "OST Dev-Split": config.DATA_DIR / "hf" / "dev.jsonl", "Demo (Juni 2026)": config.BENCHMARK_PATH}
         datasets = {k: v for k, v in datasets.items() if v.exists()}
         c_ds, c_task, c_strat, c_lim = st.columns([2, 1, 1, 1])
         with c_ds:

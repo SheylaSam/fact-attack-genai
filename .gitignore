@@ -29,3 +29,7 @@ build/
 # Local GenAI experiment indexes and model caches
 .rag-index/
 .rag-models/
+
+# Private PDFs uploaded through the interactive application
+track_2a/data/booklets/custom_*.pdf
+track_2a/data/booklets/.upload-*.tmp

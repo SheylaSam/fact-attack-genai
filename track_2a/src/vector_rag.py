@@ -16,13 +16,16 @@ class E5Encoder:
     def __init__(self, model_name=None, revision=None, chunk_tokens=384, overlap=64):
         from sentence_transformers import SentenceTransformer
         self.model_name = model_name or os.getenv('RAG_EMBEDDING_MODEL', 'intfloat/multilingual-e5-small')
-        self.model = SentenceTransformer(self.model_name, revision=revision or os.getenv('RAG_MODEL_REVISION'),
+        model_revision = revision or os.getenv('RAG_MODEL_REVISION')
+        if model_revision is None and self.model_name == 'intfloat/multilingual-e5-small':
+            model_revision = '614241f622f53c4eeff9890bdc4f31cfecc418b3'
+        self.model = SentenceTransformer(self.model_name, revision=model_revision,
                                          trust_remote_code=False, device=os.getenv('RAG_DEVICE', 'cpu'))
         resolved = getattr(self.model[0].auto_model.config, '_commit_hash', None)
         if not resolved:
             from huggingface_hub import try_to_load_from_cache
             cached = try_to_load_from_cache(self.model_name, 'config.json',
-                                            revision=revision or os.getenv('RAG_MODEL_REVISION'))
+                                            revision=model_revision)
             if isinstance(cached, str):
                 resolved = Path(cached).parent.name
         if not resolved and Path(self.model_name).is_dir():
@@ -37,6 +40,7 @@ class E5Encoder:
         if not resolved:
             raise ValueError('Cannot determine model revision; use a pinned/cached model')
         self.identity = {'model': self.model_name, 'revision': resolved, 'sentence_transformers': version('sentence-transformers'),
+                         'torch': version('torch'), 'transformers': version('transformers'), 'tokenizers': version('tokenizers'),
                          'prefixes': ['query: ', 'passage: '], 'normalized': True,
                          'chunk_tokens': chunk_tokens, 'overlap': overlap}
         if not 0 <= overlap < chunk_tokens:

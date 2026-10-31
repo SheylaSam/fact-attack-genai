@@ -95,6 +95,49 @@ class VectorRetrievalTests(unittest.TestCase):
         self.assertEqual(engine._vector_retrievers, {})
         self.assertIsNone(engine._vector_encoder)
 
+    def test_open_index_limit_closes_evicted_client(self):
+        from src.apertus_client import ApertusClient
+        from src.inference import ClaimVerificationEngine
+        engine = ClaimVerificationEngine(strategy='vector', apertus_client=ApertusClient(mock=True), max_vector_indexes=1)
+        data = {'paragraphs': self.paras, 'pages': self.paras, 'full_text': 'text', 'retriever': PassageRetriever(self.paras)}
+        first = VectorRetriever(self.paras, encoder=Encoder())
+        second = VectorRetriever(self.paras, encoder=Encoder())
+        try:
+            with patch.object(engine, '_ready_booklet_data', return_value=data), \
+                 patch('src.vector_rag.VectorRetriever', side_effect=[first,second]), \
+                 patch('src.vector_rag.E5Encoder', return_value=Encoder()), \
+                 patch.object(first,'close',wraps=first.close) as closed, \
+                 patch('src.config.EVIDENCE_POLICY','legacy'):
+                engine.verify_claim('loyer','first.pdf',top_k=1)
+                data['paragraphs'] = [{**p, 'text': p['text'] + ' changed source'} for p in self.paras]
+                engine.verify_claim('loyer','second.pdf',top_k=1)
+                closed.assert_called_once()
+                self.assertEqual(len(engine._vector_retrievers),1)
+        finally:
+            engine.close()
+
+    def test_identical_booklet_aliases_share_one_persistent_index_and_closed_engine_cannot_reopen(self):
+        from src.apertus_client import ApertusClient
+        from src.inference import ClaimVerificationEngine
+        engine = ClaimVerificationEngine(strategy='vector', apertus_client=ApertusClient(mock=True))
+        data = {'paragraphs': self.paras, 'pages': self.paras, 'full_text': 'text', 'retriever': PassageRetriever(self.paras)}
+        with tempfile.TemporaryDirectory() as directory:
+            r = VectorRetriever(self.paras, encoder=Encoder(), index_dir=directory)
+            try:
+                with patch.object(engine, '_ready_booklet_data', return_value=data), \
+                     patch('src.vector_rag.VectorRetriever', return_value=r) as factory, \
+                     patch('src.vector_rag.E5Encoder', return_value=Encoder()), \
+                     patch('src.config.EVIDENCE_POLICY','legacy'):
+                    engine.verify_claim('loyer','original.pdf',top_k=1)
+                    engine.verify_claim('loyer','identical-upload.pdf',top_k=1)
+                    self.assertEqual(factory.call_count,1)
+                    engine.close()
+                    with self.assertRaisesRegex(RuntimeError,'Engine is closed'):
+                        engine.verify_claim('loyer','original.pdf',top_k=1)
+                    self.assertEqual(factory.call_count,1)
+            finally:
+                engine.close()
+
     def test_engine_routes_to_vector_not_part_heuristic(self):
         from src.apertus_client import ApertusClient
         from src.inference import ClaimVerificationEngine

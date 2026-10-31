@@ -5,6 +5,8 @@ page-attributed evidence extraction, and Apertus LLM inference.
 """
 
 import hashlib
+from collections import OrderedDict
+from importlib.metadata import version as distribution_version, PackageNotFoundError
 import json
 import re
 import sys
@@ -142,9 +144,22 @@ _PART_LABELS = {"summary": "Overview / summary", "detail": "Official explanation
                   "legal_text": _LEGAL_TEXT_SECTION}
 
 
+def _parser_cache_signature() -> str:
+    packages = {}
+    for package in ('pypdf', 'PyMuPDF', 'pypdfium2'):
+        try:
+            packages[package] = distribution_version(package)
+        except PackageNotFoundError:
+            packages[package] = 'not-installed'
+    source = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
+              for name in ('pdf_parser.py', 'text_utils.py', 'page_pool.py', 'evidence.py')}
+    identity = {'packages': packages, 'source': source, 'python': sys.version.split()[0]}
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def _cache_name(pdf_path: Path) -> str:
     digest = hashlib.sha1(pdf_path.read_bytes()).hexdigest()[:16]
-    return f"{digest}_p{config.PASSAGE_CHARS}_v{_PARSE_CACHE_VERSION}.json"
+    return f"{digest}_p{config.PASSAGE_CHARS}_v{_PARSE_CACHE_VERSION}_{_parser_cache_signature()}.json"
 
 
 def is_parse_cached(pdf_path: Union[str, Path]) -> bool:
@@ -283,6 +298,7 @@ class ClaimVerificationEngine:
         strategy: str = config.DEFAULT_STRATEGY,
         apertus_client: Optional[ApertusClient] = None,
         prompt_mode: str = config.PROMPT_MODE,
+        max_vector_indexes: int = 3,
     ):
         self.strategy = strategy
         self.prompt_mode = prompt_mode
@@ -291,13 +307,18 @@ class ClaimVerificationEngine:
         self._source_pages = None
         self._source_pages_lock = threading.Lock()
         self._query_translator = None
-        self._vector_retrievers = {}
+        if type(max_vector_indexes) is not int or max_vector_indexes < 1:
+            raise ValueError('max_vector_indexes must be positive')
+        self.max_vector_indexes = max_vector_indexes
+        self._vector_retrievers = OrderedDict()
         self._vector_encoder = None
         self._vector_lock = threading.Lock()
+        self._closed = False
 
     def close(self):
         """Release optional local vector indexes after an experiment."""
         with self._vector_lock:
+            self._closed = True
             for retriever in self._vector_retrievers.values():
                 retriever.close()
             self._vector_retrievers.clear()
@@ -560,13 +581,19 @@ class ClaimVerificationEngine:
                 from src.vector_rag import E5Encoder, VectorRetriever
                 content_hash = hashlib.sha256(json.dumps(booklet_data["paragraphs"], sort_keys=True,
                     ensure_ascii=False, default=str).encode()).hexdigest()
-                key = (str(Path(booklet_pdf).resolve()), content_hash)
+                key = content_hash
                 with self._vector_lock:
+                    if self._closed:
+                        raise RuntimeError('Engine is closed; create a new engine before verification')
                     if key not in self._vector_retrievers:
+                        while len(self._vector_retrievers) >= self.max_vector_indexes:
+                            _, old_retriever = self._vector_retrievers.popitem(last=False)
+                            old_retriever.close()
                         if self._vector_encoder is None:
                             self._vector_encoder = E5Encoder()
                         self._vector_retrievers[key] = VectorRetriever(
                             booklet_data["paragraphs"], encoder=self._vector_encoder)
+                    self._vector_retrievers.move_to_end(key)
                     candidate_paras = self._vector_retrievers[key].retrieve(
                         claim, top_k=top_k, target_vote=vote, mode=strat,
                         exclude_sections=opposing_sections(claim) if config.SPEAKER_AWARE else None,
