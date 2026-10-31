@@ -26,10 +26,11 @@ bekam nur eine kleine Schnittstelle „prüfen mit vorgegebenen Passagen“.
 | Anfrage-Deckel | `budget.py` | Harte Obergrenze der HTTP-Anfragen pro Prüfung, mit Journal. |
 | Protokoll | `trace.py` | Ein Ereignis pro Knoten und Werkzeugaufruf, im Speicher und als JSONL. |
 | CLI | `__main__.py`, `cli_format.py` | Aufruf, nummerierte Schrittliste, Ergebnis, Exit-Code. |
-| Einstellungen | `settings.py` | `MAX_STEPS = 5`, `MAX_REQUESTS = 12`, `MAX_PASSAGES = 10`, Timeout 180 s, Werkzeugmodus. |
+| Einstellungen | `settings.py` | `MAX_STEPS = 5`, `MAX_REQUESTS = 12`, `MAX_PASSAGES = 10`, Timeout 180 s, höchstens 1024 Antwort-Tokens pro Entscheidung (`LLM_MAX_TOKENS`), Werkzeugmodus. |
 
 Die Werkzeuge heißen `suche_vorlagen` (Vektorsuche über alle Vorlagen), `suche_passagen` (bewährte
-Suche in einer Vorlage), `suche_passagen_vektor` (Vektorsuche in einer Vorlage), `pruefen`,
+Suche im ganzen Büchlein der Vorlage; Stellen zu ihrem Titel kommen zuerst, Seiten anderer Vorlagen
+desselben Büchleins sind möglich), `suche_passagen_vektor` (Vektorsuche in einer Vorlage), `pruefen`,
 `rueckfrage` und `quelle_fehlt`. Die sechs Ausgänge sind `gestuetzt`, `widersprochen`,
 `nicht_belegt`, `rueckfrage`, `quelle_fehlt` und `technischer_fehler`. Ein technischer Fehler
 (API, Budget, Schrittgrenze, Ausnahme) wird nie als `nicht_belegt` ausgegeben.
@@ -53,7 +54,8 @@ START → decide → act ─┬─→ decide      Suchergebnis oder abgelehnte A
 - **decide:** Apertus bekommt die Behauptung (als Nutzernachricht, nie im Systemprompt) und wählt
   ein Werkzeug. Im Modus `json` schreibt das Modell `{"tool": ..., "args": {...}}`, das gegen die
   Werkzeugschemas validiert wird. Eine ungültige Aktion geht als Beobachtung zurück und zählt als
-  Suchschritt.
+  Suchschritt. Bricht die Antwort im Denkanteil ab (`<|inner_prefix|>` ohne `<|inner_suffix|>`), ist
+  sie keine Aktion, auch wenn das Nachdenken JSON enthält; der Denktext geht nicht in den Verlauf.
 - **act:** führt das Suchwerkzeug aus oder nimmt eine Endaktion (`pruefen`, `rueckfrage`,
   `quelle_fehlt`) nach Prüfung der Argumente an. Die Fundstellen kommen in den Passagenpool.
 - **Schrittgrenze:** höchstens 5 Suchschritte; danach wird der Entscheider einmal gefragt und
@@ -61,9 +63,15 @@ START → decide → act ─┬─→ decide      Suchergebnis oder abgelehnte A
   technischer Fehler („Schrittgrenze“).
 - **verify:** Der bewährte NLI-Pfad prüft die Behauptung gegen den Passagenpool der gewählten
   Vorlage (eine Apertus-Anfrage).
-- **check_evidence:** Ein Zitat bleibt nur, wenn es normalisiert im PDF-Text seiner Seite steht.
-  Hat ein „gestützt“ oder „widersprochen“ kein gültiges Zitat, wird daraus „nicht belegt“ mit dem
-  Hinweis „Urteil ohne prüfbaren Beleg verworfen“.
+- **check_evidence:** Ein Zitat bleibt nur, wenn es normalisiert im PDF-Text seiner Seite oder in
+  einem der PDF-Textblöcke dieser Seite steht. Der bewährte Pfad zitiert unter der Standard-Policy
+  `raw_pages_and_blocks` ganze Seiten und Textblöcke; ein Block steht oft nicht zusammenhängend im
+  Seitentext, weil Randtitel in seine Zeilen laufen. Hat ein „gestützt“ oder „widersprochen“ kein
+  gültiges Zitat, wird daraus „nicht belegt“ mit dem Hinweis „Urteil ohne prüfbaren Beleg verworfen“.
+  Die Seiten liest die Kontrolle wie der bewährte Pfad seine Belege (Schnellparse, gespeicherte
+  Quellseiten, sonst das PDF selbst). Hat eine zitierte Seite auch dann keinen lesbaren PDF-Text, endet
+  der Lauf als `technischer_fehler`, nie als „nicht belegt“. `EVIDENCE_POLICY=legacy` lehnt der Agent
+  vor jedem Modellaufruf als `technischer_fehler` ab, weil die Zitate dort kein Originaltext sind.
 
 Die Kontrolle prüft nur, **dass** ein Zitat im PDF steht, nicht, ob es zur Behauptung passt.
 
@@ -163,8 +171,8 @@ der CLI steht in `agent_stage1_runs.json` unter `steps_text`.
 ```
 
 Der Agent hat eine Vorlage geraten. Die Behauptung sagt nicht, ob die Eigenbedarfs- oder die
-Untermiete-Vorlage vom 24.11.2024 gemeint ist. Die Ergebnisliste von `suche_vorlagen` wird im
-Protokoll nur als Kopfzeile gezeigt; **offline nachgerechnet** (derselbe Index, dieselbe Anfrage
+Untermiete-Vorlage vom 24.11.2024 gemeint ist. Die Ergebnisliste von `suche_vorlagen` stand im
+Protokoll dieses Laufs nur als Kopfzeile; **offline nachgerechnet** (derselbe Index, dieselbe Anfrage
 des Agenten, kein Modellaufruf) lag Eigenbedarf mit Score 0,873 und 15 Treffern auf Rang 1 und
 Untermiete mit 0,866 und 15 Treffern auf Rang 2. Der Agent suchte nur in Rang 1, prüfte und gab
 „gestützt“ mit Belegen von S. 8, 41 und 42 des Eigenbedarf-Kapitels aus. Das ist der Fall, den
@@ -176,6 +184,13 @@ Rangfolge hängt vom Suchtext ab, den das Modell formuliert: Die Kontrollanfrage
 
 Ein einzelner Lauf sagt nichts über die Häufigkeit. Er genügt aber als Beleg, dass die Regel im
 Prompt allein die Rückfrage nicht sichert.
+
+„4 gültige Belege aus 5 Zitaten“: Das verworfene Zitat war echter PDF-Text, der Textblock von S. 41
+„Aus all diesen Gründen empfehlen Bundesrat und Parlament, die Änderung des Obligationenrechts …
+anzunehmen.“ Die damalige Belegkontrolle verglich nur mit dem Seitentext, in dem die Randtitel
+„Empfehlung von Bundesrat und Parlament“ zwischen den Zeilen dieses Satzes stehen, und verwarf es zu
+Unrecht. Offline mit der korrigierten Kontrolle nachgeprüft (die gespeicherten Zitate des Laufs, keine
+Anfrage): 5 von 5 gültig. Der Lauf wurde nicht wiederholt.
 
 ### Lauf 2: Eindeutige Behauptung, Quelle und Beleg gefunden
 
@@ -200,6 +215,12 @@ Die richtige Vorlage stand offline nachgerechnet klar vorn (Score 0,892, 23 Tref
 Satz mit den 150 Diensttagen. Die Belege von S. 1 (Titelseite) und S. 24 (Inhaltsübersicht der
 Vorlage) sind wörtlich im PDF, tragen aber nichts zur Aussage bei: Die Belegkontrolle prüft das
 Vorhandensein, nicht die Relevanz.
+
+Das verworfene fünfte Zitat war ausgerechnet der Kernsatz, der Textblock von S. 26 „Wer in den
+Zivildienst wechselt, muss neu mindestens 150 Zivildiensttage leisten …“. Wie in Lauf 1 ist er echter
+PDF-Text, den die damalige Kontrolle nur gegen den durch Randtitel unterbrochenen Seitentext prüfte.
+Offline mit der korrigierten Kontrolle nachgeprüft (gespeicherte Zitate, keine Anfrage): 5 von 5
+gültig. Der Lauf wurde nicht wiederholt.
 
 ### Lauf 3: `quelle_fehlt` ohne Suche
 
@@ -232,7 +253,8 @@ geschrieben und synchronisiert, bevor die Anfrage gesendet wird. Keine Bodies, k
 
 Die Zeilenzahl stimmt mit den Protokollereignissen überein, die Tokens verbuchen (Entscheidungen
 und Prüfung); keiner der Läufe endete mit einem Fehler. Mit dem Smoke
-(`agent_tool_smoke.journal.jsonl`, 6 Anfragen) hat Stufe 1 damit 15 bezahlte Anfragen verbraucht.
+(`agent_tool_smoke.journal.jsonl`, 6 Anfragen) hat Stufe 1 damit 15 Anfragen an den Endpunkt
+gesendet; 3 davon (die nativen Smoke-Anfragen) lehnte der Endpunkt mit HTTP 400 ab.
 Der Deckel zählt die Anfragen an den Apertus-Endpunkt auf beiden Wegen (Agent-LLM über httpx und
 NLI-Client über `http.client`), Wiederholungen eingeschlossen. Anfragen an andere Dienste, etwa
 LangSmith-Uploads, zählt er nicht.
@@ -287,7 +309,9 @@ genügen, folgt aus der Dokumentation von LangChain und ist hier ungeprüft.
 - **Keine Nachsuche.** Lautet die Prüfung „nicht belegt“, sucht der Agent nicht noch einmal mit
   anderen Mitteln. `suche_passagen_vektor` existiert, wurde aber in keinem der drei Läufe gewählt.
 - **Keine Oberfläche.** Die Schrittliste der CLI ist das einzige Fenster auf den Lauf. Die Schrittzeile
-  von `suche_vorlagen` zeigt nur die Kopfzeile, nicht die Kandidaten.
+  von `suche_vorlagen` zeigt die drei besten Kandidaten mit Score und Treffern; das Protokoll hält im
+  Feld `data` fest, was das Modell sah (alle Kandidaten, Passagen mit Seite und Poolstatus). Die
+  Protokolle der drei echten Läufe stammen von davor und haben dieses Feld nicht.
 - **Keine Qualitätsmessung.** Drei Einzelläufe; Quelle der Erwartung ist unsere Einschätzung, kein
   gesperrtes Gold. Kein Vergleich mit B0.
 - **Rückfrage und `quelle_fehlt` sind nicht verlässlich** (Lauf 1, Lauf 3, Smoke Situation b). Eine
@@ -303,7 +327,10 @@ genügen, folgt aus der Dokumentation von LangChain und ist hier ungeprüft.
 
 Die Vektorsuche ersetzt die bewährte Suche innerhalb eines bekannten Büchleins nicht, weil der
 Ersatz gemessen schlechter war (Macro-F1 1.00 gegen 0.85 und 0.72 auf den 42 Dev-Fällen, siehe
-[ERGEBNISSE_NLI42.md](ERGEBNISSE_NLI42.md)). Sie kommt dorthin, wo die bewährte Suche blind ist:
+[ERGEBNISSE_NLI42.md](ERGEBNISSE_NLI42.md)). Einschränkung: Das sind Dev-/Regressionswerte, gemessen
+mit dem JSON-Prompt auf eingefrorenen Kontexten, und alle 42 Behauptungen nennen ihren Abschnitt
+(erkannte Abschnitts-Cues). Freie Behauptungen, wie sie der Agent bekommt, waren nicht dabei; für sie
+ist der Abstand nicht gemessen. Die Vektorsuche kommt dorthin, wo die bewährte Suche blind ist:
 bei der Quellenfindung über alle Vorlagen aller Termine, die heute ein Mensch per Dropdown
 erledigt (gebaut als `suche_vorlagen`), und später bei der Nachsuche nach „nicht belegt“ (Stufe 3).
 Ob die Vektorsuche den Gesamtwert verbessert, ist nicht gezeigt und wird erst in Stufe 5 gemessen.

@@ -98,10 +98,11 @@ kostenpflichtige NLI-Anfragen in dieser Phase. [Start und Grenzen](UI_UND_PYTHON
 
 ## Agentenschicht Stufe 1
 
-Vollständige Suite: **495 Tests bestanden**, 112 Subtests, 8 Warnungen (bestehende Fork-/
-Thread-Warnungen in den Tests), CPython 3.12.13 auf macOS ARM64, Python aus `.venv312` mit dem
-Hash-Lock. Das sind die 286 Tests von vor der Agentenschicht (inklusive der Byte-Identität der
-Apertus-Requests in `tests/test_apertus_client.py`) plus 209 neue in `tests/test_agent_*.py`;
+Vollständige Suite: **495 Tests bestanden**, 112 Subtests, 8 bestehende Warnungen (fünf
+Deprecation-Warnungen der SWIG-Typen von PyMuPDF, drei Fork-Warnungen in `tests/test_page_pool.py`),
+CPython 3.12.13 auf macOS ARM64, Python aus `.venv312` mit dem Hash-Lock. Das sind die 286 Tests
+von vor der Agentenschicht (inklusive der Byte-Identität der Apertus-Requests in
+`tests/test_apertus_client.py`) plus 209 neue in `tests/test_agent_*.py`;
 `requirements.txt` und der Wettbewerbspfad sind unverändert. Docker/Python-3.12.6-Linux wurde
 nicht reproduziert.
 
@@ -119,6 +120,16 @@ Qualitätsmessung:
   unter `agent_stage1_traces/`.
 - Die Artefakte (Ergebnisse, Journale, Protokolle) wurden auf Schlüsselmaterial geprüft: keines
   gefunden.
+- In beiden `gestuetzt`-Läufen verwarf die damalige Belegkontrolle eines von fünf Zitaten zu Unrecht:
+  einen echten Textblock des PDF, den sie nur gegen den Seitentext prüfte. Offline mit der
+  korrigierten Kontrolle nachgeprüft (gespeicherte Zitate, keine Anfrage): je 5 von 5 gültig.
+
+Nach den Korrekturen des Abschluss-Reviews (Belegkontrolle mit Textblöcken, abgeschnittener Denkanteil,
+Protokolldaten, CLI-Aufräumen): Vollständige Suite **517 Tests bestanden**, 131 Subtests, dieselben
+8 Warnungen. Mit einer Simulation der Wettbewerbsumgebung (Pakete, die `requirements-lock.txt` nicht
+enthält, wie httpx, LangGraph, LangChain und Qdrant, werden beim Import blockiert) laden alle
+`tests/test_agent_*.py` und werden übersprungen, wo die Pakete fehlen: 231 Tests, 170 übersprungen,
+keine Fehler. Ein echter Lauf mit Docker und `requirements-lock.txt` steht weiter aus.
 
 Ohne Qualitätsaussage: Es gibt noch kein gesperrtes Testset und keinen Vergleich mit dem
 bewährten Pfad. Details, Schrittlisten und Grenzen: [AGENT_STUFE1.md](AGENT_STUFE1.md).
