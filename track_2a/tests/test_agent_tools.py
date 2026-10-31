@@ -251,7 +251,9 @@ class VoteIdTests(unittest.TestCase):
         tools, index, engine = make_tools(engine=FakeEngine([passage(2)]), fixed_vote_id=V1.vote_id)
         names = [spec['name'] for spec in tools.available_specs()]
         self.assertNotIn('suche_vorlagen', names)
-        self.assertEqual(names, [spec['name'] for spec in TOOL_SPECS if spec['name'] != 'suche_vorlagen'])
+        self.assertNotIn('rueckfrage', names)  # a fixed vote leaves nothing to ask about: it could never be valid
+        self.assertIn('quelle_fehlt', names)
+        self.assertEqual(names, ['suche_passagen', 'suche_passagen_vektor', 'pruefen', 'quelle_fehlt'])
         hidden = tools.run('suche_vorlagen', {'anfrage': 'Miete'})
         self.assertTrue(hidden.error)
         self.assertEqual(index.vote_calls, [])

@@ -30,6 +30,7 @@ ERROR_CHARS = 300
 SCORE_HINT = "Die Scores liegen bei diesem Modell eng beieinander; die Trefferzahl trennt oft besser."
 
 TERMINAL_TOOLS = frozenset({"pruefen", "rueckfrage", "quelle_fehlt"})
+FIXED_VOTE_HIDDEN_TOOLS = frozenset({"suche_vorlagen", "rueckfrage"})  # nothing to find or to choose between
 
 _Query = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_QUERY_CHARS)]
 _VoteId = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_ID_CHARS)]
@@ -186,7 +187,7 @@ class AgentTools:
     """The agent's search tools over one `SourceIndex` and one engine; one instance per check (it holds the pool).
 
     `engine` provides `retrieve_passages` (the proven search of `ClaimVerificationEngine`). With `fixed_vote_id` the
-    vote is given: `suche_vorlagen` is not offered and every other tool accepts only that vote.
+    vote is given: `suche_vorlagen` and `rueckfrage` are not offered and every other tool accepts only that vote.
     """
 
     def __init__(self, index: SourceIndex, engine, booklets_dir: Path, *, fixed_vote_id: Optional[str] = None):
@@ -206,8 +207,8 @@ class AgentTools:
         }
 
     def available_specs(self) -> List[dict]:
-        return [copy.deepcopy(spec) for spec in TOOL_SPECS
-                if not (self.fixed_vote_id is not None and spec["name"] == "suche_vorlagen")]
+        hidden = FIXED_VOTE_HIDDEN_TOOLS if self.fixed_vote_id is not None else frozenset()
+        return [copy.deepcopy(spec) for spec in TOOL_SPECS if spec["name"] not in hidden]
 
     def check_vote_id(self, vote_id: str) -> VoteRef:
         """The vote of this id; ValueError that names the valid ids otherwise."""
