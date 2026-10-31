@@ -82,3 +82,16 @@ def test_history_filters_are_combined_inclusive_utc_and_read_only():
     assert filter_checks(records, start=date(2026, 11, 1), end=day) == []
     assert len(json.loads(export_checks(found))['checks']) == 1
     assert records == before
+
+
+def test_origin_filter_and_sort_preserve_records_and_respect_offsets():
+    from src.check_history import filter_checks, sort_checks
+    rows = [
+        {'id': 'a', 'origin': 'saved_demo', 'created_at': '2026-10-31T01:00:00+02:00', 'result': {'claim': 'Zulu'}},
+        {'id': 'b', 'origin': 'live', 'created_at': '2026-10-31T00:00:00+00:00', 'result': {'claim': 'Alpha'}},
+    ]
+    assert [r['id'] for r in filter_checks(rows, origin='live')] == ['b']
+    assert [r['id'] for r in sort_checks(rows)] == ['b', 'a']
+    assert [r['id'] for r in sort_checks(rows, 'oldest')] == ['a', 'b']
+    assert [r['id'] for r in sort_checks(rows, 'claim')] == ['b', 'a']
+    assert [r['id'] for r in rows] == ['a', 'b']

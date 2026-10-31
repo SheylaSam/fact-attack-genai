@@ -304,3 +304,32 @@ def test_batch_retry_only_failed_keeps_history_and_survives_language_change(isol
         assert calls == [*statements, statements[1]]
         remote.assert_not_called()
     st.cache_resource.clear()
+
+
+def test_history_origin_sort_and_localized_report_use_filtered_records(isolated_history):
+    import json
+    from src.check_history import save_check
+    from src.check_report import render_check_report
+    sample = json.loads((APP.parent / 'data/demo_cases.json').read_text())['cases'][0]
+    for claim, notice in [('Alpha Demo', 'saved demo'), ('Beta Live', None)]:
+        save_check(isolated_history, result={**sample['cached_result'], 'claim': claim},
+                   source_path=APP.parent / 'data/booklets/2026-06-14_fr.pdf',
+                   date='2026-06-14', language='fr', vote=None, notice=notice)
+    with patch('src.check_report.render_check_report', wraps=render_check_report) as reports, \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        app.selectbox(key='history_order').set_value('Älteste zuerst').run()
+        assert not app.exception
+        assert app.selectbox(key='history_selected').options[0].endswith('Alpha Demo')
+        reports.reset_mock()
+        app.selectbox(key='history_origin').set_value('Liveantworten').run()
+        assert len(app.selectbox(key='history_selected').options) == 1
+        assert all(record['origin'] == 'live' for call in reports.call_args_list for record in call.args[0])
+        app.selectbox(key='ui_language').set_value('it').run()
+        assert not app.exception
+        assert reports.call_args.args[1] == 'it'
+        assert app.selectbox(key='history_origin').value == 'Liveantworten'
+        app.button(key='reset_history_filters').click().run()
+        assert len(app.selectbox(key='history_selected').options) == 2
+        assert app.selectbox(key='history_origin').value == 'Alle Antwortarten'
+        remote.assert_not_called()

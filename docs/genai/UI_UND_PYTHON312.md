@@ -468,3 +468,57 @@ benannt, damit ausgeschaltete Verlaufsspeicherung nicht als Fehler erscheint.
 ![Simulierter Lauf mit Teilfehler](assets/streamlit-batch-summary.png)
 
 ![Simulierte erfolgreiche Wiederholung und Export](assets/streamlit-batch-retry-export.png)
+
+
+## Zehn weitere Schritte: Berichte und Verlauf
+
+1. **Einzelbericht:** Nach einer Einzelprüfung steht ein HTML-Download bereit,
+   unabhängig davon, ob der Verlauf aktiviert ist.
+2. **Sammelbericht für den Batch:** Enthält alle aktuellen Ergebnisse, Fehler
+   und Versuchszähler, auch bei einem nur teilweise erfolgreichen Lauf.
+3. **Bericht aus dem Verlauf:** Der ausgewählte Eintrag und die gesamte gefilterte
+   Ansicht lassen sich separat herunterladen; Reihenfolge und Filter werden übernommen.
+4. **Quellennachweis:** Quelldatei, Abstimmungsdatum, Sprache, Vorlage, Strategie,
+   gespeicherter Inhalts-Hash und verfügbarer Bundeskanzlei-Link sind enthalten.
+   Die Berichterstellung behauptet keine erneute Prüfung des PDF-Inhalts.
+5. **Zeitangaben:** Zeitpunkt der Berichtserstellung und Zeitpunkt des gespeicherten/
+   angezeigten Ergebnisses werden getrennt in UTC angegeben. Für alte Snapshots
+   ohne Zeitpunkt steht „Nicht verfügbar“, kein erfundener Prüfzeitpunkt.
+6. **Druckansicht:** Selbstständige UTF-8-HTML-Datei mit A4-Druck-CSS, ohne externe
+   Schriftarten, Bilder, Skripte oder automatisch geladene Netzwerkressourcen.
+   Der Browser kann die Datei drucken oder als PDF speichern. Ein fertiger PDF-
+   Download oder eine automatisiert gerenderte PDF-Datei ist nicht implementiert.
+7. **Berichte auf DE/FR/IT:** Übersetzt werden Beschriftungen und Einordnung,
+   nicht die Behauptung, Zitate oder die Original-Vorlagentitel.
+8. **Verlauf sortieren:** Neueste zuerst, älteste zuerst und Behauptung A–Z.
+   Zeitstempel mit Offset werden zum Sortieren nach UTC umgerechnet. Originaldaten
+   und gespeicherte Ergebnisse bleiben unverändert.
+9. **Antwortart filtern und Fehler trennen:** Live- und Demoantworten können getrennt
+   angezeigt/exportiert werden. Technische Fehler im Sammelbericht erhalten keine
+   fachliche Einordnung und keine angeblichen Belegstellen. Neutrale Antworten
+   exportieren auch bei vorhandenen Restdaten keine Belege.
+10. **Teamtest vorbereiten und Regression:** Die Checkliste in
+    `docs/genai/TEAM_UI_TEST.md` ist bereit. Der tatsächliche Test mit Teammitgliedern
+    wurde nicht durchgeführt und niemand wurde kontaktiert. Die komplette Suite
+    bestand mit **282 Tests plus 6 Subtests**, acht bestehenden Warnungen.
+
+Gezielte Tests prüfen zudem HTML-Escaping von Behauptungen/Zitaten, blockierte
+nicht offizielle Quell-Links, unveränderte Originaldaten, die Berichtssprache,
+Quellennachweise und gefilterte Berichtsinhalte. Ein französischer Demo-Bericht
+wurde im Browser am Kopf sowie im Bereich langer Quellenangaben/Zitate visuell
+geprüft. Die A4-CSS-Regeln sind getestet; eine echte Browser-PDF-Druckausgabe ist
+als manueller Teamtest vorgesehen. Kein neuer Apertus-Aufruf und keine neue
+Qualitätsmessung. Die UI-Sichtprüfung verwendete die isolierte Demo-Datenbank.
+
+Beispieldateien mit ausdrücklich gekennzeichneter gespeicherter Demoantwort:
+[Deutsch](assets/demo-pruefbericht-de.html),
+[Französisch](assets/demo-pruefbericht-fr.html),
+[Italienisch](assets/demo-pruefbericht-it.html).
+Die alte Demoantwort kann historische Extraktionsartefakte enthalten; diese
+werden im Bericht nicht stillschweigend umgeschrieben oder als neue Messung ausgegeben.
+
+Regressionsnachweis: `results/genai/ui_report_regression.json`.
+
+![Französischer Demo-Bericht](assets/streamlit-printable-report.png)
+
+![Bericht-Downloads im Verlauf](assets/streamlit-report-downloads.png)

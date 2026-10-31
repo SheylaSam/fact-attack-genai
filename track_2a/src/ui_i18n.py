@@ -188,6 +188,43 @@ Mehrfachprüfung als CSV|Vérification multiple en CSV|Verifica multipla in CSV
 Der Export enthält auch fehlgeschlagene Aussagen und Versuchszähler. Die Original-PDF-Datei ist nicht enthalten.|L’export contient aussi les affirmations en échec et le nombre de tentatives. Le PDF original n’est pas inclus.|L’esportazione contiene anche le affermazioni non riuscite e il numero di tentativi. Il PDF originale non è incluso.
 Prüfversuche: {n}|Tentatives : {n}|Tentativi: {n}
 """
+_ROWS += """
+Prüfbericht herunterladen (HTML)|Télécharger le rapport (HTML)|Scarica il rapporto (HTML)
+Mehrfachprüfung als Druckbericht (HTML)|Rapport imprimable de vérification multiple (HTML)|Rapporto stampabile della verifica multipla (HTML)
+Diese Prüfung als Druckbericht (HTML)|Rapport imprimable de cette vérification (HTML)|Rapporto stampabile di questa verifica (HTML)
+Gefilterten Verlauf als Druckbericht (HTML)|Rapport imprimable de l’historique filtré (HTML)|Rapporto stampabile della cronologia filtrata (HTML)
+Druckfähige Datei ohne externe Inhalte. Im Browser öffnen und bei Bedarf als PDF drucken.|Fichier imprimable sans contenu externe. Ouvrez-le dans le navigateur et imprimez-le en PDF si nécessaire.|File stampabile senza contenuti esterni. Aprilo nel browser e, se necessario, stampalo in PDF.
+Antwortart|Type de réponse|Tipo di risposta
+Alle Antwortarten|Tous les types de réponse|Tutti i tipi di risposta
+Liveantworten|Réponses en direct|Risposte in tempo reale
+Demoantworten|Réponses de démonstration|Risposte dimostrative
+Sortierung|Tri|Ordinamento
+Neueste zuerst|Les plus récentes d’abord|Prima le più recenti
+Älteste zuerst|Les plus anciennes d’abord|Prima le più vecchie
+Behauptung A–Z|Affirmation A–Z|Affermazione A–Z
+Fact Attack – Prüfbericht|Fact Attack – Rapport de vérification|Fact Attack – Rapporto di verifica
+Vergleicht Aussagen mit dem Abstimmungsbüchlein. Keine allgemeine Wahrheitsprüfung und keine Abstimmungsempfehlung.|Compare les affirmations à la brochure de votation. Ni vérification générale de vérité ni recommandation de vote.|Confronta le affermazioni con l’opuscolo di votazione. Non è una verifica generale della verità né una raccomandazione di voto.
+Bericht erstellt (UTC)|Rapport créé (UTC)|Rapporto creato (UTC)
+Prüfungen|Vérifications|Verifiche
+Im Browser öffnen und über Drucken ausgeben oder als PDF speichern.|Ouvrez dans le navigateur pour imprimer ou enregistrer en PDF.|Apri nel browser per stampare o salvare in PDF.
+Originalzitate bleiben in ihrer Quellensprache. Ein Bericht startet keine neue Prüfung.|Les citations originales conservent leur langue. Un rapport ne lance aucune nouvelle vérification.|Le citazioni originali mantengono la loro lingua. Un rapporto non avvia una nuova verifica.
+Historische Momentaufnahme. Demoantworten und technische Fehler sind gesondert gekennzeichnet.|Instantané historique. Les réponses de démonstration et les erreurs techniques sont indiquées séparément.|Istantanea storica. Le risposte dimostrative e gli errori tecnici sono indicati separatamente.
+Gespeicherte Demoantwort|Réponse de démonstration enregistrée|Risposta dimostrativa salvata
+Gespeicherte Liveantwort|Réponse en direct enregistrée|Risposta in tempo reale salvata
+Prüfung fehlgeschlagen|Échec de la vérification|Verifica non riuscita
+Technischer Fehler – keine Einordnung|Erreur technique – aucune classification|Errore tecnico – nessuna classificazione
+Nicht verfügbar|Non disponible|Non disponibile
+Quelle|Source|Fonte
+Quellendatum|Date de la source|Data della fonte
+Strategie|Stratégie|Strategia
+Gespeichert / angezeigt (UTC)|Enregistré / affiché (UTC)|Salvato / visualizzato (UTC)
+SHA-256 der Quelle|SHA-256 de la source|SHA-256 della fonte
+PDF-Seite|Page PDF|Pagina PDF
+Belegstellen|Passages justificatifs|Passaggi a sostegno
+Keine Belegstelle in diesem Bericht.|Aucun passage justificatif dans ce rapport.|Nessun passaggio a sostegno in questo rapporto.
+Offizielle Originalquelle|Source officielle originale|Fonte ufficiale originale
+Das Ergebnis konnte nicht im Verlauf gespeichert werden.|Le résultat n’a pas pu être enregistré dans l’historique.|Non è stato possibile salvare il risultato nella cronologia.
+"""
 TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
 
 

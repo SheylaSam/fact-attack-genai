@@ -101,7 +101,7 @@ def export_checks(records, format='json'):
     return output.getvalue().encode('utf-8-sig')
 
 
-def filter_checks(records, *, query='', label=None, start=None, end=None):
+def filter_checks(records, *, query='', label=None, start=None, end=None, origin=None):
     """Local, read-only AND filters; date boundaries include the whole UTC day."""
     def normalise(text):
         return ''.join(char for char in unicodedata.normalize('NFKD', text.casefold())
@@ -112,6 +112,8 @@ def filter_checks(records, *, query='', label=None, start=None, end=None):
     found = []
     for record in records:
         result = record['result']
+        if origin is not None and record.get('origin') != origin:
+            continue
         if label is not None and result.get('label') != label:
             continue
         if start or end:
@@ -129,3 +131,15 @@ def filter_checks(records, *, query='', label=None, start=None, end=None):
         if all(term in normalise(text) for term in terms):
             found.append(record)
     return found
+
+
+def sort_checks(records, order='newest'):
+    """Stable local ordering; timestamps compare as UTC instants, not offset strings."""
+    def timestamp(record):
+        value = datetime.fromisoformat(record['created_at'])
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    if order in ('newest', 'oldest'):
+        return sorted(records, key=timestamp, reverse=order == 'newest')
+    if order == 'claim':
+        return sorted(records, key=lambda record: record['result']['claim'].casefold())
+    raise ValueError('Unknown history order')
