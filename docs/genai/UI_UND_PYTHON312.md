@@ -25,8 +25,8 @@ Dev-/Regressionsdaten statt als nie verwendeten Test.
 ![Geprüfte experimentelle Strategieauswahl](assets/streamlit-vector-options.png)
 
 Die Oberfläche läuft lokal unter [127.0.0.1:8501](http://127.0.0.1:8501).
-Starten oder Umschalten der Optionen löst keine NLI-Anfrage aus. Der Prüfen-Button
-und die Beispielbuttons führen wie bisher eine Liveprüfung aus; die vorhandene
+Starten, Beispielauswahl oder Umschalten der Optionen löst keine NLI-Anfrage aus.
+Nur der Prüfen-Button startet eine Liveprüfung; die vorhandene
 CSCS-Konfiguration ist in der laufenden lokalen Vorschau geladen.
 
 ## Zugang ohne kopierte `.env`
@@ -145,3 +145,26 @@ die benötigten UI-Demodateien zu prüfen: die bisherigen Dockerfiles kopieren n
 `demo_cases.jsonl`, während das UI `demo_cases.json` und `demo_votes.json` liest.
 Die Demo-JSON enthält Goldlabels und darf daher nicht unbereinigt in ein Abgabe-
 Image kopiert werden.
+
+
+## Vereinfachter Faktencheck-Ablauf (31. Oktober 2026)
+
+Die Oberfläche beginnt mit einer leeren Behauptung und führt danach zur Quelle.
+Beispiele sind optional eingeklappt und füllen nur Behauptung und offizielle Quelle
+vor. Bei der Beispielauswahl wird ein zuvor ausgewähltes eigenes PDF abgewählt.
+Ein leerer Text deaktiviert den Prüfbutton; nur ein bewusster Klick startet die NLI.
+Die Sprache wird automatisch erkannt, mit manueller Auswahl unter einem Expander.
+
+Die Ergebnisansicht zeigt zuerst die Einordnung und danach die Belegstellen.
+Labelnummern, Tokens, Laufzeit und Konfidenzen stehen unter „Details zur Prüfung“.
+„Nicht geklärt“ beschreibt den geprüften Kontext und behauptet keine vollständige
+Abwesenheit einer Aussage im Dokument. Die Navigation lautet „Faktencheck“,
+„Ergebnisse & Vergleiche“ und „So funktioniert’s“. Der Footer verlinkt den aktuellen
+Entwicklungsbranch und das Originalprojekt getrennt.
+
+Validierung: acht gezielte Streamlit-/Strategietests bestanden, einschliesslich
+Beispielauswahl ohne Inferenz, deaktiviertem Leertext-Button und gespeicherter
+Ergebnisansicht bei blockiertem Live-Aufruf. Keine echte NLI-Anfrage in dieser
+UI-Überarbeitung. Mobile Sichtprüfung im lokalen Browser.
+
+![Vereinfachter Einstieg](assets/streamlit-guided-check.png)

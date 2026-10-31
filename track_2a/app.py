@@ -634,8 +634,8 @@ st.markdown("""
 
     /* ── Hero Title ────────────────────────────────────────────── */
     .hero-section {
-        text-align: center;
-        margin: 0.2rem 0 1rem 0;
+        text-align: left;
+        margin: 0.2rem 0 1.6rem 0;
     }
     .hero-section h1 {
         font-size: 1.7rem;
@@ -654,7 +654,7 @@ st.markdown("""
         font-weight: 400;
         line-height: 1.6;
         max-width: 560px;
-        margin: 0 auto;
+        margin: 0;
         -webkit-text-fill-color: #64748b !important;
     }
     .hero-section p strong {
@@ -903,7 +903,7 @@ st.markdown("""
         border: 1px dashed rgba(255,255,255,0.12);
         border-radius: 16px;
         padding: 1.8rem 2rem;
-        margin-top: 1.7rem;
+        margin-top: 0;
     }
     .outcome-row { display: flex; align-items: center; gap: 10px; margin: 0.7rem 0; color: #cbd5e1; font-size: 0.92rem; }
     .outcome-row strong { color: #f8fafc; }
@@ -1062,6 +1062,24 @@ st.markdown("""
         animation: fadeUp 0.4s ease both;
     }
 
+    .flow-heading {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 1.05rem; font-weight: 700; color: #f1f5f9;
+        margin: 0.6rem 0 0.8rem;
+    }
+    .flow-heading span {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 26px; height: 26px; border-radius: 8px;
+        background: rgba(213,43,30,0.16); color: #ff9b92; font-size: 0.8rem;
+    }
+    .hero-section p, .disclaimer { color: #94a3b8 !important; -webkit-text-fill-color: #94a3b8 !important; }
+    @media (max-width: 640px) {
+        .block-container { padding: 1rem !important; }
+        .topbar-meta { display: none; }
+        .hero-section h1 { font-size: 1.6rem; }
+        .hero-section p { font-size: 0.95rem; }
+        .result-placeholder, .verdict-container { padding: 1.2rem; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1227,7 +1245,7 @@ VERDICTS = {
     0: ("entailment", "✓", "Vom Abstimmungsbüchlein gestützt",
         "Das Büchlein enthält Aussagen, die diese Behauptung stützen."),
     1: ("neutral", "?", "Im Abstimmungsbüchlein nicht geklärt",
-        "Das Büchlein enthält keine Aussage, die diese Behauptung bestätigt oder widerlegt."),
+        "Im geprüften Kontext wurde keine Aussage gefunden, die diese Behauptung bestätigt oder widerlegt."),
     2: ("contradiction", "✗", "Widerspricht dem Abstimmungsbüchlein",
         "Das Büchlein enthält Aussagen, die dieser Behauptung widersprechen."),
 }
@@ -1273,7 +1291,7 @@ def _apply_case(case: dict, set_active: bool = True) -> None:
     st.session_state["claim_input"] = case["claim"]
     st.session_state["claim_lang"] = case["claim_language"].upper()
     st.session_state["active_case"] = case["id"] if set_active else None
-    st.session_state["auto_verify"] = set_active  # one click on an example runs the check
+    st.session_state.pop("uploaded_pdf", None)  # examples always use their official source
 
 
 def find_cached_case(claim: str, booklet_file: str, vote: Optional[str]) -> Optional[dict]:
@@ -1302,9 +1320,7 @@ st.markdown("""
         <span class="brand-text">Fact Attack</span>
     </div>
     <div class="topbar-meta">
-        <span class="topbar-tag">Apertus v1.5 · CSCS Alps</span>
-        <span class="topbar-tag">Track 2A (OST)</span>
-        <div class="topbar-dot" title="Model Online"></div>
+        <span class="topbar-tag">Offizielle Quellen · DE / FR / IT</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -1312,8 +1328,8 @@ st.markdown("""
 # ── Hero Section ─────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="hero-section">
-    <h1>Politische Behauptungen — am Abstimmungsbüchlein geprüft.</h1>
-    <p>Gleicht Kampagnen-Claims mit den <strong>offiziellen Abstimmungsbüchlein</strong> des Bundesrates ab — seitengenau belegt, dreisprachig, nachvollziehbar.</p>
+    <h1>Was steht wirklich im Büchlein?</h1>
+    <p>Prüfe eine politische Behauptung am offiziellen Abstimmungsbüchlein. Mit Belegstelle zum Nachlesen.</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1321,8 +1337,8 @@ st.markdown("""
 # ── Navigation Tabs ──────────────────────────────────────────────────────────
 tab_factcheck, tab_benchmark, tab_methodology = st.tabs([
     "Faktencheck",
-    "Benchmark",
-    "Architektur",
+    "Ergebnisse & Vergleiche",
+    "So funktioniert’s",
 ])
 
 
@@ -1332,11 +1348,32 @@ tab_factcheck, tab_benchmark, tab_methodology = st.tabs([
 with tab_factcheck:
     if "ballot" not in st.session_state:
         _apply_case(DEMO_CASES[0], set_active=False)
+        st.session_state["claim_input"] = ""
+        st.session_state["claim_lang"] = "Automatisch"
+        st.session_state["booklet_lang"] = "DE"
+        st.session_state["vote"] = VOTE_AUTO
 
     col_in, col_out = st.columns([1, 1.12], gap="large")
 
     # ── LEFT: input ──────────────────────────────────────────────────────────
     with col_in:
+        st.markdown('<div class="flow-heading"><span>1</span> Was möchtest du prüfen?</div>', unsafe_allow_html=True)
+        claim = st.text_area(
+            "Behauptung", key="claim_input", height=130,
+            placeholder="Zum Beispiel: Die Vorlage erhöht das Rentenalter auf 67 Jahre.",
+            label_visibility="collapsed",
+        )
+        with st.expander("Keine eigene Behauptung? Beispiel auswählen", expanded=False):
+            st.caption("Ein Beispiel füllt Behauptung und Quelle aus. Die Prüfung startest du anschliessend selbst.")
+            for case in DEMO_CASES:
+                st.button(case["title"], key=f"story_{case['id']}", width="stretch",
+                          on_click=_apply_case, args=(case,))
+        active_case = next((c for c in DEMO_CASES if c["id"] == st.session_state.get("active_case")
+                            and c["claim"] == claim), None)
+        if active_case:
+            st.caption(active_case["story"])
+
+        st.markdown('<div class="flow-heading"><span>2</span> Quelle wählen</div>', unsafe_allow_html=True)
         c_ballot, c_lang = st.columns([1.5, 1])
         with c_ballot:
             selected_ballot_name = st.selectbox("Abstimmung", list(BOOKLET_CATALOG.keys()), key="ballot")
@@ -1358,41 +1395,18 @@ with tab_factcheck:
         selected_vote = st.selectbox("Vorlage", vote_options, key="vote")
         vote = None if selected_vote == VOTE_AUTO else selected_vote
 
-        st.markdown('<div class="claim-stage-label">Beispiele aus dem OST-Datensatz · Klick prüft sofort</div>', unsafe_allow_html=True)
-        primary_cases = [c for c in DEMO_CASES if c["primary"]]
-        for row_start in range(0, len(primary_cases), 2):
-            row_cols = st.columns(2)
-            for col, case in zip(row_cols, primary_cases[row_start:row_start + 2]):
-                with col:
-                    st.button(case["title"], key=f"story_{case['id']}", width="stretch", on_click=_apply_case, args=(case,))
-        with st.expander("Weitere Beispiele", expanded=False):
-            for case in [c for c in DEMO_CASES if not c["primary"]]:
-                st.button(case["title"], key=f"story_{case['id']}", on_click=_apply_case, args=(case,))
-
-        active_case = next((c for c in DEMO_CASES if c["id"] == st.session_state.get("active_case")), None)
-        if active_case:
-            pair = f"{active_case['claim_language'].upper()} → {active_case['booklet_language'].upper()}"
-            st.markdown(f'<div class="story-desc"><strong>{pair}</strong> · {html.escape(active_case["story"])}</div>', unsafe_allow_html=True)
-
-        st.markdown('<div class="claim-stage-label">Behauptung</div>', unsafe_allow_html=True)
-        claim = st.text_area(
-            "Behauptung", key="claim_input", height=110,
-            placeholder="Politische Behauptung hier eingeben (Deutsch, Französisch oder Italienisch)…",
-            label_visibility="collapsed",
-        )
-        c_claim_lang, c_verify = st.columns([1, 2], vertical_alignment="bottom")
-        with c_claim_lang:
-            claim_lang_choice = st.selectbox("Sprache der Behauptung", ["Automatisch", "DE", "FR", "IT"], key="claim_lang")
-        with c_verify:
-            verify_clicked = st.button("Behauptung prüfen", type="primary", width="stretch")
+        with st.expander("Sprache der Behauptung", expanded=False):
+            claim_lang_choice = st.selectbox("Erkennung", ["Automatisch", "DE", "FR", "IT"], key="claim_lang")
+            st.caption("Deutsch, Französisch und Italienisch werden automatisch erkannt. Die Quelle darf eine andere Sprache haben.")
         claim_lang = guess_language(claim) if claim_lang_choice == "Automatisch" else claim_lang_choice.lower()
+        verify_clicked = st.button("Behauptung prüfen", type="primary", width="stretch", disabled=not claim.strip())
+        st.caption("Beim Prüfen werden die Behauptung und ausgewählte Textstellen an Apertus auf CSCS gesendet.")
         st.markdown(
-            '<div class="disclaimer">Prüft nur, ob das offizielle Abstimmungsbüchlein die Behauptung stützt, offenlässt '
-            'oder ihr widerspricht. Kein politischer Rat und keine Abstimmungsempfehlung.</div>',
+            '<div class="disclaimer">Vergleicht die Aussage mit dem Büchlein. Keine allgemeine Wahrheitsprüfung und keine Abstimmungsempfehlung.</div>',
             unsafe_allow_html=True,
         )
 
-        with st.expander("Erweitert: Kontext-Strategie & eigenes PDF", expanded=False):
+        with st.expander("Weitere Optionen: Suche & eigenes PDF", expanded=False):
             experiments = st.checkbox("Vektor-Experimente aktivieren", key="enable_vector_rag")
             options = strategy_options(experiments)
             if st.session_state.get("strategy_option") not in options:
@@ -1408,7 +1422,6 @@ with tab_factcheck:
 
     # ── Verification ─────────────────────────────────────────────────────────
     signature = (claim.strip(), str(pdf_path), vote, strat, claim_lang)
-    verify_clicked = verify_clicked or st.session_state.pop("auto_verify", False)
     if verify_clicked and claim.strip():
         if not pdf_path.exists():
             with col_out:
@@ -1449,13 +1462,13 @@ with tab_factcheck:
             stale = bool(last_check and claim.strip())
             st.markdown(f"""
             <div class="result-placeholder">
-                <div class="claim-stage-label">{'Eingabe geändert' if stale else 'Ergebnis'}</div>
+                <div class="claim-stage-label">{'Eingabe geändert · erneut prüfen' if stale else 'Dein Ergebnis'}</div>
                 <p class="verdict-reasoning">{'«Behauptung prüfen» klicken, um das Ergebnis zu aktualisieren.' if stale else
-                'Wähle links ein Beispiel oder gib eine Behauptung ein. Apertus vergleicht sie mit dem offiziellen Abstimmungsbüchlein:'}</p>
-                <div class="outcome-row"><span class="outcome-dot dot-entailment"></span><strong>Gestützt</strong> — das Büchlein bestätigt die Aussage</div>
-                <div class="outcome-row"><span class="outcome-dot dot-neutral"></span><strong>Nicht geklärt</strong> — das Büchlein sagt dazu nichts</div>
+                'Hier erscheint dein Ergebnis mit der passenden Belegstelle. Gib eine Behauptung ein, wähle die Quelle und starte die Prüfung.'}</p>
+                <div class="outcome-row"><span class="outcome-dot dot-entailment"></span><strong>Gestützt</strong> — passende Aussage gefunden</div>
+                <div class="outcome-row"><span class="outcome-dot dot-neutral"></span><strong>Nicht geklärt</strong> — im geprüften Kontext offen</div>
                 <div class="outcome-row"><span class="outcome-dot dot-contradiction"></span><strong>Widerspruch</strong> — das Büchlein sagt etwas anderes</div>
-                <div class="disclaimer">Jedes Ergebnis wird mit den Seiten des Büchleins belegt, auf die es sich stützt.</div>
+                <div class="disclaimer">Bei gestützten oder widersprochenen Aussagen kannst du die Belegstelle direkt nachlesen.</div>
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -1466,7 +1479,6 @@ with tab_factcheck:
 
             b_data = engine._get_booklet_data(pdf_path)
             total_pages = len(b_data["pages"])
-            full_tokens = int(len(b_data["full_text"]) / 3.7)
             pages_read = len(result.context_pages) if result.context_pages else total_pages
             v_cls, v_icon, v_title, v_desc = VERDICTS[result.label]
 
@@ -1477,16 +1489,10 @@ with tab_factcheck:
             <div class="verdict-container verdict-{v_cls} animate-in">
                 <div class="verdict-label verdict-label-{v_cls}">
                     <span class="verdict-icon icon-{v_cls}">{v_icon}</span>
-                    Label {result.label} · {result.label_name}
+                    Abgleich mit dem offiziellen Büchlein
                 </div>
                 <h3 class="verdict-title">{v_title}</h3>
                 <p class="verdict-reasoning">{v_desc}</p>
-                <div class="verdict-stats">
-                    <div><span class="vs-num">{claim_lang.upper()} → {lang_code.upper()}</span><span class="vs-lbl">Behauptung → Büchlein</span></div>
-                    <div><span class="vs-num">{pages_read} / {total_pages}</span><span class="vs-lbl">Quellseiten im Kontext</span></div>
-                    <div><span class="vs-num">{fmt(result.tokens_prompt)}</span><span class="vs-lbl">Tokens statt ≈{fmt(full_tokens)}</span></div>
-                    <div><span class="vs-num">{result.latency_ms / 1000:.1f} s</span><span class="vs-lbl">Antwortzeit</span></div>
-                </div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1542,13 +1548,14 @@ with tab_factcheck:
                 )
                 st.markdown(f"""
                 <div class="evidence-block animate-in">
-                    <p class="verdict-reasoning">Keine Stelle im Büchlein bestätigt oder widerlegt diese Behauptung.
+                    <p class="verdict-reasoning">Im geprüften Kontext wurde keine bestätigende oder widersprechende Belegstelle gefunden.
                     Apertus hat diese Seiten geprüft:</p>
                     <div class="page-chips">{chips}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-            with st.expander("Konfidenz & Messwerte", expanded=False):
+            with st.expander("Details zur Prüfung", expanded=False):
+                st.caption(f"Behauptung: {claim_lang.upper()} · Quelle: {lang_code.upper()} · {pages_read} von {total_pages} Quellseiten im Kontext")
                 st.markdown(f"""
                 <div style="margin-bottom: 1.2rem;">
                     <div class="conf-row">
@@ -1580,7 +1587,7 @@ with tab_factcheck:
                     st.json(result.retrieval_query_metadata["embedding"], expanded=False)
 
             with st.expander("Faktencheck-Karte zum Teilen", expanded=False):
-                card_quote = primary_quote or "Keine Stelle im Büchlein bestätigt oder widerlegt diese Behauptung."
+                card_quote = primary_quote or "Im geprüften Kontext wurde keine bestätigende oder widersprechende Belegstelle gefunden."
                 card_svg = generate_fact_card_svg(
                     claim=claim, label=result.label, quote=card_quote,
                     page_number=primary_page, proposal_id=None, date_str=selected_date,
@@ -1865,4 +1872,4 @@ python -m src benchmark -d data/hf/test.jsonl -t beginner""", language="bash")
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-st.caption("Hack Apertus 2026 — Team Fact Attack (Track 2A: OST) · Josip Jukic & Felipe Wüthrich · [GitHub](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)")
+st.caption("Hack Apertus 2026 — Team Fact Attack (Track 2A: OST) · Josip Jukic & Felipe Wüthrich · [Unser Entwicklungsbranch](https://github.com/SheylaSam/fact-attack-genai/tree/genai/vector-rag) · [Originalprojekt](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)")

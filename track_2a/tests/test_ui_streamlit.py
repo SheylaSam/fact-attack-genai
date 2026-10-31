@@ -32,6 +32,7 @@ def test_missing_rag_dependencies_give_local_error_without_hybrid_fallback():
     with patch('src.ui_strategies.rag_available',return_value=False), \
          patch('src.apertus_client.ApertusClient._request_completion',side_effect=AssertionError('No network')) as remote:
         app=AppTest.from_file(APP,default_timeout=50).run()
+        app.text_area(key='claim_input').set_value('Die Vorlage verändert das Rentenalter.').run()
         app.checkbox(key='enable_vector_rag').check().run()
         app.radio(key='strategy_option').set_value(DENSE).run()
         next(button for button in app.button if button.label=='Behauptung prüfen').click().run()
@@ -39,3 +40,28 @@ def test_missing_rag_dependencies_give_local_error_without_hybrid_fallback():
         assert any('Optionale Abhängigkeiten' in error.value for error in app.error)
         assert 'last_check' not in app.session_state
         remote.assert_not_called()
+
+
+def test_examples_prepare_inputs_without_starting_inference():
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No automatic inference')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        verify = next(button for button in app.button if button.label == 'Behauptung prüfen')
+        assert verify.disabled
+        next(button for button in app.button if button.key.startswith('story_')).click().run()
+        assert not app.exception
+        assert app.text_area(key='claim_input').value.strip()
+        assert not next(button for button in app.button if button.label == 'Behauptung prüfen').disabled
+        assert 'last_check' not in app.session_state
+        remote.assert_not_called()
+
+
+def test_saved_example_result_remains_readable_when_live_is_unavailable():
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=RuntimeError('Offline UI check')):
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        next(button for button in app.button if button.key.startswith('story_')).click().run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert not app.exception
+        assert 'last_check' in app.session_state
+        assert app.session_state['last_check']['notice']
+        assert any(expander.label == 'Details zur Prüfung' for expander in app.expander)
+        assert any('gespeicherte' in item.value for item in app.markdown)
