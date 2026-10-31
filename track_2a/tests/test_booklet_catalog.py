@@ -26,3 +26,18 @@ def test_manifest_rejects_non_official_urls_and_paths(tmp_path):
         path.write_text(json.dumps({'sources': {filename: {**entry, 'url': url}}}))
         with pytest.raises(ValueError):
             load_catalog(path)
+
+
+def test_title_search_matches_across_languages_and_keeps_date_languages():
+    from src.booklet_catalog import filter_sources
+    sources = {
+        '2024-09-22_de.pdf': {'date': '2024-09-22', 'votes': ['Biodiversitätsinitiative']},
+        '2024-09-22_fr.pdf': {'date': '2024-09-22', 'votes': ['Initiative biodiversité']},
+        '2024-11-24_de.pdf': {'date': '2024-11-24', 'votes': ['Mietrecht']},
+    }
+    assert set(filter_sources(sources, 'BIODIVERSITE')) == {'2024-09-22_de.pdf', '2024-09-22_fr.pdf'}
+    assert len(filter_sources(sources, 'biodiversite', '2024')) == 2
+    assert not filter_sources(sources, 'biodiversite', '2025')
+    assert not filter_sources(sources, 'Mietrecht Unbekannt')
+    assert len(filter_sources(sources, 'September 2024')) == 2
+    assert filter_sources(sources, '   ') == sources

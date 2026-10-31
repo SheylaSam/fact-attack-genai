@@ -79,3 +79,26 @@ def test_partial_source_installation_only_offers_available_date_and_language():
         assert app.selectbox(key='ballot').options == ['24. November 2024']
         assert app.radio(key='booklet_lang').options == ['DE']
         remote.assert_not_called()
+
+
+def test_source_filters_no_hits_reset_and_examples_do_not_infer():
+    from src.booklet_catalog import load_catalog
+    sources = load_catalog(APP.parent / 'data/booklet_catalog.json')
+    with patch('src.booklet_catalog.available_sources', return_value=sources), patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No inference')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        app.text_input(key='source_query').set_value('Mietrecht').run()
+        assert app.selectbox(key='ballot').options == ['24. November 2024']
+        app.text_area(key='claim_input').set_value('Eine politische Behauptung.').run()
+        app.text_input(key='source_query').set_value('xyzkeinetreffer').run()
+        assert app.selectbox(key='ballot').disabled
+        assert next(button for button in app.button if button.label == 'Behauptung prüfen').disabled
+        assert any('Keine passende Quelle' in item.value for item in app.info)
+        next(button for button in app.button if button.label == 'Quellenfilter zurücksetzen').click().run()
+        assert not app.exception
+        assert len(app.selectbox(key='ballot').options) == 20
+        app.selectbox(key='source_year').set_value('2020').run()
+        assert len(app.selectbox(key='ballot').options) == 3
+        next(button for button in app.button if button.key.startswith('story_')).click().run()
+        assert app.selectbox(key='source_year').value == 'Alle Jahre'
+        assert app.selectbox(key='ballot').value == '14. Juni 2026'
+        remote.assert_not_called()

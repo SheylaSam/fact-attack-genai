@@ -235,3 +235,28 @@ französische Original auf Seite 20 und seine Markierung wurden im Vollbild
 geprüft. Keine neuen NLI-Aufrufe und keine neuen Modell-Qualitätsmessungen.
 
 ![Markierter Beleg auf der französischen Originalseite](assets/streamlit-original-evidence.png)
+
+
+## Quellen nach Thema und Jahr finden
+
+Die Quellenauswahl lässt sich lokal nach Vorlagentiteln und Jahr filtern.
+Suchbegriffe werden ohne Gross-/Kleinschreibung oder Akzentunterschiede mit den
+DE-/FR-/IT-Titeln sowie dem Datum verglichen; mehrere Begriffe müssen alle
+vorkommen. Das ist eine Titelsuche, keine PDF-Volltext- oder semantische Suche.
+Ein Treffer in einer Sprache erhält alle verfügbaren Sprachfassungen des Termins.
+Die Prüfung bleibt auf genau das gewählte Büchlein und die gewählte Vorlage bezogen.
+
+Bei null Treffern wird die vorherige offizielle Quelle sichtbar beibehalten,
+die Datumsauswahl gesperrt und eine Prüfung mit ihr deaktiviert. Die Filter
+lassen sich mit einem Klick zurücksetzen. Ein eigenes hochgeladenes PDF bleibt
+unabhängig von den Filtern nutzbar. Demo-Beispiele setzen die Quellenfilter zurück,
+damit ihre zugehörige Quelle auswählbar bleibt. Ein durch Filter geändertes
+Büchlein invalidiert wie bisher die Signatur eines alten Ergebnisses.
+
+Neun gezielte Katalog-/Streamlit-Tests bestanden (fünf bestehende PDF-Warnungen),
+inklusive sprachübergreifender Suche, Jahr, Nulltreffern, Reset und Beispielwechsel.
+Der Filtertest verwendet Katalogmetadaten und benötigt keine nachgeladenen PDFs.
+Im Browser führte „Mietrecht“ zu genau einem Termin, dem 24. November 2024.
+Keine Downloads oder Apertus-Aufrufe durch die Suche.
+
+![Themensuche im Quellenkatalog](assets/streamlit-source-search.png)

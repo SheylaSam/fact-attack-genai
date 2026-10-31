@@ -28,7 +28,7 @@ from src.evaluator import BenchmarkEvaluator
 from src.results_summary import build_summary
 from src.text_utils import best_snippet, guess_language
 from src import config
-from src.booklet_catalog import load_catalog, available_sources, date_options, languages_for_date
+from src.booklet_catalog import load_catalog, available_sources, date_options, languages_for_date, filter_sources
 from src.ui_strategies import STANDARD, strategy_options, strategy_from_label, rag_available, store_uploaded_source, load_completed_dev42
 
 # Page Configuration
@@ -1306,6 +1306,11 @@ def warm_up_demo_booklets():
 warm_up_demo_booklets()
 
 
+def _reset_source_filters():
+    st.session_state["source_query"] = ""
+    st.session_state["source_year"] = "Alle Jahre"
+
+
 def _apply_case(case: dict, set_active: bool = True) -> None:
     """Button callback: load a demo case into the widgets (runs before the widgets are rebuilt)."""
     ballot = next(name for name, date in BOOKLET_CATALOG.items() if date == case["booklet_date"])
@@ -1316,6 +1321,7 @@ def _apply_case(case: dict, set_active: bool = True) -> None:
     st.session_state["claim_lang"] = case["claim_language"].upper()
     st.session_state["active_case"] = case["id"] if set_active else None
     st.session_state.pop("uploaded_pdf", None)  # examples always use their official source
+    _reset_source_filters()
 
 
 def find_cached_case(claim: str, booklet_file: str, vote: Optional[str]) -> Optional[dict]:
@@ -1407,9 +1413,30 @@ with tab_factcheck:
             st.caption(active_case["story"])
 
         st.markdown('<div class="flow-heading"><span>2</span> Quelle wählen</div>', unsafe_allow_html=True)
+        c_search, c_year = st.columns([2, 1])
+        with c_search:
+            source_query = st.text_input("Thema oder Vorlage suchen", key="source_query",
+                                        placeholder="z. B. Mietrecht, Rente, biodiversité",
+                                        help="Sucht lokal in den Vorlagentiteln auf DE, FR und IT; keine Volltextsuche im PDF.")
+        with c_year:
+            years = ["Alle Jahre"] + sorted({entry["date"][:4] for entry in AVAILABLE_SOURCES.values()}, reverse=True)
+            if st.session_state.get("source_year", "Alle Jahre") not in years:
+                st.session_state["source_year"] = "Alle Jahre"
+            source_year = st.selectbox("Jahr", years, key="source_year")
+        filtered_sources = filter_sources(AVAILABLE_SOURCES, source_query, source_year)
+        filtered_dates = date_options(filtered_sources)
+        no_source_matches = not filtered_dates
+        if no_source_matches:
+            st.info("Keine passende Quelle gefunden. Versuche einen anderen Begriff oder setze die Filter zurück. Die bisherige Quelle bleibt ausgewählt.")
+            filtered_dates = {st.session_state["ballot"]: BOOKLET_CATALOG[st.session_state["ballot"]]}
+        elif st.session_state.get("ballot") not in filtered_dates:
+            st.session_state["ballot"] = next(iter(filtered_dates))
+        if source_query.strip() or source_year != "Alle Jahre":
+            st.caption(f"{len(date_options(filtered_sources))} von {len(BOOKLET_CATALOG)} Terminen gefunden · Suche in Vorlagentiteln")
+            st.button("Quellenfilter zurücksetzen", on_click=_reset_source_filters)
         c_ballot, c_lang = st.columns([1.5, 1])
         with c_ballot:
-            selected_ballot_name = st.selectbox("Abstimmung", list(BOOKLET_CATALOG.keys()), key="ballot")
+            selected_ballot_name = st.selectbox("Abstimmung", list(filtered_dates), key="ballot", disabled=no_source_matches)
             selected_date = BOOKLET_CATALOG[selected_ballot_name]
         with c_lang:
             language_options = languages_for_date(AVAILABLE_SOURCES, selected_date)
@@ -1438,7 +1465,7 @@ with tab_factcheck:
             claim_lang_choice = st.selectbox("Erkennung", ["Automatisch", "DE", "FR", "IT"], key="claim_lang")
             st.caption("Deutsch, Französisch und Italienisch werden automatisch erkannt. Die Quelle darf eine andere Sprache haben.")
         claim_lang = guess_language(claim) if claim_lang_choice == "Automatisch" else claim_lang_choice.lower()
-        verify_clicked = st.button("Behauptung prüfen", type="primary", width="stretch", disabled=not claim.strip())
+        verify_clicked = st.button("Behauptung prüfen", type="primary", width="stretch", disabled=not claim.strip() or (no_source_matches and uploaded_file is None))
         st.caption("Beim Prüfen werden die Behauptung und ausgewählte Textstellen an Apertus auf CSCS gesendet.")
         st.markdown(
             '<div class="disclaimer">Vergleicht die Aussage mit dem Büchlein. Keine allgemeine Wahrheitsprüfung und keine Abstimmungsempfehlung.</div>',

@@ -1,6 +1,7 @@
 """Official source metadata and locally available, date/language-specific PDFs."""
 import json
 import re
+import unicodedata
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -44,6 +45,31 @@ def date_options(sources):
 def languages_for_date(sources, date):
     return [lang.upper() for lang in ('de', 'fr', 'it')
             if f'{date}_{lang}.pdf' in sources]
+
+
+def _search_text(value):
+    decomposed = unicodedata.normalize('NFKD', value.casefold())
+    return ''.join(char for char in decomposed if not unicodedata.combining(char))
+
+
+def filter_sources(sources, query='', year='Alle Jahre'):
+    """Match titles in all languages, then keep every available language of each date.
+
+    This is a local metadata search, not PDF full-text search or semantic retrieval.
+    """
+    terms = _search_text(query).split()
+    dates = set()
+    for date in {entry['date'] for entry in sources.values()}:
+        if year != 'Alle Jahre' and date[:4] != str(year):
+            continue
+        titles = [title for entry in sources.values() if entry['date'] == date
+                  for title in entry.get('votes', [])]
+        label = next(iter(date_options({'date': {'date': date}})))
+        haystack = _search_text(' '.join([date, label, *titles]))
+        if all(term in haystack for term in terms):
+            dates.add(date)
+    return {name: entry for name, entry in sources.items() if entry['date'] in dates}
+
 
 
 def main():
