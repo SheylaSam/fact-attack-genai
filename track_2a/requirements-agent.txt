@@ -1,0 +1,5 @@
+# Agent layer (LangGraph), stage 1. Optional: the competition path (requirements.txt) does not need these.
+# langchain-core is pinned to the version langgraph==1.2.11 / langchain-openai==1.6.2 resolve to.
+langgraph==1.2.11
+langchain-core==1.7.3
+langchain-openai==1.6.2
