@@ -3,7 +3,8 @@
 Three variants behind one `Decider` protocol:
 * `NativeToolDecider`: the chat model's own tool calling (`bind_tools`); the first tool call is the action.
 * `JsonActionDecider`: the model writes `{"tool": ..., "args": {...}}` as text; the tool list and the format are
-  appended to the system message. Thinking output (`<|inner_prefix|>...<|inner_suffix|>answer`) is cut off first.
+  appended to the system message. Thinking output (`<|inner_prefix|>...<|inner_suffix|>answer`) is cut off first; an
+  answer that ends inside the thinking is no action, whatever JSON the reasoning contains.
 * `ScriptedDecider`: a deterministic policy over the last observation, for tests and the offline mode. No network.
 
 `messages` are OpenAI chat messages; the claim is the content of the first user message and never part of the system
@@ -12,7 +13,7 @@ message. An action is validated against the offered tools: an unknown tool or in
 Exceptions of the chat model (timeouts, a spent request budget) are not caught here.
 
 `make_chat_model` is the only place that builds the LLM client: sync only, one HTTP request per call, counted on the
-check's `RequestBudget`.
+check's `RequestBudget`, at most `settings.LLM_MAX_TOKENS` output tokens per answer.
 """
 import datetime
 import json
@@ -33,6 +34,10 @@ if TYPE_CHECKING:  # langchain-openai is optional (requirements-agent.txt); make
 MODES = ("native", "json", "scripted")
 DEFAULT_MARGIN = 0.02  # top-1 must lead top-2 by at least this much, or the scripted policy asks
 RAW_CHARS = 2000  # cap on a model answer that parsed to nothing; it goes into the history again
+THINKING_START, THINKING_END = "<|inner_prefix|>", "<|inner_suffix|>"  # Apertus thinking markers
+CUT_OFF_RAW = "(Antwort im Denkanteil abgebrochen; der Denktext wird nicht übernommen.)"  # history entry for it
+CUT_OFF_ERROR = ("Denkanteil abgeschnitten: Die Antwort endete, bevor das Nachdenken abgeschlossen war. Es wurde keine "
+                 "Aktion ausgeführt. Antworte knapp mit genau einem JSON-Objekt.")
 TITLE_CHARS = 90  # a vote title inside the scripted question
 CONNECT_TIMEOUT_S = 10.0
 FORMAT_INSTRUCTION = (
@@ -173,8 +178,16 @@ def _last_action_object(text: str) -> Optional[Tuple[dict, str]]:
 
 def parse_json_action(text: str, tools: List[dict]) -> AgentAction:
     """The action a model wrote as text: reasoning cut off, last JSON object with "tool" taken (also from a code
-    fence or between prose), tool name and arguments validated against `tools`."""
-    answer = ApertusClient._strip_thinking(text or "").strip()
+    fence or between prose), tool name and arguments validated against `tools`.
+
+    An answer that ends inside a thinking part (a start marker after the last end marker, e.g. cut off by the token
+    cap) is no action: JSON inside the reasoning is a thought, not a decision. Its `raw` is a fixed marker, so the
+    reasoning never goes into the history.
+    """
+    text = text or ""
+    if text.rfind(THINKING_START) > text.rfind(THINKING_END):
+        return AgentAction(raw=CUT_OFF_RAW, error=CUT_OFF_ERROR)
+    answer = ApertusClient._strip_thinking(text).strip()
     found = _last_action_object(answer)
     if found is None:
         return AgentAction(raw=answer[:RAW_CHARS], error='Keine Werkzeugwahl: Die Antwort enthält kein JSON-Objekt '
@@ -305,11 +318,12 @@ def make_chat_model(budget: RequestBudget) -> "ChatOpenAI":
 
     `timeout` is passed on because the SDK hands its own (by default: no) timeout to every request, which would
     override the one of the httpx client. An unreachable host fails after `CONNECT_TIMEOUT_S`, a silent one after
-    `settings.LLM_TIMEOUT_S`.
+    `settings.LLM_TIMEOUT_S`. `max_tokens` caps every answer (langchain-openai sends it as `max_completion_tokens`).
     """
     from langchain_openai import ChatOpenAI
     return ChatOpenAI(model=config.LLM_NAME, base_url=config.LLM_BASE_URL, api_key=config.LLM_API_KEY, temperature=0,
-                      max_retries=0, timeout=httpx.Timeout(settings.LLM_TIMEOUT_S, connect=CONNECT_TIMEOUT_S),
+                      max_retries=0, max_tokens=settings.LLM_MAX_TOKENS,
+                      timeout=httpx.Timeout(settings.LLM_TIMEOUT_S, connect=CONNECT_TIMEOUT_S),
                       http_client=budget_http_client(budget),
                       http_async_client=httpx.AsyncClient(transport=_SyncOnlyTransport()))
 

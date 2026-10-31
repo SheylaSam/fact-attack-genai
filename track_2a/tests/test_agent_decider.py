@@ -43,6 +43,7 @@ MESSAGES = [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': C
 V1, V2 = '2024-11-24_de#1', '2024-11-24_de#2'
 THINKING = '<|inner_prefix|>Ich überlege {"tool": "pruefen"} und wähle.<|inner_suffix|>'
 SEARCH = {'tool': 'suche_vorlagen', 'args': {'anfrage': 'Miete'}}
+CHECK = {'tool': 'pruefen', 'args': {'vorlage_id': '2024-11-24_de#1'}}
 USAGE = {'input_tokens': 10, 'output_tokens': 3, 'total_tokens': 13}
 
 
@@ -108,9 +109,19 @@ class ParseJsonActionTests(unittest.TestCase):
         action = parse_json_action(f'{first} dann besser {last} {{"label": 1}}', TOOL_SPECS)
         self.assertEqual(action.args, {'anfrage': 'letzte'})
 
-    def test_parse_cut_off_thinking_falls_back_to_the_last_object(self):
-        action = parse_json_action('<|inner_prefix|>Ich wähle ' + json.dumps(SEARCH) + ' und überlege weiter', TOOL_SPECS)
-        self.assertEqual(action.tool, 'suche_vorlagen')
+    def test_parse_cut_off_thinking_is_no_action(self):
+        reasoning = 'Ich wähle vielleicht ' + json.dumps(CHECK) + ', aber das wäre geraten'
+        for text in ('<|inner_prefix|>' + reasoning,  # the answer ended inside the thinking
+                     THINKING + json.dumps(SEARCH) + '<|inner_prefix|>' + reasoning):  # a second, unended thinking
+            with self.subTest(text=text[-40:]):
+                action = parse_json_action(text, TOOL_SPECS)
+                self.assertIsNone(action.tool)
+                self.assertEqual(action.args, {})
+                self.assertTrue(action.error.startswith('Denkanteil abgeschnitten'), action.error)
+                self.assertNotIn('pruefen', action.raw)  # nothing of the reasoning goes into the history
+                self.assertNotIn('geraten', action.raw)
+                self.assertNotIn('inner_prefix', action.raw + action.error)
+                self.assertLessEqual(len(action.raw), decider_module.RAW_CHARS)
 
     def test_parse_returns_validated_stripped_args_and_the_object_as_raw(self):
         text = 'Antwort: {"tool": "suche_vorlagen", "args": {"anfrage": "  Miete  "}} Ende'
@@ -312,6 +323,18 @@ class JsonActionDeciderTests(unittest.TestCase):
         self.assertIsNone(action.tool)
         self.assertTrue(action.error)
 
+    def test_json_cut_off_thinking_keeps_the_reasoning_out_of_the_history(self):
+        chat = StubChat(AIMessage(content='<|inner_prefix|>Vielleicht ' + json.dumps(CHECK) + ' geraten',
+                                  usage_metadata=USAGE))
+        decider = JsonActionDecider(chat)
+        action = decider.decide(MESSAGES, TOOL_SPECS, [])
+        self.assertIsNone(action.tool)
+        self.assertEqual((action.tokens_prompt, action.tokens_completion), (10, 3))
+        assistant, user = decider.observation_messages(action, Observation('pruefen', f'Fehler: {action.error}'))
+        self.assertNotIn('geraten', assistant['content'])
+        self.assertNotIn('pruefen', assistant['content'])
+        self.assertIn('Denkanteil abgeschnitten', user['content'])
+
     def test_json_observation_messages_are_assistant_plus_user(self):
         chat = StubChat(AIMessage(content=THINKING + json.dumps(SEARCH)))
         decider = JsonActionDecider(chat)
@@ -464,6 +487,19 @@ class MakeChatModelTests(unittest.TestCase):
         model = self.make(RequestBudget(limit=1), lambda request: httpx.Response(200, json=self.ANSWER))
         self.assertEqual((model.model_name, model.temperature, model.max_retries), ('test-model', 0, 0))
         self.assertEqual(model.openai_api_base, 'http://llm.invalid/v1')
+
+    def test_make_chat_model_caps_the_answer_length(self):
+        sent = []
+
+        def handler(request):
+            sent.append(json.loads(request.content))
+            return httpx.Response(200, json=self.ANSWER)
+
+        model = self.make(RequestBudget(limit=1), handler)
+        self.assertEqual(model.max_tokens, settings.LLM_MAX_TOKENS)
+        model.invoke('hallo')
+        # langchain-openai sends the cap under its current OpenAI name
+        self.assertEqual(sent[0]['max_completion_tokens'], settings.LLM_MAX_TOKENS)
 
     def test_make_chat_model_counts_every_request_and_never_retries(self):
         seen = []

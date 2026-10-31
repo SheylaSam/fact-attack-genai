@@ -9,6 +9,7 @@ MAX_REQUESTS = 12  # actual HTTP requests per check, retries, translation and ca
 MAX_PASSAGES = 10  # passages that go into the evidence check
 MAX_CLAIM_CHARS = 1000  # the claim is data, never part of the system prompt
 LLM_TIMEOUT_S: float = 180.0  # read/write limit of one agent LLM request; connecting is capped at 10 s (decider.py)
+LLM_MAX_TOKENS: int = 1024  # output cap of one agent LLM answer (thinking included); a cut-off thinking is no action
 LANGUAGES = ("de",)
 
 # "json": the capped smoke of 2026-10-31 (results/genai/agent_tool_smoke.json, 6 requests) found JSON actions valid in 3 of

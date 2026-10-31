@@ -37,6 +37,7 @@ class AgentSettingsTests(unittest.TestCase):
             self.assertEqual(s.MAX_PASSAGES, 10)
             self.assertEqual(s.MAX_CLAIM_CHARS, 1000)
             self.assertEqual(s.LLM_TIMEOUT_S, 180.0)
+            self.assertEqual(s.LLM_MAX_TOKENS, 1024)
             self.assertEqual(s.LANGUAGES, ("de",))
             self.assertEqual(s.TOOL_MODE, "json")
             self.assertEqual(s.INDEX_DIR, config.REPO_ROOT / ".rag-index" / "agent-sources")
