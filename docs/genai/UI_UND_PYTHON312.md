@@ -283,8 +283,8 @@ SQLite schreibt Einträge transaktional; neu angelegte Datenbankdateien erhalten
 Modus 0600. Verlauf und Nebenfiles sind aus Git und beiden Docker-Buildkontexten
 ausgeschlossen. Das ist ein lokaler Verlauf für diese App-Installation, kein
 persönliches Konto oder Mehrbenutzersystem: Nutzer derselben Installation sehen
-denselben Verlauf. Automatische Löschung, Export und eine Löschoberfläche sind
-noch nicht implementiert.
+denselben Verlauf. Export und ein wiederherstellbarer Papierkorb sind ergänzt (siehe unten).
+Eine endgültige Löschung oder automatische Aufbewahrungsfrist ist nicht implementiert.
 
 Neun gezielte Speicher-/Streamlit-Tests bestanden (fünf bestehende PDF-Warnungen):
 Persistenz über einen neuen App-Lauf, Abschalten der Speicherung, Demo-/Live-
@@ -295,3 +295,31 @@ Demoantwort. Keine neue Apertus-Anfrage. Die normale lokale Vorschau enthält
 keinen dadurch angelegten Demo-Verlaufseintrag.
 
 ![Lokaler Prüfverlauf mit gekennzeichneter Demoantwort](assets/streamlit-check-history.png)
+
+
+## Verlauf exportieren und Einträge entfernen
+
+Im Tab „Prüfverlauf“ trennt „Ansicht“ aktive Einträge und Papierkorb.
+Unter „Export & Verlauf verwalten“ stehen der einzelne Eintrag als JSON und der
+angezeigte Verlauf als JSON bzw. CSV bereit. JSON enthält Belegzitate, Kennzeichnung
+der Antwortherkunft und die Quellenidentität, aber keine internen absoluten Pfade,
+Retrieval-Debugmetadaten oder PDFs. CSV ist eine UTF-8-Übersicht mit BOM für Excel;
+formelähnliche Zellinhalte werden mit einem Apostroph entschärft. Die Downloads
+werden lokal erzeugt und nicht an einen weiteren Dienst übertragen.
+
+„In Papierkorb verschieben“ blendet nur den ausgewählten Eintrag aus der aktiven
+Liste aus. „Wiederherstellen“ im Papierkorb holt ihn zurück. Es werden keine
+Datenbankzeilen oder PDF-Dateien endgültig gelöscht. Der Papierkorb ist keine
+Datenschutzlöschung und bleibt wie der aktive Verlauf lokal gespeichert.
+Bestehende SQLite-Datenbanken werden bei der ersten Änderung um eine Spalte
+`removed` ergänzt; alte Einträge bleiben aktiv. Neue Prüfungen lassen sich danach
+weiter speichern. Exportiert wird die jeweils angezeigte Ansicht, aktive Einträge
+oder Papierkorb. Ein JSON-Import ist noch nicht vorgesehen.
+
+Zwölf gezielte Speicher-/Streamlit-Tests bestanden (fünf bestehende PDF-Warnungen),
+inklusive alter Datenbank, neuer Einträge nach Migration, Papierkorb, Rückkehr,
+Neustart und Exportinhalt/CSV-Sicherheit. Die Browserprüfung verwendete nur die
+isolierte Demo-Datenbank mit blockierter API: entfernt und erfolgreich
+wiederhergestellt. Keine neuen Apertus-Aufrufe.
+
+![Export und Wiederherstellung im Papierkorb](assets/streamlit-history-export-trash.png)

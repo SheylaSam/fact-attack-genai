@@ -29,7 +29,7 @@ from src.evaluator import BenchmarkEvaluator
 from src.results_summary import build_summary
 from src.text_utils import best_snippet, guess_language
 from src import config
-from src.check_history import save_check, load_checks, matching_source
+from src.check_history import save_check, load_checks, matching_source, set_removed, export_checks
 from src.booklet_catalog import load_catalog, available_sources, date_options, languages_for_date, filter_sources
 from src.ui_strategies import STANDARD, strategy_options, strategy_from_label, rag_available, store_uploaded_source, load_completed_dev42
 
@@ -1675,19 +1675,44 @@ with tab_factcheck:
 with tab_history:
     st.markdown("### Dein Prüfverlauf")
     st.caption("Lokal auf diesem Rechner gespeichert · Öffnen löst keine neue Prüfung aus. Sichtbar für Nutzer dieser App-Installation.")
+    history_view = st.radio("Ansicht", ["Aktive Prüfungen", "Papierkorb"], horizontal=True, key="history_view")
+    in_trash = history_view == "Papierkorb"
+    if st.session_state.get("history_message"):
+        st.success(st.session_state.pop("history_message"))
     try:
-        history = load_checks(HISTORY_PATH)
+        history = load_checks(HISTORY_PATH, removed=in_trash)
     except (OSError, ValueError, sqlite3.Error):
         history = []
         st.warning("Der lokale Verlauf lässt sich gerade nicht lesen.")
     if not history:
-        st.info("Noch keine Prüfungen gespeichert. Aktiviere beim Faktencheck die lokale Speicherung.")
+        st.info("Der Papierkorb ist leer." if in_trash else "Noch keine Prüfungen gespeichert. Aktiviere beim Faktencheck die lokale Speicherung.")
     else:
         indexed = {record["id"]: record for record in history}
+        if st.session_state.get("history_selected") not in indexed:
+            st.session_state["history_selected"] = next(iter(indexed))
         selected_id = st.selectbox("Gespeicherte Prüfung", list(indexed),
             format_func=lambda key: f"{indexed[key]['created_at'][:16].replace('T', ' ')} UTC · {indexed[key]['result']['claim'][:90]}",
             key="history_selected")
         record = indexed[selected_id]
+        with st.expander("Export & Verlauf verwalten", expanded=False):
+            st.caption("JSON enthält Ergebnis und Belegzitate; CSV eine Übersicht. PDF-Dateien sind nicht enthalten.")
+            st.download_button("Diese Prüfung als JSON", data=export_checks([record]),
+                               file_name=f"faktencheck_{record['id'][:8]}.json", mime="application/json")
+            st.download_button("Angezeigten Verlauf als CSV", data=export_checks(history, 'csv'),
+                               file_name="pruefverlauf.csv", mime="text/csv")
+            st.download_button("Angezeigten Verlauf als JSON", data=export_checks(history),
+                               file_name="pruefverlauf.json", mime="application/json")
+            action = "Wiederherstellen" if in_trash else "In Papierkorb verschieben"
+            st.caption("Einträge im Papierkorb bleiben lokal gespeichert und können wiederhergestellt werden. Die PDF-Datei bleibt erhalten.")
+            if st.button(action, key="history_remove_restore"):
+                try:
+                    if set_removed(HISTORY_PATH, selected_id, removed=not in_trash):
+                        st.session_state["history_message"] = "Prüfung wiederhergestellt." if in_trash else "Prüfung in den Papierkorb verschoben."
+                        st.rerun()
+                    else:
+                        st.warning("Der Eintrag ist nicht mehr vorhanden. Bitte die Ansicht aktualisieren.")
+                except (OSError, sqlite3.Error):
+                    st.error("Der Verlauf konnte nicht geändert werden.")
         saved_result = PredictionResult(**record["result"])
         st.markdown("#### " + VERDICTS[saved_result.label][2])
         st.text(saved_result.claim)

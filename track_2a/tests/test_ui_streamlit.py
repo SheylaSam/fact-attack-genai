@@ -11,10 +11,11 @@ APP=Path(__file__).parents[1]/'app.py'
 
 @pytest.fixture(autouse=True)
 def isolated_history(tmp_path):
-    from src.check_history import save_check, load_checks
+    from src.check_history import save_check, load_checks, set_removed
     database = tmp_path / 'history.sqlite3'
     with patch('src.check_history.save_check', side_effect=lambda path, **kwargs: save_check(database, **kwargs)), \
-         patch('src.check_history.load_checks', side_effect=lambda path: load_checks(database)):
+         patch('src.check_history.load_checks', side_effect=lambda path, **kwargs: load_checks(database, **kwargs)), \
+         patch('src.check_history.set_removed', side_effect=lambda path, *args, **kwargs: set_removed(database, *args, **kwargs)):
         yield database
 
 
@@ -136,3 +137,23 @@ def test_history_opt_out_does_not_persist_a_check(isolated_history):
         assert not app.exception
         assert 'last_check' in app.session_state
         assert not isolated_history.exists()
+
+
+def test_history_trash_and_restore_survive_new_app_run_without_api(isolated_history):
+    from src.check_history import load_checks
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=RuntimeError('Offline')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        next(button for button in app.button if button.key.startswith('story_')).click().run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        app.button(key='history_remove_restore').click().run()
+        assert not app.exception
+        assert not load_checks(isolated_history)
+        app.radio(key='history_view').set_value('Papierkorb').run()
+        assert app.button(key='history_remove_restore').label == 'Wiederherstellen'
+        app.button(key='history_remove_restore').click().run()
+        assert not app.exception
+        assert len(load_checks(isolated_history)) == 1
+        restarted = AppTest.from_file(APP, default_timeout=50).run()
+        assert not restarted.exception
+        assert len(restarted.selectbox(key='history_selected').options) == 1
+        remote.assert_not_called()
