@@ -41,9 +41,9 @@ Die Mengen stehen im Code als `DEV_VOTES`, `TEST_VOTES`, `DEV_SPECIAL_VOTES`, `T
 | Art (`kind`) | Dev | Test | erwartet | Themen |
 |---|---:|---:|---|---|
 | `mehrdeutig` | 2 | 4 | `rueckfrage`, danach `after_answer` | Dev: Mietrecht (#2/#3), Prämien (2024-06-09 #1/#2). Test: E-ID 2021/2025, AHV 2026/AHV 21 (+13. AHV), Ehepaare 2026/Individualbesteuerung, Kriegsmaterial 2026/2020 |
-| `falscher_sprecher` | 1 | 2 | nach der Konvention „Falscher Sprecher“ (kommt mit dem Dev-Entwurf) | Argument der einen Seite der anderen zugeschrieben |
+| `falscher_sprecher` | 1 | 2 | `widersprochen` (Konvention „Falscher Sprecher“, unten) | Argument der einen Seite der anderen zugeschrieben |
 | `zusammengesetzt` | 1 | 2 | `rueckfrage` | zwei unabhängige Aussagen in einem Satz |
-| `ohne_abstimmung` | 1 | 2 | `quelle_fehlt` | Dev: Euro statt Franken. Test: Themen ohne Vorlage in den 64 Vorlagen |
+| `ohne_abstimmung` | 1 | 2 | `quelle_fehlt` | Dev: Cannabis (statt „Euro statt Franken“: die Bargeld-Vorlage 2026-03-08 #1 regelt den Franken als Währung). Test: Themen ohne Vorlage in den 64 Vorlagen |
 | `api_ausfall` | 1 | 1 | `technischer_fehler` | normale Behauptung, `fault` `timeout` bzw. `http_500` |
 | `prompt_injection` | 1 | 2 | Urteil der echten Aussage | eingebettete Anweisung, einmal als JSON/HTML-Schnipsel |
 
@@ -98,6 +98,62 @@ Beispielzeile (Hauptfall, gekürzt):
 
 Regel 5, zweiter Satz („höchstens zwei Fälle pro Vorlage teilen sich ein Zitat“), prüft der Validator
 nicht; er gilt für das Entwerfen und für die Durchsicht.
+
+## Falscher Sprecher: Konvention
+
+Der Spezialfall `falscher_sprecher` schreibt ein Argument der einen Seite (Komitee oder Bundesrat) der
+anderen Seite zu. Der Datensatzbeschrieb des OST-Datensatzes regelt das nicht; er wertet nur „relativ
+zur `reference_string` und zum Büchlein als Ganzes“. Die Konvention stammt darum aus den OST-Daten
+selbst (nachgeschlagen am 01.11.2026, `src.hf_dataset.load_rows()`, 1488 Zeilen).
+
+**Grundmenge.** 495 deutsche Behauptungen. 264 davon nennen am Anfang eine Seite (`claim_part`:
+`committee` 102, `federal_council` 162). Label 2 oder 1 tragen 169: `committee` 28 × Label 2 und
+48 × Label 1, `federal_council` 47 × Label 2 und 46 × Label 1.
+
+**Stichprobe.** 30 der 169, gezogen mit `random.Random(20261101).sample(…, 30)` in der Reihenfolge von
+`load_rows()`. Gelesen wurde jede Behauptung mit ihrer `reference_string`; bei Bedarf auch die Argumente
+der Gegenseite im Büchlein oder in anderen Zeilen derselben Vorlage.
+
+| Gruppe | Anzahl | Label |
+|---|---:|---|
+| Die genannte Seite bekommt eine Aussage der Gegenseite | 6 | alle 2 |
+| Nur die Aussage der genannten Seite ist umgekehrt, die Gegenseite sagt es so nicht | 3 | alle 2 |
+| Thema einer anderen Vorlage oder frei erfunden | 21 | alle 1 |
+
+Die sechs Fälle mit falschem Sprecher:
+
+- hf-1047 (Justiz-Initiative): Der Bundesrat soll das Losverfahren loben. Das ist das Argument des
+  Komitees.
+- hf-1113 (Justiz-Initiative): Das Komitee soll das heutige Wahlsystem loben. Das ist das Argument des
+  Bundesrats.
+- hf-1088 (CO2-Gesetz): Das Komitee soll das Gesetz kostengünstig, klimawirksam und sozial gerecht
+  nennen. So argumentiert der Bundesrat.
+- hf-1126 (Nationalstrassen): Der Bundesrat soll zum Nein raten, weil die heutigen Strassen genügen.
+  Das ist die Linie des Referendumskomitees.
+- hf-1024 (Prämien-Entlastung): Der Bundesrat soll sagen, die Initiative fördere die Kostenkontrolle.
+  Das Komitee argumentiert so, es spricht von einem neuen Anreiz für Bund und Kantone.
+- hf-1154 (E-ID 2025), ein Grenzfall: Der Bundesrat soll sagen, Firmen und Behörden dürften alle Daten
+  speichern. Das ist eine zugespitzte Form der Datenschutzwarnung des Komitees.
+
+In allen sechs vertritt die genannte Seite im Büchlein ausdrücklich das Gegenteil. Ohne hf-1154 bleiben
+fünf, das Bild ist dasselbe. Die drei reinen Umkehrungen sind hf-1000 (Kostenbremse), hf-1001
+(SRG-Initiative) und hf-1046 (Indonesien).
+
+Ergänzend wurden alle 94 Behauptungen mit Label 1 aus der Grundmenge durchgesehen, nicht nur die 21 aus
+der Stichprobe. Keine schreibt einer Seite ein Argument der Gegenseite zu. Label 1 steht dort für ein
+fremdes Thema (z. B. hf-0510: Geldspielgesetz bei der Pflegeinitiative) oder für erfundenen Inhalt
+(z. B. hf-0644: Verhüllungsverbot steigere die Lebenserwartung).
+
+**Regel.** Die Fälle tragen einheitlich Label 2, also gilt dieses Label:
+
+- `falscher_sprecher` hat `expected` = `widersprochen` und `acceptable` = [`widersprochen`].
+- `page` und `quote` zeigen die Stelle, an der die genannte Seite das Gegenteil sagt.
+- Die Regel ist nur für den Fall belegt, dass die genannte Seite im Büchlein das Gegenteil vertritt.
+  Einen falschen Sprecher, bei dem die genannte Seite zum Punkt schweigt, gibt es in den OST-Daten
+  nicht. Solche Fälle werden nicht geschrieben: Wer entwirft, wählt ein Argument, dem die genannte
+  Seite ausdrücklich widerspricht.
+- Die Ersatzregel für fehlende oder uneinheitliche Daten (`widersprochen` oder `nicht_belegt`, beide
+  in `acceptable`) wird damit nicht gebraucht.
 
 ## Prüfregeln
 
