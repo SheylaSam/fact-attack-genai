@@ -156,6 +156,114 @@ def test_page_script_is_valid_javascript(tmp_path):
     assert done.returncode == 0, done.stderr
 
 
+# --- the log in the browser: git and several tabs ----------------------------------------------------------------------
+
+def test_default_output_is_ignored_by_git():
+    """The page embeds the draft labels and the booklet text: `git add -A` must never pick it up."""
+    if shutil.which("git") is None:
+        pytest.skip("git is not installed")
+    done = subprocess.run(["git", "check-ignore", "-q", str(script.DEFAULT_OUT)], cwd=config.REPO_ROOT)
+    if done.returncode == 128:
+        pytest.skip("not a git work tree")
+    assert done.returncode == 0, f"{script.DEFAULT_OUT} is not ignored: add .cache/ to the root .gitignore"
+
+
+def test_page_merges_the_stored_log_before_it_writes_and_listens_to_other_tabs():
+    code = code_of(render_review_page(CASES, VIEWS))
+    assert 'addEventListener("storage"' in code
+    write_log = re.search(r"function writeLog\(\) \{(.*?)\n  \}", code, re.S).group(1)
+    assert write_log.index("mergeStored()") < write_log.index("storageSet(KEY")  # re-read, merge, then write
+
+
+# Runs the page's real script twice ("tab A" and "tab B") against one shared localStorage, with a stub DOM.
+TWO_TABS = r"""
+const fs = require("fs");
+const vm = require("vm");
+
+const html = fs.readFileSync(process.argv[2], "utf8");
+const data = /<script type="application\/json" id="review-data">([\s\S]*?)<\/script>/.exec(html)[1];
+const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+const code = scripts[scripts.length - 1][1];
+const KEY = JSON.parse(data).storageKey;
+
+const shared = new Map();  // the localStorage both tabs see
+const storage = {
+  getItem: (key) => (shared.has(key) ? shared.get(key) : null),
+  setItem: (key, value) => { shared.set(key, String(value)); },
+  removeItem: (key) => { shared.delete(key); },
+};
+let clock = Date.parse("2026-11-01T10:00:00Z");  // every `new Date()` is one second later, in both tabs
+class FakeDate extends Date {
+  constructor(...args) { super(...(args.length ? args : [(clock += 1000)])); }
+}
+
+function fakeNode() {
+  const node = {children: [], attrs: {}, dataset: {}, style: {}, className: "", textContent: "", value: "",
+    hidden: false, disabled: false,
+    append(...items) { node.children.push(...items); },
+    replaceChildren(...items) { node.children = items; },
+    addEventListener() {}, setAttribute(name, value) { node.attrs[name] = String(value); },
+    querySelector: () => fakeNode(), remove() {}, click() {}, focus() {}, blur() {}, scrollIntoView() {},
+    matches: () => false, closest: () => null,
+    get firstElementChild() { return node.children.find((child) => typeof child === "object"); }};
+  return node;
+}
+
+function openTab() {
+  const nodes = {};
+  const listeners = {document: {}, window: {}};
+  const filters = ["all", "open", "differ"].map((name) => Object.assign(fakeNode(), {dataset: {filter: name}}));
+  const document = {
+    getElementById: (id) => nodes[id] || (nodes[id] = id === "review-data"
+      ? Object.assign(fakeNode(), {textContent: data}) : fakeNode()),
+    createElement: () => fakeNode(),
+    querySelectorAll: (selector) => (selector === ".filter" ? filters : []),
+    addEventListener: (type, fn) => { (listeners.document[type] = listeners.document[type] || []).push(fn); },
+    body: fakeNode(),
+  };
+  const window = {localStorage: storage, location: {hash: ""}, history: {replaceState() {}}, scrollTo() {},
+    addEventListener: (type, fn) => { (listeners.window[type] = listeners.window[type] || []).push(fn); }};
+  vm.runInContext(code, vm.createContext({document, window, Date: FakeDate, setTimeout, clearTimeout, URL, Blob}));
+  return {
+    press(code) {
+      (listeners.document.keydown || []).forEach((fn) => fn({code, key: code, target: fakeNode(), shiftKey: false,
+        ctrlKey: false, metaKey: false, altKey: false, repeat: false, preventDefault() {}}));
+    },
+    storageEvent() { (listeners.window.storage || []).forEach((fn) => fn({key: KEY})); },
+    progress: () => nodes["progress-text"].textContent,
+  };
+}
+
+const a = openTab();
+const b = openTab();            // both tabs start on dev-001 with an empty log
+a.press("Digit1");              // tab A judges dev-001
+b.press("ArrowRight");          // tab B has not heard of that: it moves on to dev-002 ...
+b.press("Digit2");              // ... and judges it
+const progressB = b.progress();
+a.storageEvent();               // the browser tells tab A about the write of tab B
+const progressA = a.progress();
+a.press("Digit2");              // tab A judges dev-001 again, now differently
+console.log(JSON.stringify({log: JSON.parse(shared.get(KEY)), progressA, progressB}));
+"""
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_second_tab_neither_loses_nor_duplicates_judgements(tmp_path):
+    cases = [case(), case(id="dev-002", claim="Die Gebühr steigt nicht, sagt die Behörde im Jahr 2020.")]
+    (tmp_path / "page.html").write_text(render_review_page(cases, {"dev-001": view(), "dev-002": view()}),
+                                        encoding="utf-8")
+    (tmp_path / "two_tabs.js").write_text(TWO_TABS, encoding="utf-8")
+    done = subprocess.run(["node", str(tmp_path / "two_tabs.js"), str(tmp_path / "page.html")],
+                          capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    result = json.loads(done.stdout)
+    log = result["log"]
+    assert [event["id"] for event in log].count("dev-001") == 2 and [event["id"] for event in log].count("dev-002") == 1
+    assert len({(event["id"], event["at"]) for event in log}) == len(log) == 3  # nothing lost, nothing twice
+    assert result["progressB"] == "2 / 2 geprüft"  # tab B took over the judgement of tab A when it wrote
+    assert result["progressA"] == "2 / 2 geprüft"  # tab A learned of tab B's judgement from the storage event
+
+
 # --- build_views ----------------------------------------------------------------------------------------------------
 
 class FakeCatalog:

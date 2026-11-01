@@ -5,8 +5,9 @@ Usage (from track_2a/):
 
 The page shows one case at a time: the claim, the vote, the quote and the booklet page it comes from. The drafted result
 (`expected`, `after_answer`, `note`) stays hidden until a judgement is given, then it appears as "stimmt überein" or
-"weicht ab". Judgements are appended to a log in the browser (localStorage) and exported as `label_review.jsonl`, one
-line per judgement: {"id", "case_sha", "expected", "after_answer", "note", "at"}. A judgement belongs to the `case_sha`
+"weicht ab". Judgements are appended to a log in the browser (localStorage; every write first merges what other tabs
+stored) and exported as `label_review.jsonl`, one line per judgement:
+{"id", "case_sha", "expected", "after_answer", "note", "at"}. A judgement belongs to the `case_sha`
 it was given for: a changed case counts as open again. Keys: 1-3 (main cases) or 1-6 (special cases) judge, Shift+1-3
 judge the row "Nach der Antwort" of an ambiguous case, arrows and Enter move, N jumps to the note.
 
@@ -335,7 +336,32 @@ _SCRIPT = r"""
     }
   }
 
-  function writeLog() {
+  function eventKey(event) {
+    return event.id + "\n" + event.at;
+  }
+
+  function mergeLogs(known, others) {  // `known` first, then what `others` has and `known` lacks (same id and time)
+    const seen = new Set(known.map(eventKey));
+    const merged = known.slice();
+    others.forEach((event) => {
+      if (!seen.has(eventKey(event))) {
+        seen.add(eventKey(event));
+        merged.push(event);
+      }
+    });
+    return merged;
+  }
+
+  function mergeStored() {  // take over what another tab wrote since this one read the log; true if there was any
+    const merged = mergeLogs(events, readLog());
+    if (merged.length === events.length) return false;
+    events = merged;
+    recompute();
+    return true;
+  }
+
+  function writeLog() {  // the stored log is merged first: a second tab must not overwrite this one's judgements
+    mergeStored();
     storageSet(KEY, JSON.stringify(events));
     refreshNotice();
   }
@@ -725,7 +751,8 @@ _SCRIPT = r"""
   }
 
   function importLog(text) {
-    const seen = new Set(events.map((event) => event.id + "\n" + event.at));
+    mergeStored();
+    const seen = new Set(events.map(eventKey));
     let added = 0, duplicate = 0, unknown = 0, broken = 0;
     text.split("\n").forEach((line) => {
       if (!line.trim()) return;
@@ -735,9 +762,8 @@ _SCRIPT = r"""
       } catch (error) { /* counted below */ }
       if (!event) { broken += 1; return; }
       if (!position.has(event.id)) { unknown += 1; return; }
-      const key = event.id + "\n" + event.at;
-      if (seen.has(key)) { duplicate += 1; return; }
-      seen.add(key);
+      if (seen.has(eventKey(event))) { duplicate += 1; return; }
+      seen.add(eventKey(event));
       events.push(event);
       added += 1;
     });
@@ -814,10 +840,19 @@ _SCRIPT = r"""
   function startIndex() {  // the case in the address, else the one after the case judged last
     const wanted = addressId();
     if (position.has(wanted)) return position.get(wanted);
-    const last = events.length ? position.get(events[events.length - 1].id) : undefined;
+    const newest = events.reduce((best, event) => (!best || time(event) >= time(best) ? event : best), null);
+    const last = newest ? position.get(newest.id) : undefined;
     if (last === undefined) return 0;
     return Math.min(last + 1, cases.length - 1);
   }
+
+  window.addEventListener("storage", (event) => {  // another tab wrote the log: show its judgements here too
+    if (event.key !== KEY || !mergeStored()) return;
+    const shown = !emptyView && ui ? validEvent(cases[current]) : null;
+    if (shown) sel = {expected: shown.expected, after: shown.after_answer};
+    if (emptyView) setFilter(filter);
+    else refreshJudgement();
+  });
 
   window.addEventListener("hashchange", () => {  // an address with a case id (e.g. #dev-018) shows that case
     const wanted = addressId();
