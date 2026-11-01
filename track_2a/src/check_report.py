@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from html import escape
 from urllib.parse import urlparse
+from src.booklet_catalog import OFFICIAL_HOSTS
 from src.ui_i18n import translate
 
 
@@ -42,7 +43,7 @@ def render_check_report(records, language='de', generated_at=None):
             evidence = f'<p>{e(t("Keine Belegstelle in diesem Bericht."))}</p>'
         url = record.get('source_url') or ''
         parsed = urlparse(url)
-        link = f'<p><a href="{escape(url, quote=True)}">{e(t("Offizielle Originalquelle"))}</a></p>' if parsed.scheme == 'https' and parsed.hostname == 'www.bk.admin.ch' else ''
+        link = f'<p><a href="{escape(url, quote=True)}">{e(t("Offizielle Originalquelle"))}</a></p>' if parsed.scheme == 'https' and parsed.hostname in OFFICIAL_HOSTS else ''
         failure = f'<p class="notice">{e(error)}</p>' if error else ''
         save_error = f'<p class="notice">{e(t("Das Ergebnis konnte nicht im Verlauf gespeichert werden."))}</p>' if record.get('save_error') else ''
         attempts = f'<p>{e(t("Prüfversuche: {n}").format(n=record["attempts"]))}</p>' if record.get('attempts') else ''
