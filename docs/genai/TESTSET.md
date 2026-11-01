@@ -1,0 +1,161 @@
+# Testset der Agentenschicht (Stufe 2)
+
+01.11.2026, Branch `genai/agent-testset`. Plan:
+[agentenschicht-stufe2-testset.md](../superpowers/plans/2026-11-01-agentenschicht-stufe2-testset.md),
+Design: [agentenschicht-design.md](../superpowers/specs/2026-10-31-agentenschicht-design.md).
+
+## Zweck
+
+Das Testset misst später (Stufe 5) den Agenten, und es legt vorher (Stufe 3) die Schwellenwerte
+fest. Es besteht aus 90 frei formulierten deutschen Behauptungen (30 Dev, 60 Test) und 20
+Spezialfällen (7 Dev, 13 Test). Jeder Fall hat ein erwartetes Ergebnis und eine **wörtliche**
+Fundstelle im Büchlein. Sheyla prüft jedes Label blind, danach wird das Testset gesperrt, **bevor**
+Schwellenwerte kalibriert werden.
+
+Die Fälle entstehen nur aus dem Büchleintext (`scripts/check_testset.py --show <vote_id>`), ohne
+Agent, ohne Apertus und ohne Web. Kein Fall geht vor dem Sperren durch den Agenten, den Prüfpfad oder
+ein anderes Modell. Das Modul `track_2a/src/agent/testset.py` und das Skript
+`track_2a/scripts/check_testset.py` prüfen jeden Fall deterministisch gegen die PDFs.
+
+## Vorlagenplan
+
+Aufgeteilt wird nach Vorlage (`vote_id` aus `SourceIndex`, Form `<datum>_de#<k>`). Jede Vorlage
+gehört genau einer Seite an. Paraphrasen derselben Aussage bleiben dadurch automatisch im selben Split.
+Die Mengen stehen im Code als `DEV_VOTES`, `TEST_VOTES`, `DEV_SPECIAL_VOTES`, `TEST_SPECIAL_VOTES` und
+`HAUPT_PLAN` (Vorlage → Anzahl Hauptfälle); ein Test hält sie gleich diesem Abschnitt.
+
+**Dev, Hauptfälle (30 = 15 Vorlagen × 2, Neuheit `bekannt`):**
+`2020-02-09_de#1` Bezahlbare Wohnungen · `2020-09-27_de#2` Jagdgesetz · `2020-11-29_de#1` Konzernverantwortung · `2021-06-13_de#3` Covid-19-Gesetz · `2021-09-26_de#2` Ehe für alle · `2021-11-28_de#1` Pflegeinitiative · `2022-02-13_de#2` Tabakwerbung · `2022-05-15_de#1` Filmgesetz · `2022-09-25_de#1` Massentierhaltung · `2023-06-18_de#1` OECD-Mindeststeuer · `2024-06-09_de#2` Kostenbremse · `2024-09-22_de#1` Biodiversität · `2025-02-09_de#1` Umweltverantwortung · `2025-11-30_de#1` Service citoyen · `2026-06-14_de#2` Zivildienst
+
+**Test, Hauptfälle (60):**
+- Neuheit `ungesehen`, je 6 (2 pro Klasse): `2026-11-29_de#1` AHV-Zusatzfinanzierung · `#2` Feuerwerk · `#3` Faire Bundessteuern für Ehepaare · `#4` Kriegsmaterialgesetz
+- Neuheit `beobachtet`, je 6 (2 pro Klasse): `2026-09-27_de#1` Neutralitätsinitiative · `#2` Ernährungsinitiative
+- Neuheit `bekannt`, je 2: `2020-09-27_de#5` Kampfflugzeuge · `2021-03-07_de#1` Verhüllungsverbot · `2021-06-13_de#4` CO2-Gesetz · `2021-11-28_de#2` Justiz-Initiative · `2022-02-13_de#4` Medienpaket · `2022-05-15_de#2` Transplantationsgesetz · `2023-06-18_de#2` Klimaschutzgesetz · `2024-03-03_de#2` Renteninitiative · `2024-06-09_de#4` Stromversorgung · `2024-11-24_de#1` Nationalstrassen · `2025-11-30_de#2` Initiative für eine Zukunft · `2026-03-08_de#2` SRG-Initiative
+
+**Nur für Spezialfälle reserviert:**
+- Dev: `2024-11-24_de#2` Mietrecht Untermiete · `2024-11-24_de#3` Mietrecht Eigenbedarf · `2024-06-09_de#1` Prämien-Entlastung
+- Test: `2021-03-07_de#2` E-ID 2021 · `2025-09-28_de#2` E-ID 2025 · `2022-09-25_de#2` AHV 21 · `2024-03-03_de#1` 13. AHV-Rente · `2026-03-08_de#4` Individualbesteuerung · `2020-11-29_de#2` Kriegsgeschäfte
+
+**Spezialfälle (20 = 7 Dev + 13 Test):**
+
+| Art (`kind`) | Dev | Test | erwartet | Themen |
+|---|---:|---:|---|---|
+| `mehrdeutig` | 2 | 4 | `rueckfrage`, danach `after_answer` | Dev: Mietrecht (#2/#3), Prämien (2024-06-09 #1/#2). Test: E-ID 2021/2025, AHV 2026/AHV 21 (+13. AHV), Ehepaare 2026/Individualbesteuerung, Kriegsmaterial 2026/2020 |
+| `falscher_sprecher` | 1 | 2 | nach der Konvention „Falscher Sprecher“ (kommt mit dem Dev-Entwurf) | Argument der einen Seite der anderen zugeschrieben |
+| `zusammengesetzt` | 1 | 2 | `rueckfrage` | zwei unabhängige Aussagen in einem Satz |
+| `ohne_abstimmung` | 1 | 2 | `quelle_fehlt` | Dev: Euro statt Franken. Test: Themen ohne Vorlage in den 64 Vorlagen |
+| `api_ausfall` | 1 | 1 | `technischer_fehler` | normale Behauptung, `fault` `timeout` bzw. `http_500` |
+| `prompt_injection` | 1 | 2 | Urteil der echten Aussage | eingebettete Anweisung, einmal als JSON/HTML-Schnipsel |
+
+Neuheit nach Datum: `2026-11-29` → `ungesehen`, `2026-09-27` → `beobachtet` (frühere Experimente
+haben dieses Büchlein gesehen, die neuen Behauptungen sind aber neu), sonst `bekannt`. Die Zuordnung
+macht `testset.novelty_for(vote_id)`.
+
+## Schema von `cases.jsonl`
+
+Datei: `track_2a/data/genai/testset/cases.jsonl`, eine Zeile pro Fall, UTF-8. Jede Zeile hat alle
+Felder von `EvalCase` und zusätzlich `"claim_language": "de"`. Fehlt ein Feld oder ist eines
+unbekannt, nennt `read_cases` die Zeile (`ValueError`). `claim_language` ist kein Teil des Falls und
+geht nicht in den Hash ein; der Leser verlangt `"de"` auf jeder Zeile.
+
+| Feld | Typ | Bedeutung |
+|---|---|---|
+| `id` | Text | `dev-001` … `dev-030` und `test-001` … `test-060` (Hauptfälle), `sdev-01` … `sdev-07` und `stest-01` … `stest-13` (Spezialfälle) |
+| `split` | `dev` oder `test` | |
+| `group` | `haupt` oder `spezial` | |
+| `kind` | Art oder `null` | `null` genau bei `haupt`; bei `spezial` eine der sechs Arten |
+| `novelty` | `bekannt`, `beobachtet`, `ungesehen` oder `null` | nach Datum der Vorlage; `null` bei `ohne_abstimmung` |
+| `claim` | Text | die Behauptung, deutsch, höchstens 1000 Zeichen |
+| `expected` | Ergebnis | eines der sechs Ergebnisse von `graph.Outcome`: `gestuetzt`, `widersprochen`, `nicht_belegt`, `rueckfrage`, `quelle_fehlt`, `technischer_fehler` |
+| `acceptable` | Liste | Hauptfälle: leer. Spezialfälle: Ergebnisse, die nicht falsch sind; enthält `expected` |
+| `vote_id` | Text oder `null` | die Vorlage der Fundstelle; bei `mehrdeutig` die Vorlage, die nach der Antwort auf die Rückfrage gemeint ist; `null` genau bei `ohne_abstimmung` |
+| `ambiguous_with` | Liste | nur `mehrdeutig`: die anderen Vorlagen, zu denen die Behauptung ebenso passt (nicht `vote_id`) |
+| `after_answer` | Urteil oder `null` | nur `mehrdeutig`: das Urteil, wenn die Rückfrage mit `vote_id` beantwortet ist |
+| `page` | Zahl oder `null` | 1-basierte PDF-Seite der Fundstelle |
+| `quote` | Text oder `null` | wörtliches Zitat von dieser Seite |
+| `fault` | `timeout`, `http_500` oder `null` | nur `api_ausfall`: der eingespielte Fehler |
+| `note` | Text | Begründung; bei Spezialfällen und bei `nicht_belegt` Pflicht |
+
+`case_sha(case)` ist der SHA-256 von `json.dumps(asdict(case), sort_keys=True, ensure_ascii=False,
+separators=(",", ":"))`. Ein geprüftes Urteil ist an diesen Hash gebunden: Ändert sich ein Feld, ist
+das Urteil veraltet.
+
+Beispielzeile (Hauptfall, gekürzt):
+
+```json
+{"id": "test-001", "split": "test", "group": "haupt", "kind": null, "novelty": "ungesehen", "claim": "…", "expected": "gestuetzt", "acceptable": [], "vote_id": "2026-11-29_de#2", "ambiguous_with": [], "after_answer": null, "page": 6, "quote": "Feuerwerk löst sehr unterschiedliche Reaktionen aus.", "fault": null, "note": "", "claim_language": "de"}
+```
+
+## Schreibregeln für Entwürfe
+
+1. Quelle ist nur der Text aus `check_testset.py --show <vote_id>`; kein Agent, kein Apertus, kein Web.
+2. Formuliere wie eine Stimmbürgerin, 8–40 Wörter, ein einziger Satz mit einer Aussage. Am Anfang steht kein Abschnittssignal wie „Der Bundesrat …“, „Das Komitee …“, „Laut Abstimmungstext …“ oder „Bei einem Ja …“; der Validator prüft das mit `part_context.claim_part`. Etwa die Hälfte nennt die Vorlage alltagssprachlich („die Feuerwerk-Initiative“), die anderen beschreiben nur den Inhalt.
+3. Hauptfälle betreffen **Tatsachen, die das Büchlein als Tatsache darstellt**: was sich ändert, Zahlen, Fristen, Zuständigkeiten, heutiger Zustand. Umstrittene Argumente einer Seite gibt es nur als Spezialfall `falscher_sprecher`.
+4. **gestützt:** Das Büchlein sagt es, umformuliert und nicht abgeschrieben. **widersprochen:** Das Büchlein sagt klar etwas anderes, etwa eine andere Zahl, Richtung, Zuständigkeit oder ein anderes Datum. **nicht belegt:** plausibel und zum Thema der Vorlage, aber das Büchlein entscheidet es weder dafür noch dagegen. `note` erklärt, warum.
+5. `page` und `quote`: die eine Seite, die das Label begründet; bei „nicht belegt“ die nächstliegende Stelle. Das Zitat wird zeichengenau aus der `--show`-Ausgabe kopiert, 20–400 Zeichen. Höchstens zwei Fälle pro Vorlage teilen sich ein Zitat.
+6. Keine Behauptung aus `data/holdout_2026-09-27/claims.jsonl` oder `data/genai/ost_june_dev.jsonl` übernehmen; der Validator prüft exakte Duplikate.
+7. Am Ende steht `check_testset.py --partial` ohne Probleme.
+
+Regel 5, zweiter Satz („höchstens zwei Fälle pro Vorlage teilen sich ein Zitat“), prüft der Validator
+nicht; er gilt für das Entwerfen und für die Durchsicht.
+
+## Prüfregeln
+
+`validate(cases, votes, previous_claims=…, complete=True)` liefert eine Meldung pro Problem. Jede
+beginnt mit der Fall-ID, die Zählregeln des fertigen Testsets mit `Testset:`.
+
+- **Felder:** Das ID-Muster passt zu `split` und `group` (und liegt im Bereich 1 bis zur Anzahl). IDs sind
+  eindeutig. `split` ∈ {dev, test}, `group` ∈ {haupt, spezial}. `kind` ist `None` genau bei `haupt`.
+- **Behauptung:** nicht leer, höchstens 1000 Zeichen (`settings.MAX_CLAIM_CHARS`), `guess_language` ergibt
+  `de`, nach `official_normalize` eindeutig im Set und nicht unter den früheren Behauptungen (Holdout und
+  OST-Dev). Am Anfang steht kein Abschnittssignal (`claim_part` ist `None`), ausser bei `falscher_sprecher`;
+  dort darf die Behauptung eine Seite nennen.
+- **Vorlage:** `vote_id` ist `None` genau bei `ohne_abstimmung`; sonst ist sie bekannt und ihr Büchlein
+  liegt lokal vor. Fehlt das PDF (frischer Klon), lautet die Meldung
+  `<id>: Büchlein fehlt (<datei>): scripts/fetch_catalog_booklets.py ausführen`; es gibt keinen Absturz und
+  keine Folgemeldung zu Seite und Zitat. Die Vorlage gehört zur Menge ihres Splits und ihrer Gruppe: Hauptfälle
+  nur zu `DEV_VOTES` bzw. `TEST_VOTES`, Spezialfälle auch zu den reservierten Vorlagen des Splits. `novelty`
+  entspricht dem Datum der Vorlage (bei Spezialfällen der Vorlage des Falls); `ohne_abstimmung` hat `None`.
+- **Fundstelle** (bei gesetzter `vote_id`): `page` liegt in `VoteRef.pages`. `official_normalize(quote)` hat
+  20 bis 400 Zeichen und steht im normalisierten Text der Seite **oder** eines ihrer Textblöcke
+  (`graph.page_texts`). Das ist genau die Regel, nach der die Belegkontrolle des Agenten ein Zitat annimmt:
+  ’ statt ', « » statt `"` oder ein ergänztes Wort gelten als nicht wörtlich, Gross-/Kleinschreibung, Leerraum
+  und Trennstriche am Zeilenende nicht. Eine Seite ohne lesbaren Text hat eine eigene Meldung.
+- **Ergebnisse:** Bei `haupt` ist `expected` eines der drei Urteile. Pro Art:
+
+  | `kind` | Regel |
+  |---|---|
+  | `mehrdeutig` | `expected` = `rueckfrage`; `after_answer` ∈ Urteile; `ambiguous_with` nicht leer, bekannt, ohne `vote_id`, gleiche Split-Menge |
+  | `zusammengesetzt` | `expected` = `rueckfrage` |
+  | `ohne_abstimmung` | `expected` = `quelle_fehlt`; `page`, `quote` und `novelty` sind `None` |
+  | `api_ausfall` | `expected` = `technischer_fehler`; `fault` ∈ {timeout, http_500} |
+  | `falscher_sprecher` | `expected` ∈ {widersprochen, nicht_belegt} |
+  | `prompt_injection` | `expected` ∈ Urteile |
+
+  `fault`, `after_answer` und `ambiguous_with` sind nur bei ihrer Art gesetzt. `acceptable` ist leer bei
+  `haupt`; bei `spezial` enthält es `expected` und nur Ergebnisse aus `OUTCOMES`. `note` ist nicht leer bei
+  `spezial` und wenn `expected` oder `after_answer` = `nicht_belegt`.
+- **Zählung (nur bei `complete=True`, also ohne `--partial`):** je Split und Gruppe 30/60 Haupt- und 7/13
+  Spezialfälle; je Klasse (gestützt, widersprochen, nicht belegt) 10 (Dev) bzw. 20 (Test) Hauptfälle; je
+  Vorlage so viele Hauptfälle wie `HAUPT_PLAN` (2 oder 6), bei Vorlagen mit 6 Fällen je Klasse 2; je Art so
+  viele Spezialfälle wie `KIND_COUNTS`.
+
+## Prüfskript
+
+Aus `track_2a/`:
+
+```bash
+../.venv312/bin/python scripts/check_testset.py --show 2026-11-29_de#2      # Seiten einer Vorlage, Rohtext
+../.venv312/bin/python scripts/check_testset.py --partial                   # Entwurf prüfen, ohne Zählung
+../.venv312/bin/python scripts/check_testset.py                             # fertiges Testset prüfen
+```
+
+- `--show` druckt jede Seite der Vorlage als `=== S. <n> (<teile>) ===` (die Teile des Büchleins, zu denen
+  die Seite gehört, etwa `summary`) und darunter den Rohtext aus `engine.source_page_text`, der Text, aus dem
+  das Zitat kopiert wird. Es braucht keine `cases.jsonl`.
+- Ohne `--show` liest das Skript `data/genai/testset/cases.jsonl` (oder `--cases PATH`). Es druckt
+  `OK: <n> Fälle, 0 Probleme` (Exit 0) oder eine Zeile pro Problem (Exit 1). Fehlt die Datei, steht
+  `Keine Fälle: <Pfad> fehlt` (Exit 1).
+- Die Engine läuft mit `ApertusClient(mock=True)`: Es verlässt keine Anfrage den Rechner.
+- Die PDFs liegen nicht im Repository. Fehlen sie, lädt
+  `../.venv312/bin/python scripts/fetch_catalog_booklets.py` sie und prüft den SHA-256 gegen den Katalog.

@@ -114,6 +114,16 @@ def _exception(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {str(exc)[:ERROR_CHARS]}"
 
 
+def page_texts(engine, pdf, page: int) -> List[str]:
+    """The normalized PDF text of the page and of each of its text blocks; empty: the page has no readable text.
+
+    The forms a quote may be found in: this is the evidence check's rule, shared with the testset validator.
+    """
+    source = engine.source_page(pdf, page) or {}
+    texts = [source.get("text") or ""] + list(source.get("blocks") or [])
+    return [text for text in (official_normalize(t) for t in texts if isinstance(t, str)) if text]
+
+
 class _Nodes:
     def __init__(self, tools: AgentTools, decider: Decider, engine, tracer: Tracer, max_steps: int, budget: Any):
         self.tools = tools
@@ -290,10 +300,7 @@ class _Nodes:
                 "reasoning": DISCARDED_REASON.format(verdict=verdict), "route": "finish"}
 
     def _page_texts(self, pdf, page: int) -> List[str]:
-        """The normalized PDF text of the page and of each of its text blocks; empty: the page has no readable text."""
-        source = self.engine.source_page(pdf, page) or {}
-        texts = [source.get("text") or ""] + list(source.get("blocks") or [])
-        return [text for text in (official_normalize(t) for t in texts if isinstance(t, str)) if text]
+        return page_texts(self.engine, pdf, page)
 
     def _valid_evidence(self, vote: VoteRef, prediction: PredictionResult) -> Tuple[List[EvidenceItem], List[int]]:
         """The quotes found verbatim (after `official_normalize`) in the PDF text of their page or of one of its text
