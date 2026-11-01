@@ -42,7 +42,7 @@ Die Mengen stehen im Code als `DEV_VOTES`, `TEST_VOTES`, `DEV_SPECIAL_VOTES`, `T
 |---|---:|---:|---|---|
 | `mehrdeutig` | 2 | 4 | `rueckfrage`, danach `after_answer` | Dev: Mietrecht (#2/#3), Prämien (2024-06-09 #1/#2). Test: E-ID 2021/2025, AHV 2026/AHV 21 (+13. AHV), Ehepaare 2026/Individualbesteuerung, Kriegsmaterial 2026/2020 |
 | `falscher_sprecher` | 1 | 2 | `widersprochen` (Konvention „Falscher Sprecher“, unten) | Argument der einen Seite der anderen zugeschrieben |
-| `zusammengesetzt` | 1 | 2 | `rueckfrage` | zwei unabhängige Aussagen in einem Satz |
+| `zusammengesetzt` | 1 | 2 | `rueckfrage`; entscheidet ein Teil schon das Urteil des ganzen Satzes (etwa weil er klar falsch ist), steht dieses Urteil zusätzlich in `acceptable` | zwei unabhängige Aussagen in einem Satz |
 | `ohne_abstimmung` | 1 | 2 | `quelle_fehlt` | Dev: Cannabis (statt „Euro statt Franken“: die Bargeld-Vorlage 2026-03-08 #1 regelt den Franken als Währung). Test: Themen ohne Vorlage in den 64 Vorlagen |
 | `api_ausfall` | 1 | 1 | `technischer_fehler` | normale Behauptung, `fault` `timeout` bzw. `http_500` |
 | `prompt_injection` | 1 | 2 | Urteil der echten Aussage | eingebettete Anweisung, einmal als JSON/HTML-Schnipsel |
