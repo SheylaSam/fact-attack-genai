@@ -9,9 +9,13 @@ The plan below (which vote belongs to which split) and the counts are fixed in d
   the booklet. "Verbatim" is the agent's own rule (`graph.page_texts`): `official_normalize(quote)` is part of the
   normalized text of the page or of one of its text blocks.
 * A booklet that is not local (fresh clone) is reported per case with the command that loads it, never a crash.
+* `lock` seals the finished set: it needs Sheyla's blind review of every case (`label_review.jsonl`, one line per
+  judgement) and writes `manifest.json` with the hashes. `load_testset` is the only gate to the cases afterwards: dev is
+  free, test stays closed (stage 5) and nothing is returned if `cases.jsonl` no longer matches the manifest.
 """
 from collections import Counter
 from dataclasses import asdict, dataclass, fields
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -189,14 +193,18 @@ def _parse_line(line: str, where: str) -> EvalCase:
     return EvalCase(**{**row, **{name: tuple(row[name]) for name in _LIST_FIELDS}})
 
 
+def _cases_from_text(text: str, name: str) -> List[EvalCase]:
+    cases = []
+    for number, line in enumerate(text.split("\n"), 1):  # not splitlines: U+2028 is text
+        if line.strip():
+            cases.append(_parse_line(line, f"{name}, Zeile {number}"))
+    return cases
+
+
 def read_cases(path: Path = CASES_PATH) -> List[EvalCase]:
     """The cases of a cases.jsonl in file order; ValueError (German) names the line of a bad or missing field."""
     path = Path(path)
-    cases = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):  # not splitlines: U+2028 is text
-        if line.strip():
-            cases.append(_parse_line(line, f"{path.name}, Zeile {number}"))
-    return cases
+    return _cases_from_text(path.read_text(encoding="utf-8"), path.name)
 
 
 def case_sha(case: EvalCase) -> str:
@@ -498,3 +506,228 @@ def validate(cases: List[EvalCase], votes, *, previous_claims: Iterable[str] = (
     if complete:
         problems += _count_problems(cases)
     return problems
+
+
+# --- review, lock and loader ------------------------------------------------------------------------------------
+# `label_review.jsonl` is the export of `scripts/build_label_review.py`: one line per judgement of Sheyla,
+# {"id", "case_sha", "expected", "after_answer", "note", "at"}. A judgement belongs to the `case_sha` it was given for.
+
+MANIFEST_SCHEMA = 1
+REVIEWER = "Sheyla"
+USAGE = "Dev frei. Test und Spezial-Test einmalig nach dem Konfigurationsfreeze (Stufe 5)."
+ALREADY_LOCKED = "bereits gesperrt; Änderungen brauchen ein neues Testset"
+_EVENT_TEXT_FIELDS = ("id", "case_sha", "expected", "note", "at")
+
+
+@dataclass(frozen=True)
+class ReviewStatus:
+    """Where the review stands for the current cases (ids in the order of the cases)."""
+    missing: List[str]  # no judgement at all
+    stale: List[str]  # the latest judgement was given for another version of the case: judge again
+    disagree: List[str]  # the latest judgement is for this case, but says another `expected` (or `after_answer`)
+    first_agree: int  # cases whose first judgement was for this very case and agrees: the blind agreement
+    changed_after_first_review: List[str]  # cases whose first judgement was for another version of the case
+
+
+class LockRefused(Exception):
+    """The set cannot be locked; `problems` has one message per problem, each naming its case ids."""
+
+    def __init__(self, problems: Iterable[str]):
+        self.problems: List[str] = list(problems)
+        super().__init__("\n".join(self.problems))
+
+
+def _parse_event(line: str, where: str) -> dict:
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{where}: kein gültiges JSON ({exc.msg})") from None
+    if not isinstance(event, dict):
+        raise ValueError(f"{where}: ein JSON-Objekt wird erwartet")
+    if missing := [name for name in (*_EVENT_TEXT_FIELDS, "after_answer") if name not in event]:
+        raise ValueError(f"{where}: Felder fehlen: {', '.join(missing)}")
+    for name in _EVENT_TEXT_FIELDS:
+        if not isinstance(event[name], str):
+            raise ValueError(f"{where}: {name} muss ein Text sein")
+    if event["after_answer"] is not None and not isinstance(event["after_answer"], str):
+        raise ValueError(f"{where}: after_answer muss ein Text oder null sein")
+    return event
+
+
+def _chronological(events: Iterable[dict]) -> List[dict]:
+    """By `at` (ISO times of one format compare as text); events of the same time stay in file order."""
+    return sorted(events, key=lambda event: event.get("at", ""))
+
+
+def _review_from_text(text: str, name: str) -> Dict[str, List[dict]]:
+    review: Dict[str, List[dict]] = {}
+    for number, line in enumerate(text.split("\n"), 1):
+        if line.strip():
+            event = _parse_event(line, f"{name}, Zeile {number}")
+            review.setdefault(event["id"], []).append(event)
+    return {case_id: _chronological(events) for case_id, events in review.items()}
+
+
+def read_review(path: Path = REVIEW_PATH) -> Dict[str, List[dict]]:
+    """The judgements of a review export: id -> its events, oldest first (same time: file order).
+
+    ValueError (German) names the line of a bad event.
+    """
+    path = Path(path)
+    return _review_from_text(path.read_text(encoding="utf-8"), path.name)
+
+
+def _agrees(case: EvalCase, event: dict) -> bool:
+    if event["expected"] != case.expected:
+        return False
+    return case.kind != "mehrdeutig" or event.get("after_answer") == case.after_answer
+
+
+def review_status(cases: List[EvalCase], review: Dict[str, List[dict]]) -> ReviewStatus:
+    """The latest judgement of a case counts; the first one is only counted for the blind agreement.
+
+    A stale judgement says nothing about today's case, so a case is either stale or disagreeing, never both.
+    Judgements of ids that are no case are ignored.
+    """
+    missing, stale, disagree, changed = [], [], [], []
+    first_agree = 0
+    for case in cases:
+        events = _chronological(review.get(case.id, []))
+        if not events:
+            missing.append(case.id)
+            continue
+        sha = case_sha(case)
+        first, latest = events[0], events[-1]
+        if first["case_sha"] != sha:
+            changed.append(case.id)
+        elif _agrees(case, first):
+            first_agree += 1
+        if latest["case_sha"] != sha:
+            stale.append(case.id)
+        elif not _agrees(case, latest):
+            disagree.append(case.id)
+    return ReviewStatus(missing, stale, disagree, first_agree, changed)
+
+
+def _counts(values: Iterable[Optional[str]]) -> Dict[str, int]:
+    return dict(sorted(Counter("keine" if value is None else value for value in values).items()))
+
+
+def _booklet_names(cases: List[EvalCase]) -> List[str]:
+    """The PDF file name of every booklet a case points to, by `vote_id` or `ambiguous_with`."""
+    votes = {vote for case in cases for vote in (case.vote_id, *case.ambiguous_with) if vote is not None}
+    return sorted({f"{vote.split('#', 1)[0]}.pdf" for vote in votes})
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _read_inputs(cases_path: Path, review_path: Path) -> Tuple[bytes, bytes, List[EvalCase], Dict[str, List[dict]]]:
+    """Bytes and parsed content of cases and review; LockRefused names a missing or unreadable file."""
+    raw: List[bytes] = []
+    for path in (cases_path, review_path):
+        try:
+            raw.append(Path(path).read_bytes())
+        except OSError:
+            raise LockRefused([f"Datei fehlt oder ist nicht lesbar: {path}"]) from None
+    try:
+        cases = _cases_from_text(raw[0].decode("utf-8"), Path(cases_path).name)
+        review = _review_from_text(raw[1].decode("utf-8"), Path(review_path).name)
+    except ValueError as exc:  # bad JSON or fields (UnicodeDecodeError is a ValueError too)
+        raise LockRefused([str(exc)]) from None
+    return raw[0], raw[1], cases, review
+
+
+def _review_problems(status: ReviewStatus) -> List[str]:
+    found = []
+    if status.missing:
+        found.append(f"Ohne Urteil: {', '.join(status.missing)}")
+    if status.stale:
+        found.append(f"Fall nach dem Urteil geändert, neues Urteil nötig: {', '.join(status.stale)}")
+    if status.disagree:
+        found.append(f"Urteil weicht vom Entwurf ab, einzeln klären: {', '.join(status.disagree)}")
+    return found
+
+
+def lock(*, votes, sources: Dict[str, dict], cases_path: Path = CASES_PATH, review_path: Path = REVIEW_PATH,
+         manifest_path: Path = MANIFEST_PATH, git_commit: str, git_dirty: bool, now: datetime, complete: bool = True,
+         previous_claims: Iterable[str] = ()) -> dict:
+    """Seal the testset: check it, write `manifest_path` and return the manifest. LockRefused if it cannot be locked.
+
+    Refused when the manifest exists (a locked set is never changed: that needs a new testset), when `validate` finds a
+    problem (`complete` and `previous_claims` go to it) or when a case has no judgement, a stale one or one that differs
+    from the draft. `votes` is a `VoteCatalog`, `sources` the booklet catalog (`load_catalog`: its `sha256` goes into
+    the manifest). `now` must carry a time zone. The manifest is created exclusively: two locks cannot both succeed.
+    """
+    if now.tzinfo is None:
+        raise ValueError("now braucht eine Zeitzone")
+    manifest_path = Path(manifest_path)
+    if manifest_path.exists():
+        raise LockRefused([ALREADY_LOCKED])
+    cases_bytes, review_bytes, cases, review = _read_inputs(cases_path, review_path)
+    problems = validate(cases, votes, previous_claims=previous_claims, complete=complete)
+    status = review_status(cases, review)
+    problems += _review_problems(status)
+    booklets = {}
+    for name in _booklet_names(cases):
+        if name in sources:
+            booklets[name] = sources[name]["sha256"]
+        else:
+            problems.append(f"Büchlein {name} steht nicht im Katalog: sein SHA-256 lässt sich nicht festhalten")
+    if problems:
+        raise LockRefused(problems)
+    manifest = {
+        "schema": MANIFEST_SCHEMA,
+        "locked_at": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "git_commit": git_commit,
+        "git_dirty": git_dirty,
+        "cases_sha256": _sha256(cases_bytes),
+        "review_sha256": _sha256(review_bytes),
+        "counts": {
+            "split_group": _counts(f"{case.split}/{case.group}" for case in cases),
+            "kind": _counts(case.kind for case in cases),
+            "novelty": _counts(case.novelty for case in cases),
+            "expected": _counts(case.expected for case in cases),
+        },
+        "booklets": booklets,
+        "review": {"cases": len(cases), "first_judgement_agrees": status.first_agree,
+                   "changed_after_first_review": status.changed_after_first_review, "reviewer": REVIEWER},
+        "usage": USAGE,
+    }
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with manifest_path.open("x", encoding="utf-8") as stream:
+            stream.write(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+    except FileExistsError:  # locked by someone else since the check above
+        raise LockRefused([ALREADY_LOCKED]) from None
+    return manifest
+
+
+def load_testset(split: str, *, cases_path: Path = CASES_PATH, manifest_path: Path = MANIFEST_PATH,
+                 allow_test: bool = False) -> List[EvalCase]:
+    """The cases of `split` (main and special cases) of the locked testset, in file order.
+
+    This is the gate to the cases: ValueError if the set is not locked or `cases_path` no longer has the hash of the
+    manifest, ValueError for an unknown split, PermissionError for `test` without `allow_test=True` (stage 5 only).
+    """
+    try:
+        manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise ValueError("Testset ist nicht gesperrt") from None
+    except (OSError, ValueError):
+        raise ValueError(f"Manifest {manifest_path} ist nicht lesbar") from None
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("cases_sha256"), str):
+        raise ValueError(f"Manifest {manifest_path} ist nicht lesbar: cases_sha256 fehlt")
+    try:
+        cases_bytes = Path(cases_path).read_bytes()
+    except FileNotFoundError:
+        raise ValueError("cases.jsonl wurde nach dem Sperren verändert (die Datei fehlt)") from None
+    if _sha256(cases_bytes) != manifest["cases_sha256"]:
+        raise ValueError("cases.jsonl wurde nach dem Sperren verändert")
+    if split not in SPLITS:
+        raise ValueError(f"Unbekannter Split {split!r}, erlaubt sind {', '.join(SPLITS)}")
+    if split == "test" and not allow_test:
+        raise PermissionError("Testteil erst nach dem Konfigurationsfreeze (allow_test=True)")
+    cases = _cases_from_text(cases_bytes.decode("utf-8"), Path(cases_path).name)
+    return [case for case in cases if case.split == split]
