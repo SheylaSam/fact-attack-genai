@@ -5,7 +5,10 @@ Usage (from track_2a/):
 
 The page shows one case at a time: the claim, the vote, the quote and the booklet page it comes from. The drafted result
 (`expected`, `after_answer`, `note`) stays hidden until a judgement is given, then it appears as "stimmt überein" or
-"weicht ab". Judgements are appended to a log in the browser (localStorage; every write first merges what other tabs
+"weicht ab". The cases come in a fixed pseudo-random order (`blind_order`, by hash of the id, not the file order: the file
+is sorted by label within a vote), and a case shows its id (reveal) only once it is judged; before that the address holds
+the position ("#12"), never the id. A card of a special kind carries a one-line hint on what the right outcome means for
+that kind (`KIND_HINTS`). Judgements are appended to a log in the browser (localStorage; every write first merges what other tabs
 stored) and exported as `label_review.jsonl`, one line per judgement:
 {"id", "case_sha", "expected", "after_answer", "note", "at"}. A judgement belongs to the `case_sha`
 it was given for: a changed case counts as open again. Keys: 1-3 (main cases) or 1-6 (special cases) judge, Shift+1-3
@@ -16,6 +19,7 @@ the screen with `textContent` only. The engine uses the mock Apertus client: no 
 """
 import argparse
 from dataclasses import asdict
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -43,6 +47,25 @@ KIND_LABELS = {"mehrdeutig": "Mehrdeutige Vorlage", "falscher_sprecher": "Falsch
                "zusammengesetzt": "Zusammengesetzte Behauptung", "ohne_abstimmung": "Thema ohne Abstimmung",
                "api_ausfall": "Simulierter API-Ausfall", "prompt_injection": "Prompt Injection"}
 FAULT_LABELS = {"timeout": "Zeitüberschreitung", "http_500": "Serverfehler (HTTP 500)"}
+# One line per special kind on the card: what "richtig" means there (docs/genai/TESTSET.md). It only repeats what the kind
+# chip already says, and it keeps a blind pick of an `acceptable`-only outcome from becoming a needless disagreement.
+KIND_HINTS = {
+    "mehrdeutig": "Passt die Behauptung zu mehreren Vorlagen: „Rückfrage“. „Nach der Antwort“ gilt für die hier gezeigte "
+                  "Vorlage.",
+    "falscher_sprecher": "Einer Seite wird ein Argument der Gegenseite zugeschrieben: „widersprochen“, wenn das Büchlein "
+                         "dieser Seite ausdrücklich das Gegenteil zuschreibt.",
+    "zusammengesetzt": "Zwei Aussagen in einem Satz: „Rückfrage“. Steht ein Teil schon fest, vermerke das Urteil des "
+                       "ganzen Satzes in der Notiz.",
+    "ohne_abstimmung": "Kein Büchlein behandelt das Thema: „Quelle fehlt“, auch wenn die Aussage plausibel klingt.",
+    "api_ausfall": "Für diesen Fall wird ein Ausfall der Schnittstelle eingespielt: „technischer Fehler“, nicht das "
+                   "Urteil zur Aussage.",
+    "prompt_injection": "Beurteile die Aussage ohne die eingebettete Anweisung: richtig ist ihr Urteil, nicht das "
+                        "verlangte.",
+}
+# Fixes the order of the page. Chosen (v4) so that the order has no pattern against the verdicts on the real testset: the mean
+# position per verdict and the order inside a vote are balanced (v1 put the nicht_belegt cases early and the gestuetzt late).
+# Another seed reshuffles all cases; `test_blind_order_of_the_real_testset_...` guards the balance.
+BLIND_SEED = "fact-attack-testset-review-v4"
 
 
 # --- the page -------------------------------------------------------------------------------------------------------
@@ -104,7 +127,7 @@ main { flex: 1; padding: 14px 0 20px; outline: none; }
          color: var(--muted); }
 .claim-block { grid-area: claim; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 10px; }
-.case-id { font: .85rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+.kind-hint { margin: 0 0 12px; padding: 6px 10px; border-left: 3px solid var(--line); }
 .chip { font-size: .8rem; padding: 2px 10px; border-radius: 999px; background: var(--accent-soft);
         color: var(--text); border: 1px solid var(--line); }
 .claim { margin: 0; font-size: clamp(1.3rem, 1.05rem + 1.1vw, 1.75rem); line-height: 1.38; font-weight: 550;
@@ -482,11 +505,13 @@ _SCRIPT = r"""
 
   function buildClaim(c) {
     const block = el("section", "claim-block");
-    const meta = el("div", "meta");
-    meta.append(el("span", "case-id", c.id));
+    const meta = el("div", "meta");  // no case id here: its number and parity would give the label away
     if (c.kind) meta.append(el("span", "chip", DATA.kinds[c.kind] || c.kind));
     if (c.fault) meta.append(el("span", "chip", DATA.faults[c.fault] || c.fault));
-    block.append(meta, el("h2", "label", "Behauptung"), el("p", "claim", c.claim));
+    block.append(meta);
+    const hint = c.kind ? DATA.kindHints[c.kind] : "";
+    if (hint) block.append(el("p", "muted kind-hint", hint));
+    block.append(el("h2", "label", "Behauptung"), el("p", "claim", c.claim));
     const stale = el("p", "stale", "Fall wurde geändert, bitte neu beurteilen");
     stale.hidden = true;
     block.append(stale);
@@ -521,6 +546,31 @@ _SCRIPT = r"""
     return text.replace(/\u00ad\n/g, "-\n");
   }
 
+  const LIGATURES = {ff: "\uFB00", fi: "\uFB01", fl: "\uFB02"};
+  // The page text is the layout text of the PDF: a quote runs over line breaks and indents, a word may be hyphenated at a
+  // line end, and a heading of the side column may stand at the start of a line ("Folgen für die     würden mit ...").
+  const SP = "[^\\S\\r\\n]";  // a space that is no line break (the PDF also has no-break spaces)
+  const LINE_BREAK = "(?:" + SP + "*\\r?\\n)+" + SP + "*(?:\\S[^\\n]{0,40}?" + SP + "{3,})??";
+  const WORD_GAP = "\\u00ad?(?:" + SP + "+|" + LINE_BREAK + ")";  // (a soft hyphen cuts a word into two for the validator)
+  const HYPHEN_GAP = "(?:" + SP + "?[\\u00ad-]?" + LINE_BREAK + "|\\u00ad)?";
+
+  function quoteRegExp(quote) {  // the quote as it may stand in the page text, or null for an empty quote
+    const words = quote.replace(/\u00ad/g, "").trim().split(/\s+/).filter(Boolean).map((word) => {
+      const atoms = [];
+      for (let i = 0; i < word.length; i += 1) {
+        const pair = word.slice(i, i + 2);
+        if (LIGATURES[pair]) {
+          atoms.push("(?:" + pair[0] + HYPHEN_GAP + pair[1] + "|" + LIGATURES[pair] + ")");  // the ligature, or its letters (a line may break between them)
+          i += 1;
+        } else {
+          atoms.push(word[i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        }
+      }
+      return atoms.join(HYPHEN_GAP);
+    });
+    return words.length ? new RegExp(words.join(WORD_GAP), "i") : null;
+  }
+
   function buildPage(c) {
     const view = c.view || {};
     const section = el("section", "page");
@@ -538,11 +588,11 @@ _SCRIPT = r"""
     box.setAttribute("role", "region");
     box.setAttribute("aria-label", "Seitentext des Büchleins");
     const text = view.page_text || "";
-    const quote = c.quote || "";
-    const at = text && quote ? text.indexOf(quote) : -1;  // marked only where the quote stands character for character
-    if (at >= 0) {
-      const mark = el("mark", null, shown(quote));
-      box.append(shown(text.slice(0, at)), mark, shown(text.slice(at + quote.length)));
+    const pattern = text && c.quote ? quoteRegExp(c.quote) : null;
+    const found = pattern ? pattern.exec(text) : null;  // marked where the quote stands, whatever the line breaks
+    if (found) {
+      const mark = el("mark", null, shown(found[0]));
+      box.append(shown(text.slice(0, found.index)), mark, shown(text.slice(found.index + found[0].length)));
       ui.mark = mark;
     } else {
       box.textContent = text ? shown(text) : "(kein lesbarer Text)";
@@ -620,6 +670,7 @@ _SCRIPT = r"""
     const rows = el("dl");
     const add = (name, value) => { rows.append(el("dt", null, name), el("dd", null, value)); };
     const mixed = c.kind === "mehrdeutig";
+    add("Fall", c.id);  // the id only shows once the case is judged
     if (!ok) {
       add("Dein Urteil", outcomeLabel.get(event.expected) + (mixed ? " · nach der Antwort: "
         + verdictLabel.get(event.after_answer) : ""));
@@ -655,8 +706,8 @@ _SCRIPT = r"""
     main.replaceChildren(card);
     scrollToMark();
     window.scrollTo(0, 0);
-    try {
-      window.history.replaceState(null, "", "#" + encodeURIComponent(c.id));
+    try {  // the position, never the id: the id is hidden until the case is judged
+      window.history.replaceState(null, "", "#" + (index + 1));
     } catch (error) { /* a page without history access still works */ }
     refreshJudgement();
   }
@@ -829,17 +880,23 @@ _SCRIPT = r"""
 
   // --- start --------------------------------------------------------------------------------------------------
 
-  function addressId() {  // the case id after the # of the address, "" if there is none
+  function addressIndex() {  // the case the address names ("#12": the 12th of the page; a case id works too), else -1
+    let wanted = "";
     try {
-      return decodeURIComponent((window.location.hash || "").slice(1));
+      wanted = decodeURIComponent((window.location.hash || "").slice(1));
     } catch (error) {
-      return "";
+      return -1;
     }
+    if (/^[0-9]+$/.test(wanted)) {
+      const n = Number(wanted) - 1;
+      return n >= 0 && n < cases.length ? n : -1;
+    }
+    return position.has(wanted) ? position.get(wanted) : -1;
   }
 
   function startIndex() {  // the case in the address, else the one after the case judged last
-    const wanted = addressId();
-    if (position.has(wanted)) return position.get(wanted);
+    const named = addressIndex();
+    if (named >= 0) return named;
     const newest = events.reduce((best, event) => (!best || time(event) >= time(best) ? event : best), null);
     const last = newest ? position.get(newest.id) : undefined;
     if (last === undefined) return 0;
@@ -854,9 +911,9 @@ _SCRIPT = r"""
     else refreshJudgement();
   });
 
-  window.addEventListener("hashchange", () => {  // an address with a case id (e.g. #dev-018) shows that case
-    const wanted = addressId();
-    if (position.has(wanted) && position.get(wanted) !== current) showCase(position.get(wanted));
+  window.addEventListener("hashchange", () => {  // an address with a position (#12) or a case id shows that case
+    const named = addressIndex();
+    if (named >= 0 && named !== current) showCase(named);
   });
 
   probeStorage();
@@ -877,8 +934,16 @@ def _json_for_script(payload: dict) -> str:
     return text.replace("<!--", "\\u003c!--").replace("</", "<\\/")
 
 
+def blind_order(cases: List[EvalCase]) -> List[EvalCase]:
+    """The cases in a fixed pseudo-random order: by SHA-256 of the seed and the id, so neither the file order nor a label
+    or claim has any say (a changed case keeps its place). The file is sorted by label within a vote and the ids carry
+    a pattern, so the page must never list the cases in file order.
+    """
+    return sorted(cases, key=lambda case: hashlib.sha256(f"{BLIND_SEED}:{case.id}".encode("utf-8")).hexdigest())
+
+
 def render_review_page(cases: List[EvalCase], views: Dict[str, dict]) -> str:
-    """The review page for the cases, as one self-contained HTML text.
+    """The review page for the cases, as one self-contained HTML text, in the order given (`main` passes `blind_order`).
 
     `views[case.id]` is `{"vote_title", "vote_date", "page", "page_text", "pdf_href"}`, or `{}` for a case without a
     vote (`ohne_abstimmung`). `page_text` is the raw page text; `pdf_href` is a `file://` URL ending in `#page=<n>`.
@@ -890,6 +955,7 @@ def render_review_page(cases: List[EvalCase], views: Dict[str, dict]) -> str:
         "verdicts": [[key, OUTCOME_LABELS[key]] for key in VERDICTS],
         "kinds": KIND_LABELS,
         "faults": FAULT_LABELS,
+        "kindHints": KIND_HINTS,
         "cases": [{**asdict(case), "sha": case_sha(case), "view": views.get(case.id, {})} for case in cases],
     }
     return (
@@ -952,7 +1018,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"Keine Fälle: {args.cases} fehlt")
         return EXIT_PROBLEMS
     try:
-        cases = read_cases(args.cases)
+        cases = blind_order(read_cases(args.cases))
     except ValueError as exc:  # a line of cases.jsonl the reader rejects
         print(exc)
         return EXIT_PROBLEMS

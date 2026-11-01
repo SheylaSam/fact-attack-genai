@@ -2,7 +2,13 @@
 
 Usage (from track_2a/):
   python scripts/lock_testset.py [--review PATH]
+  python scripts/lock_testset.py --status [--review PATH]
 
+`--status` only reads: it prints where the review stands (missing, stale and disagreeing judgements, the blind
+agreement) and exits 0 if the set could be locked as far as the review goes. It copies nothing, writes no manifest and
+starts no engine, and it works on a locked set too. Run it on an export before locking.
+
+Locking (without `--status`):
 `--review` is the export of the review page (`build_label_review.py`): it is copied to
 `data/genai/testset/label_review.jsonl` first. Without it the review stored there is used. Locking needs the finished
 set (`check_testset.py` without `--partial`: counts, quotes, no repeated claims) and a judgement of Sheyla for every
@@ -25,7 +31,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.check_testset import load_previous_claims, make_engine
 from src import config
 from src.agent.testset import (ALREADY_LOCKED, CASES_PATH, MANIFEST_PATH, REVIEW_PATH, TESTSET_DIR, LockRefused,
-                               load_vote_catalog, lock)
+                               ReviewStatus, load_vote_catalog, lock, read_cases, read_review, review_status)
 from src.booklet_catalog import load_catalog
 
 EXIT_OK, EXIT_PROBLEMS = 0, 1
@@ -37,6 +43,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--review", type=Path, metavar="PATH",
                         help=f"Exportdatei der Prüfseite, wird nach {REVIEW_PATH} kopiert "
                              "(Standard: die dort liegende)")
+    parser.add_argument("--status", action="store_true",
+                        help="nur lesen: Stand der Labelprüfung ausgeben (fehlend, veraltet, abweichend), "
+                             "nichts kopieren, nicht sperren")
     return parser
 
 
@@ -89,8 +98,52 @@ def summary(manifest: dict) -> str:
     return "\n".join(lines)
 
 
+def _ids(names: Sequence[str]) -> str:
+    return f" ({len(names)}): {', '.join(names)}" if names else ": keine"
+
+
+def status_report(total: int, status: ReviewStatus, review_path: Path, locked: bool) -> str:
+    """The review status as German text; `total` is the number of cases."""
+    open_cases = len(status.missing) + len(status.stale) + len(status.disagree)
+    changed = status.changed_after_first_review
+    lines = [f"Stand der Labelprüfung (nur gelesen, nichts geschrieben): {review_path}"]
+    if locked:
+        lines.append(f"Hinweis: {ALREADY_LOCKED}")
+    lines += [f"{total} Fälle",
+              f"Beurteilt, stimmt überein: {total - open_cases}",
+              f"Fehlend{_ids(status.missing)}",
+              f"Veraltet{_ids(status.stale)}",
+              f"Abweichend{_ids(status.disagree)}",
+              f"Erstes Urteil stimmte überein: {status.first_agree} von {total}",
+              f"Nach dem ersten Urteil geändert{_ids(changed)}",
+              "Bereit zum Sperren (soweit die Review reicht): `lock_testset.py --review <Export>`" if not open_cases
+              else "Noch nicht bereit zum Sperren: fehlende und veraltete Fälle beurteilen lassen, "
+                   "abweichende einzeln klären"]
+    return "\n".join(lines)
+
+
+def show_status(review_path: Path) -> int:
+    """`--status`: read the cases and the review, print where it stands. Writes and copies nothing."""
+    if not CASES_PATH.is_file():
+        print(f"Keine Fälle: {CASES_PATH} fehlt")
+        return EXIT_PROBLEMS
+    if not review_path.is_file():
+        print(f"Keine Review: {review_path} fehlt")
+        return EXIT_PROBLEMS
+    try:
+        cases = read_cases(CASES_PATH)
+        status = review_status(cases, read_review(review_path))
+    except ValueError as exc:  # a bad line of cases.jsonl or of the export
+        print(exc)
+        return EXIT_PROBLEMS
+    print(status_report(len(cases), status, review_path, MANIFEST_PATH.exists()))
+    return EXIT_PROBLEMS if status.missing or status.stale or status.disagree else EXIT_OK
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.status:
+        return show_status(args.review or REVIEW_PATH)
     if MANIFEST_PATH.exists():  # before the review is copied: a locked review is never overwritten
         print(ALREADY_LOCKED)
         return EXIT_PROBLEMS

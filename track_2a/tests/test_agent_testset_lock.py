@@ -565,6 +565,98 @@ def test_script_closes_the_engine_on_refusal(run, files, capsys):
     assert run.engine_closed
 
 
+# --- lock_testset.py --status (read-only) ---------------------------------------------------------------------------
+
+def snapshot(directory):
+    """Name -> bytes of every file under `directory`: to prove that a command wrote nothing."""
+    return {str(path.relative_to(directory)): path.read_bytes() for path in sorted(directory.rglob("*")) if path.is_file()}
+
+
+def test_status_prints_the_counts_and_writes_nothing(run, files, tmp_path, capsys):
+    before = snapshot(tmp_path)
+    assert script.main(["--status", "--review", str(run.export)]) == 0
+    out = capsys.readouterr().out
+    assert "6 Fälle" in out and "Fehlend: keine" in out and "Veraltet: keine" in out and "Abweichend: keine" in out
+    assert "Erstes Urteil stimmte überein: 6 von 6" in out and "Bereit zum Sperren" in out
+    assert snapshot(tmp_path) == before  # no copy of the export, no manifest, nothing
+    assert not files.review.exists() and not files.manifest.exists()
+    assert run.lock_options is None and not run.engine_closed  # the engine is not even started
+
+
+def test_status_names_missing_stale_and_disagreeing_cases(run, files, tmp_path, capsys):
+    events = judgements()
+    events[0] = judge(DEV_1, 0, expected="nicht_belegt")  # disagrees
+    events[1] = judge(DEV_2, 1, case_sha="0" * 64)  # given for another version of the case
+    del events[3]  # sdev-04 has no judgement
+    write_review(run.export, events)
+    before = snapshot(tmp_path)
+    assert script.main(["--status", "--review", str(run.export)]) == 1
+    out = capsys.readouterr().out
+    assert "Fehlend (1): sdev-04" in out
+    assert "Veraltet (1): dev-002" in out
+    assert "Abweichend (1): dev-001" in out
+    assert "Beurteilt, stimmt überein: 3" in out and "Noch nicht bereit zum Sperren" in out
+    assert "Bereit zum Sperren" not in out.replace("Noch nicht bereit zum Sperren", "")
+    assert snapshot(tmp_path) == before and not files.manifest.exists()
+
+
+def test_status_counts_the_blind_agreement_and_the_changed_cases(run, files, capsys):
+    events = judgements()
+    events.insert(0, judge(DEV_1, -5, case_sha="1" * 64))  # the first judgement of dev-001 was for an older version
+    write_review(run.export, events)
+    assert script.main(["--status", "--review", str(run.export)]) == 0
+    out = capsys.readouterr().out
+    assert "Erstes Urteil stimmte überein: 5 von 6" in out
+    assert "Nach dem ersten Urteil geändert (1): dev-001" in out
+
+
+def test_status_without_review_option_reads_the_stored_review(run, files, capsys):
+    files.review.write_bytes(run.export.read_bytes())
+    stored = files.review.read_bytes()
+    assert script.main(["--status"]) == 0
+    assert str(files.review) in capsys.readouterr().out
+    assert files.review.read_bytes() == stored and not files.manifest.exists()
+
+
+def test_status_is_available_after_the_lock_and_changes_nothing(run, files, capsys):
+    assert script.main(["--review", str(run.export)]) == 0
+    capsys.readouterr()
+    locked = {name: path.read_bytes() for name, path in (("review", files.review), ("manifest", files.manifest))}
+    assert script.main(["--status"]) == 0
+    out = capsys.readouterr().out
+    assert "bereits gesperrt" in out and "6 Fälle" in out
+    assert {name: path.read_bytes() for name, path in (("review", files.review), ("manifest", files.manifest))} == locked
+
+
+def test_status_reports_a_missing_review_file_or_cases_file(run, files, tmp_path, capsys):
+    assert script.main(["--status", "--review", str(tmp_path / "fehlt.jsonl")]) == 1
+    assert f"Keine Review: {tmp_path / 'fehlt.jsonl'} fehlt" in capsys.readouterr().out
+    assert script.main(["--status"]) == 1  # no stored review either
+    assert "label_review.jsonl" in capsys.readouterr().out
+    files.cases.unlink()
+    assert script.main(["--status", "--review", str(run.export)]) == 1
+    assert f"Keine Fälle: {files.cases} fehlt" in capsys.readouterr().out
+    assert not files.manifest.exists() and not files.review.exists()
+
+
+def test_status_names_the_bad_line_of_the_review(run, files, capsys):
+    run.export.write_text(run.export.read_text(encoding="utf-8") + "{kaputt\n", encoding="utf-8")
+    assert script.main(["--status", "--review", str(run.export)]) == 1
+    assert "Zeile 7" in capsys.readouterr().out and not files.manifest.exists()
+
+
+def test_status_ignores_judgements_of_unknown_ids(run, files, capsys):
+    stray = dict(judge(DEV_1, 9), id="dev-099")
+    write_review(run.export, judgements() + [stray])
+    assert script.main(["--status", "--review", str(run.export)]) == 0
+    assert "dev-099" not in capsys.readouterr().out
+
+
+def test_status_and_lock_options_stay_apart():
+    assert script.build_parser().parse_args(["--status"]).status is True
+    assert script.build_parser().parse_args([]).status is False
+
+
 # --- git state of the script ---------------------------------------------------------------------------------------
 
 def test_changed_paths_reads_porcelain_z_output():
