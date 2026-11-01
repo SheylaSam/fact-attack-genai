@@ -38,6 +38,8 @@ desselben Büchleins sind möglich), `suche_passagen_vektor` (Vektorsuche in ein
 Quellenindex: Gebaut mit `track_2a/scripts/build_agent_index.py`, Bericht in
 `track_2a/results/genai/agent_index_build.json` (58 Vorlagen, 20 Quellen, nichts übersprungen,
 Bauzeit 96 s). Der Index selbst liegt unter `.rag-index/agent-sources/` und ist nicht im Repo.
+Stand seit Stufe 2 (01.11.2026): Mit den Büchlein vom 27.09. und 29.11.2026 sind es 64 Vorlagen aus
+22 Quellen und 1572 Chunks (Bericht neu gebaut); die Tabelle oben und die Zahlen davor beschreiben den Stand von Stufe 1.
 Eine Eigenheit: Im Büchlein vom 25.09.2022 stehen AHV 21 und die Mehrwertsteuer-Finanzierung
 in einem gemeinsamen Eintrag des Inhaltsverzeichnisses. Der Index hat deshalb 58 statt der 59
 Titel des Katalogs; die Mehrwertsteuer-Vorlage hat keine eigene ID, eine Behauptung dazu landet

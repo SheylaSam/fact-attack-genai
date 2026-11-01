@@ -3,7 +3,11 @@ import json
 import re
 import unicodedata
 from pathlib import Path
+from typing import Tuple
 from urllib.parse import urlparse
+
+# Hosts a catalog URL may point to: bk.admin.ch for the booklets of the dataset, admin.ch for the 2026 booklets.
+OFFICIAL_HOSTS: Tuple[str, ...] = ('www.bk.admin.ch', 'www.admin.ch')
 
 MONTHS = ('Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
           'August', 'September', 'Oktober', 'November', 'Dezember')
@@ -15,7 +19,7 @@ def load_catalog(path):
         if (not re.fullmatch(r'\d{4}-\d{2}-\d{2}_(de|fr|it)\.pdf', filename)
                 or filename != f"{entry['date']}_{entry['language']}.pdf"
                 or urlparse(entry['url']).scheme != 'https'
-                or urlparse(entry['url']).hostname != 'www.bk.admin.ch'):
+                or urlparse(entry['url']).hostname not in OFFICIAL_HOSTS):
             raise ValueError('Invalid official booklet metadata')
     return sources
 

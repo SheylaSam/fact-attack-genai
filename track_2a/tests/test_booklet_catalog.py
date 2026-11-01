@@ -41,3 +41,40 @@ def test_title_search_matches_across_languages_and_keeps_date_languages():
     assert not filter_sources(sources, 'Mietrecht Unbekannt')
     assert len(filter_sources(sources, 'September 2024')) == 2
     assert filter_sources(sources, '   ') == sources
+
+
+def _write_catalog(tmp_path, url):
+    entry = {'date': '2026-11-29', 'language': 'de', 'url': url, 'votes': []}
+    path = tmp_path / 'catalog.json'
+    path.write_text(json.dumps({'sources': {'2026-11-29_de.pdf': entry}}))
+    return path
+
+
+def test_load_catalog_accepts_www_admin_ch(tmp_path):
+    from src.booklet_catalog import OFFICIAL_HOSTS
+    assert OFFICIAL_HOSTS == ('www.bk.admin.ch', 'www.admin.ch')
+    for host in OFFICIAL_HOSTS:
+        path = _write_catalog(tmp_path, f'https://{host}/dam/de/x.pdf')
+        assert '2026-11-29_de.pdf' in load_catalog(path)
+
+
+def test_load_catalog_rejects_other_hosts(tmp_path):
+    for url in ['https://evil.example/x.pdf', 'http://www.admin.ch/x.pdf',
+                'https://www.admin.ch.evil.example/x.pdf', 'https://admin.ch/x.pdf']:
+        with pytest.raises(ValueError):
+            load_catalog(_write_catalog(tmp_path, url))
+
+
+def test_catalog_lists_new_booklets():
+    from src import config
+    sources = load_catalog(config.DATA_DIR / 'booklet_catalog.json')
+    for date in ('2026-09-27', '2026-11-29'):
+        for lang in ('de', 'fr', 'it'):
+            assert f'{date}_{lang}.pdf' in sources
+    assert sources['2026-09-27_de.pdf']['sha256'] == '6d27a4c6c5ed0e8583a49864979dcc2ddeeb4c65e895b97a2df3fa1d089dbc15'
+    assert sources['2026-11-29_de.pdf']['sha256'] == '391b1f2941820c9859b0fef5ac6dd366e325076ebd125f0c5ecd763fea428be2'
+    assert len(sources['2026-11-29_de.pdf']['votes']) == 4 and len(sources['2026-09-27_de.pdf']['votes']) == 2
+    for name in sources:
+        if name.startswith(('2026-09-27', '2026-11-29')):
+            assert len(sources[name]['sha256']) == 64
+            assert len(sources[name]['votes']) == (2 if name.startswith('2026-09-27') else 4)
