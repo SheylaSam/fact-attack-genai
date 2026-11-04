@@ -255,6 +255,42 @@ class McpServerHelpersTests(unittest.TestCase):
         self.assertEqual(env, {'PATH': '/bin', 'RAG_EMBEDDING_MODEL': 'm', 'MOCK_APERTUS': '1',
                                'FACT_ATTACK_SKIP_DOTENV': '1'})
 
+    def test_every_setting_that_config_reads_is_forwarded_or_secret(self):
+        import ast
+        from src import config
+        tree = ast.parse(Path(config.__file__).read_text(encoding='utf-8'))
+        read = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                name = ast.unparse(node.func)
+                if name in ('os.getenv', 'os.environ.get'):  # the first argument is the name, the second a default
+                    names = node.args[:1]
+                elif name == '_endpoint_setting':  # both arguments are names
+                    names = node.args
+                else:
+                    continue
+                read |= {a.value for a in names if isinstance(a, ast.Constant) and isinstance(a.value, str)}
+            elif isinstance(node, ast.Subscript) and ast.unparse(node.value) == 'os.environ':
+                if isinstance(node.slice, ast.Constant):
+                    read.add(node.slice.value)
+        self.assertIn('RETRIEVAL_QUERY_MODE', read)  # the parser finds the names at all
+        self.assertTrue({'BASE_URL', 'API_KEY', 'LLM_BASE_URL', 'LLM_API_KEY'} <= read)
+        known = set(mcp_server._INHERITED) | mcp_server._SECRET_VARIABLES | mcp_server._SET_BY_SERVER
+        self.assertEqual(sorted(read - known), [], 'src/config.py reads settings the MCP server neither forwards nor '
+                                                   'withholds on purpose')
+        self.assertFalse(set(mcp_server._INHERITED) & mcp_server._SECRET_VARIABLES)
+        self.assertFalse([name for name in mcp_server._INHERITED if name.startswith('LANGSMITH_')])
+
+    def test_a_non_default_retrieval_setting_reaches_the_server(self):
+        env = server_environment({'RETRIEVAL_QUERY_MODE': 'original', 'PART_CONTEXT': 'false', 'QUICK_PARTS': 'false',
+                                  'TRANSLATE_CLAIM': 'true', 'NLI_TOP_K': '5', 'PAGE_MAX_CHARS': '1500',
+                                  'TMPDIR': '/scratch/tmp'})
+        self.assertEqual({name: env[name] for name in ('RETRIEVAL_QUERY_MODE', 'PART_CONTEXT', 'QUICK_PARTS',
+                                                       'TRANSLATE_CLAIM', 'NLI_TOP_K', 'PAGE_MAX_CHARS', 'TMPDIR')},
+                         {'RETRIEVAL_QUERY_MODE': 'original', 'PART_CONTEXT': 'false', 'QUICK_PARTS': 'false',
+                          'TRANSLATE_CLAIM': 'true', 'NLI_TOP_K': '5', 'PAGE_MAX_CHARS': '1500',
+                          'TMPDIR': '/scratch/tmp'})
+
     def test_server_environment_switches_off_every_dotenv_file(self):
         self.assertEqual(server_environment({})['FACT_ATTACK_SKIP_DOTENV'], '1')
         self.assertEqual(server_environment({'FACT_ATTACK_SKIP_DOTENV': '0'})['FACT_ATTACK_SKIP_DOTENV'], '1')

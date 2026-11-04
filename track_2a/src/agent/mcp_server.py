@@ -51,10 +51,31 @@ CLAIM_DESCRIPTION = (f"Wortlaut der Behauptung, 1 bis {settings.MAX_CLAIM_CHARS}
                      "Wird vom Graphen gesetzt, nicht vom Modell.")
 CROSS_LINGUAL_ERROR = ("Sprachübergreifende Suche braucht eine Übersetzung durch Apertus; der MCP-Server sendet "
                        "keine Anfragen. Ohne MCP prüfen (--werkzeuge lokal).")
-# Variables the server process may inherit. Never passed on: FACT_ATTACK_ENV_FILE, LLM_API_KEY, API_KEY, BASE_URL,
-# LLM_BASE_URL and LANGSMITH_* (an allow list, so no other secret can slip through either).
-_INHERITED = ("PATH", "HOME", "LANG", "HF_HOME", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "RAG_EMBEDDING_MODEL",
-              "RAG_MODEL_REVISION", "AGENT_INDEX_DIR")
+# Variables the server process may inherit (an allow list, so no other secret can slip through): the process basics, the
+# model and index locations, and every non-secret setting `src/config.py` reads. The latter must match the agent's
+# own values: src.config reads os.environ (load_dotenv has already put the agent's .env values there), while the child
+# loads no .env file, so a setting that is not forwarded would silently differ between the two processes. TMPDIR keeps
+# the caches (booklets, query translations) in the same place.
+_PROCESS_VARIABLES = ("PATH", "HOME", "LANG", "TMPDIR", "HF_HOME", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE",
+                      "RAG_EMBEDDING_MODEL", "RAG_MODEL_REVISION", "AGENT_INDEX_DIR")
+_CONFIG_VARIABLES = (
+    "LLM_NAME", "MODEL", "LLM_STREAMING", "LLM_REQUEST_TIMEOUT_S", "LLM_JSON_REPAIR", "NLI_OFFICIAL_IO",
+    "LLM_MAX_RETRIES", "LLM_RETRY_BUDGET_S", "NLI_STRATEGY", "NLI_TOP_K", "PASSAGE_CHARS", "PAGE_MAX_CHARS",
+    "PAGE_MAX_CHARS_TAIL", "PAGE_FULL_RANKS", "PART_CONTEXT", "PART_CONTEXT_CHARS", "PART_CONTEXT_CHARS_LEGAL",
+    "QUICK_PARTS", "B_LABEL_ONLY", "B_PROMPT", "B_BIAS", "B_PROBS_JOURNAL_PATH", "B_ESCALATE_BELOW", "B_SHORT_CHARS",
+    "PROMPT_LEAN", "PROMPT_MODE", "IDS_REASON", "A_RELATION_PROMPT", "A_SKILL_PROMPT", "A_COMPACT_PROMPT",
+    "A_PROMPT_DROP", "A_PART_LABEL_ONCE", "A_PROMPT", "A_PROBS_JOURNAL_PATH", "PROMPT_INPUT_JOURNAL_PATH",
+    "PROMPT_SHORT", "FEW_SHOT", "THINKING", "THINKING_MAX_TOKENS", "THINKING_BUDGET", "TRANSLATE_CLAIM",
+    "SPEAKER_AWARE", "SPEAKER_BOOST", "LEGAL_TEXT_MAX_PAGES", "REFERENCE_MAX_CHARS", "REFERENCE_MID_CHARS",
+    "REFERENCE_LONG_CHARS", "SPEAKER_HINT", "NUMERIC_OVERRIDE", "EVIDENCE_POLICY", "CACHE_SINGLE_FLIGHT",
+    "SOURCE_PAGES_LAZY", "RETRIEVAL_QUERY_MODE", "QUERY_TRANSLATION_CACHE_DIR", "BOOKLET_CACHE_DIR",
+    "BOOKLET_CACHE_PREBUILT", "EVIDENCE_SPLIT", "EVIDENCE_FILL", "EVIDENCE_MAX_ITEMS", "EVIDENCE_MAX_CHARS",
+    "EVIDENCE_ON_NEUTRAL", "NLI_BATCH_WORKERS", "NLI_WORKERS")
+_INHERITED = _PROCESS_VARIABLES + _CONFIG_VARIABLES
+# Never passed on: the key file and the secrets (API_KEY, LLM_API_KEY), the endpoint (BASE_URL, LLM_BASE_URL) and
+# every LANGSMITH_* name.
+_SECRET_VARIABLES = frozenset({"FACT_ATTACK_ENV_FILE", "API_KEY", "LLM_API_KEY", "BASE_URL", "LLM_BASE_URL"})
+_SET_BY_SERVER = frozenset({"MOCK_APERTUS", "FACT_ATTACK_SKIP_DOTENV"})  # config names `server_environment` fixes itself
 
 
 def _param_description(tool: str, field: str) -> str:
