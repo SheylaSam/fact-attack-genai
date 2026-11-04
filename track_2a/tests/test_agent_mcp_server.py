@@ -9,6 +9,8 @@ import sys
 import threading
 import unittest
 from unittest import mock
+
+import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.agent import settings
 
@@ -145,6 +147,14 @@ class McpServerOverStdioTests(unittest.TestCase):
         passages = payload(result)['passages']
         self.assertEqual(passages[0]['text'], f'Treffer zu {CLAIM_DE}')
         self.assertEqual((passages[0]['page_number'], passages[0]['section']), (2, 'COM'))
+        self.assertIs(type(passages[0]['page_number']), int)  # the engine's np.int64, not the text "2"
+
+    def test_suche_passagen_passes_the_claim_unchanged(self):
+        # Like AgentTools locally: the length is checked on the stripped text, the backend gets the claim as given
+        claim = f'  {CLAIM_DE} '
+        result = self.server.call_tool('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': claim})
+        self.assertFalse(result.isError)
+        self.assertEqual(payload(result)['passages'][0]['text'], f'Treffer zu {claim}')
 
     def test_suche_passagen_vektor_uses_the_query(self):
         result = self.server.call_tool('suche_passagen_vektor', {'vorlage_id': V2.vote_id, 'anfrage': 'Eigenbedarf'})
@@ -152,6 +162,9 @@ class McpServerOverStdioTests(unittest.TestCase):
         passages = payload(result)['passages']
         self.assertEqual(passages[0]['text'], 'Vektortreffer zu Eigenbedarf')
         self.assertEqual(passages[0]['page_number'], 4)
+        self.assertIs(type(passages[0]['page_number']), int)
+        self.assertIs(type(passages[0]['retrieval_score']), float)
+        self.assertEqual(passages[0]['retrieval_score'], float(np.float32(0.9)))
 
     def test_unknown_vote_id_is_an_error_result(self):
         for tool, args in (('suche_passagen', {'vorlage_id': '2024-11-24_de#9', 'behauptung': CLAIM_DE}),
@@ -164,7 +177,8 @@ class McpServerOverStdioTests(unittest.TestCase):
     def test_invalid_arguments_are_error_results(self):
         cases = (('suche_vorlagen', {'anfrage': '   '}),
                  ('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': '   '}),
-                 ('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': 'x' * (settings.MAX_CLAIM_CHARS + 1)}))
+                 ('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': 'x' * (settings.MAX_CLAIM_CHARS + 1)}),
+                 ('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': 123}))
         for tool, args in cases:
             with self.subTest(tool=tool, args=str(args)[:50]):
                 self.assertTrue(self.server.call_tool(tool, args).isError)
@@ -173,6 +187,8 @@ class McpServerOverStdioTests(unittest.TestCase):
         claim = ((CLAIM_DE + ' ') * 20)[:settings.MAX_CLAIM_CHARS].strip()
         result = self.server.call_tool('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': claim})
         self.assertFalse(result.isError)
+        padded = self.server.call_tool('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': f'  {claim}\n'})
+        self.assertFalse(padded.isError)  # the length counts the stripped text
 
     def test_cross_lingual_claim_is_refused(self):
         result = self.server.call_tool('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': CLAIM_FR})
@@ -236,7 +252,47 @@ class McpServerHelpersTests(unittest.TestCase):
 
     def test_server_environment_takes_only_the_listed_variables(self):
         env = server_environment({'PATH': '/bin', 'SECRET_THING': 's', 'RAG_EMBEDDING_MODEL': 'm'})
-        self.assertEqual(env, {'PATH': '/bin', 'RAG_EMBEDDING_MODEL': 'm', 'MOCK_APERTUS': '1'})
+        self.assertEqual(env, {'PATH': '/bin', 'RAG_EMBEDDING_MODEL': 'm', 'MOCK_APERTUS': '1',
+                               'FACT_ATTACK_SKIP_DOTENV': '1'})
+
+    def test_server_environment_switches_off_every_dotenv_file(self):
+        self.assertEqual(server_environment({})['FACT_ATTACK_SKIP_DOTENV'], '1')
+        self.assertEqual(server_environment({'FACT_ATTACK_SKIP_DOTENV': '0'})['FACT_ATTACK_SKIP_DOTENV'], '1')
+
+    def test_config_in_the_server_process_loads_no_dotenv_file(self):
+        # The child replaces the loader with one that fails, then imports src.config. No .env file is created:
+        # the control run without the switch shows that config calls the loader otherwise.
+        code = ('import sys, dotenv, dotenv.main\n'
+                'def refuse(*args, **kwargs):\n'
+                '    print("load_dotenv called", file=sys.stderr)\n'
+                '    sys.exit(3)\n'
+                'dotenv.load_dotenv = dotenv.main.load_dotenv = refuse\n'
+                'import src.config\n'
+                'print("config_ok")\n')
+        env = server_environment()
+
+        def run(child_env):
+            return subprocess.run([sys.executable, '-c', code], cwd=str(FIXTURE.parents[2]), env=child_env,
+                                  text=True, capture_output=True, timeout=TIMEOUT)
+
+        result = run(env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), 'config_ok')
+        control = run({name: value for name, value in env.items() if name != 'FACT_ATTACK_SKIP_DOTENV'})
+        self.assertEqual(control.returncode, 3, control.stderr)
+        self.assertIn('load_dotenv called', control.stderr)
+
+    def test_plain_keeps_numpy_numbers_numbers(self):
+        result = mcp_server._plain({'passages': [{'page_number': np.int64(3), 'score': np.float32(0.25),
+                                                  'rank': np.int32(1), 'exact': np.bool_(True),
+                                                  'native': np.float64(0.5), 'path': Path('/b/x.pdf'),
+                                                  'text': 'Seite'}]})
+        passage = result['passages'][0]
+        self.assertEqual(passage, {'page_number': 3, 'score': 0.25, 'rank': 1, 'exact': True, 'native': 0.5,
+                                   'path': '/b/x.pdf', 'text': 'Seite'})
+        self.assertEqual({k: type(v) for k, v in passage.items()},
+                         {'page_number': int, 'score': float, 'rank': int, 'exact': bool, 'native': float,
+                          'path': str, 'text': str})
 
     def test_server_environment_forces_the_mock_even_if_the_base_says_otherwise(self):
         self.assertEqual(server_environment({'MOCK_APERTUS': '0'})['MOCK_APERTUS'], '1')

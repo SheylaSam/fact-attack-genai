@@ -10,7 +10,9 @@ Scope: `suche_vorlagen`, `suche_passagen` and `suche_passagen_vektor`, plus the 
 (the model never does), so the server declares that parameter itself.
 
 The server never sends an Apertus request: its engine has a mock client, and `server_environment` hands the child
-process neither the key file nor any secret. A proven search that needs a translation (claim and booklet in different
+process only an allow list of harmless variables plus `MOCK_APERTUS=1` and `FACT_ATTACK_SKIP_DOTENV=1`, so
+`src.config` loads no `.env` file in the child (neither the key file nor `track_2a/.env`, `<repo>/.env` or one found by
+searching upwards) and no secret reaches the process. A proven search that needs a translation (claim and booklet in different
 languages) is refused with an error result; the request budget counts only requests of the agent process.
 
 stdout carries the protocol. The backend is built with stdout redirected to stderr (Python level and file
@@ -59,9 +61,17 @@ def _param_description(tool: str, field: str) -> str:
     return _TOOLS[tool][0].model_json_schema()["properties"][field]["description"]
 
 
+def _json_default(value: Any) -> Any:
+    """numpy scalars become Python numbers (a page number must stay a number for the agent's page filter); any
+    other object json cannot write (a path, say) becomes text."""
+    if getattr(value, "ndim", None) == 0 and callable(getattr(value, "item", None)):
+        return value.item()
+    return str(value)
+
+
 def _plain(value: Any) -> Any:
     """JSON-safe copy of a result (engine passages may carry numpy scalars or paths)."""
-    return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+    return json.loads(json.dumps(value, ensure_ascii=False, default=_json_default))
 
 
 def _checked(tool: str, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -95,12 +105,13 @@ def build_server(backend: SearchBackend) -> FastMCP:
             vorlage_id: Annotated[str, Field(description=_param_description("suche_passagen", "vorlage_id"))],
             behauptung: Annotated[str, Field(description=CLAIM_DESCRIPTION)]) -> dict:
         args = _checked("suche_passagen", {"vorlage_id": vorlage_id})
-        if not isinstance(behauptung, str) or not behauptung.strip() or len(behauptung) > settings.MAX_CLAIM_CHARS:
+        if not 1 <= len(behauptung.strip()) <= settings.MAX_CLAIM_CHARS:  # pydantic has already checked the type
             raise ValueError(f"Die Behauptung muss 1 bis {settings.MAX_CLAIM_CHARS} Zeichen lang sein.")
         vote = _known_vote(backend, args["vorlage_id"])
         if guess_language(behauptung) != vote.language:
             raise ValueError(CROSS_LINGUAL_ERROR)
-        return _plain({"passages": backend.proven_passages(vote.vote_id, behauptung.strip())})
+        # unchanged, as AgentTools passes it locally, so MCP and local results agree
+        return _plain({"passages": backend.proven_passages(vote.vote_id, behauptung)})
 
     def suche_passagen_vektor(
             vorlage_id: Annotated[str, Field(description=_param_description("suche_passagen_vektor", "vorlage_id"))],
@@ -167,6 +178,7 @@ def server_environment(base: Mapping[str, str] = os.environ) -> Dict[str, str]:
     """The environment of the server process: an allow list of harmless variables, and the mock switch."""
     env = {name: base[name] for name in _INHERITED if name in base}
     env["MOCK_APERTUS"] = "1"
+    env["FACT_ATTACK_SKIP_DOTENV"] = "1"  # src.config then loads no .env file in the child
     return env
 
 

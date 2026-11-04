@@ -5,12 +5,17 @@ Not collected as a test (the name has no `test_` prefix). Task 6 (the MCP client
 
 * `--laerm`: the backend setup writes "Lärm" to stdout (a library that prints while the server starts).
 * `--leer`: `search_votes` returns no candidates.
-* A query of "STIRB" to any search ends the process at once with `os._exit(1)` (a server that dies mid-check).
+* An `anfrage` of "STIRB" (`suche_vorlagen`, `suche_passagen_vektor`) ends the process at once with `os._exit(1)`
+  (a server that dies mid-check); so does a `behauptung` of "STIRB" to `suche_passagen`. Task 6 uses
+  `suche_vorlagen` with it.
+* Passages carry numpy scalars (`np.int64` page numbers, an `np.float32` score), as the engine's do.
 """
 import argparse
 import os
 from pathlib import Path
 import sys
+
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.agent import mcp_server
@@ -43,14 +48,14 @@ class FakeIndex:
 
     def search_passages(self, vote_id, query, k=8):
         _die_on_cue(query)
-        return [{'page_number': self.votes[vote_id].pages[0], 'text': f'Vektortreffer zu {query}', 'section': 'COM',
-                 'vote_id': vote_id, 'retrieval_score': 0.9}]
+        return [{'page_number': np.int64(self.votes[vote_id].pages[0]), 'text': f'Vektortreffer zu {query}',
+                 'section': 'COM', 'vote_id': vote_id, 'retrieval_score': np.float32(0.9)}]
 
 
 class FakeEngine:
     def retrieve_passages(self, claim, booklet_pdf, vote=None, claim_language=None, booklet_language=None, top_k=8):
         _die_on_cue(claim)
-        return [{'page_number': 2, 'text': f'Treffer zu {claim}', 'section': 'COM'}]
+        return [{'page_number': np.int64(2), 'text': f'Treffer zu {claim}', 'section': 'COM'}]
 
 
 def main():
