@@ -2,13 +2,23 @@
 
     START → decide → act ─┬─→ decide (search result or rejected action fed back)
                           ├─→ verify → check_evidence → finish → END
-                          └─→ finish (rueckfrage, quelle_fehlt, technical error)
+                          ├─→ ask → finish (rueckfrage, from the guard or from the model)
+                          └─→ finish (quelle_fehlt, technical error)
 
 * `decide` asks the decider for the next action; every answer is one step (`steps`).
 * `act` runs a search tool, or accepts a terminal action (`pruefen`, `rueckfrage`, `quelle_fehlt`) after validating
   its arguments and resolving every vote id with `AgentTools.check_vote_id`. An invalid action, invalid arguments or a
   rejected terminal action is fed back to the decider as an observation and is a search step. A failed tool ends the
   run as `technischer_fehler`.
+* The guard sits in `act`: without a fixed vote, before the first vote-bound action (`suche_passagen`,
+  `suche_passagen_vektor`, `pruefen`, with valid arguments and a known vote id) it assesses the vote ranking of the
+  claim's own wording (`AgentTools.claim_assessment`, never the model's query). If the claim fits several votes
+  ("mehrdeutig") the action is not run and the route goes to `ask` with the close votes; a failure of that search is a
+  technical error, never `nicht_belegt`.
+* `ask` is the only node that sets the outcome `rueckfrage` (`asked_by` says whether the guard or the model asked).
+  Stage 4 replaces the ending here with `interrupt` and continues the check with the chosen vote.
+* `quelle_fehlt` is accepted only after a search: without a fixed vote after a `suche_vorlagen` without error, with
+  a fixed vote after a passage search. Otherwise it is rejected like any invalid action.
 * At most `max_steps` search steps. After them the decider is asked once more and offered only the terminal tools; if
   that answer does not end the search, the run ends as `technischer_fehler` ("Schrittgrenze").
 * `verify` checks the claim against the vote's pooled passages with the proven NLI path. `PredictionResult.error`
@@ -32,7 +42,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, TypedDic
 from langgraph.graph import END, START, StateGraph
 
 from src import config
-from src.agent import settings
+from src.agent import guard, settings
 from src.agent.decider import AgentAction, Decider
 from src.agent.prompts import system_prompt
 from src.agent.source_index import VoteRef
@@ -58,6 +68,12 @@ UNREADABLE_ERROR = ("Belegprüfung nicht möglich: Für {pages} von {source} gib
 LEGACY_POLICY_ERROR = ("EVIDENCE_POLICY=legacy wird vom Agenten nicht unterstützt: Seine Belegprüfung braucht Zitate "
                        "aus dem Originaltext der PDF-Seiten (EVIDENCE_POLICY raw_pages oder raw_pages_and_blocks). Es "
                        "wurde nichts geprüft.")
+NO_SEARCH_YET = "quelle_fehlt erst nach einer Suche: Rufe zuerst suche_vorlagen auf."
+NO_PASSAGE_SEARCH_YET = ("quelle_fehlt erst nach einer Suche: Suche zuerst mit suche_passagen oder "
+                         "suche_passagen_vektor.")
+GUARD_ERROR = "Wächter: Vorlagensuche zur Behauptung fehlgeschlagen: {error}"
+VOTE_BOUND_TOOLS = frozenset({"suche_passagen", "suche_passagen_vektor", "pruefen"})  # the guard checks before these
+PASSAGE_SEARCH_TOOLS = frozenset({"suche_passagen", "suche_passagen_vektor"})
 SUMMARY_CHARS = 200
 ERROR_CHARS = 300
 _PAGE_PREFIX = re.compile(r"^\[(?:page|seite)\s+\d+\] ?", re.IGNORECASE)  # engine prefix, as in to_official_dict
@@ -82,6 +98,7 @@ class AgentResult:
     prediction: Optional[PredictionResult] = None
     events: List[TraceEvent] = field(default_factory=list)
     steps: int = 0
+    asked_by: Optional[Literal["guard", "model"]] = None  # who asked back; only with outcome "rueckfrage"
 
 
 class _State(TypedDict, total=False):
@@ -91,6 +108,11 @@ class _State(TypedDict, total=False):
     history: List[Observation]  # observations fed back so far, rejections included
     steps: int  # decisions so far
     search_steps: int  # decisions that did not end the search
+    vote_searches: int  # suche_vorlagen runs without error
+    passage_searches: int  # suche_passagen / suche_passagen_vektor runs without error
+    guard_done: bool  # the guard has assessed the claim and let the first vote-bound action through
+    asked_by: str  # "guard" or "model"
+    ask_data: dict  # what the ask event carries: the guard's assessment or the model's options
     offered: List[str]  # tools offered for the latest decision
     action: AgentAction  # the latest decision
     route: str  # next node
@@ -191,14 +213,33 @@ class _Nodes:
         history = list(state.get("history", []))
         started = time.perf_counter()
         rejection = self._precheck(action, state.get("offered", []))
+        guard_data: Optional[dict] = None
+        guard_done = state.get("guard_done", False)
+        if rejection is None and not guard_done and self._guard_applies(action):
+            try:
+                assessment = self.tools.claim_assessment(state["claim"])  # the claim's wording, not the model's query
+            except Exception as exc:  # a guard that cannot look is a technical error, never "nicht belegt"
+                message = GUARD_ERROR.format(error=_exception(exc))
+                self.emit(step, "act", started, tool=tool, args=args, summary="Wächter: Vorlagensuche fehlgeschlagen",
+                          error=message)
+                return {"error": message, "route": "finish"}
+            guard_data, guard_done = assessment.to_data(), True
+            if assessment.kind == "mehrdeutig":  # several votes fit: the action is not run
+                options = [self.tools.check_vote_id(vote_id) for vote_id in assessment.close]
+                self.emit(step, "act", started, tool=tool, args=args, data={"guard": guard_data},
+                          summary=f"Wächter: mehrdeutig, {', '.join(assessment.close)} liegen gleichauf; "
+                                  f"{tool} nicht ausgeführt")
+                return {"guard_done": True, "asked_by": "guard", "question": guard.question(options),
+                        "options": options, "ask_data": guard_data, "route": "ask"}
+        guard_event = {"guard": guard_data} if guard_data is not None else {}
         if rejection is None and tool in TERMINAL_TOOLS:
             try:
-                update, summary = self._accept_terminal(action)
-            except ValueError as exc:  # invalid arguments, unknown vote id, no passages
+                update, summary = self._accept_terminal(state, action)
+            except ValueError as exc:  # invalid arguments, unknown vote id, no passages, no search before quelle_fehlt
                 rejection = str(exc)
             else:
-                self.emit(step, "act", started, tool=tool, args=args, summary=summary)
-                return update
+                self.emit(step, "act", started, tool=tool, args=args, summary=summary, data=guard_event)
+                return {**update, "guard_done": guard_done}
         if state.get("search_steps", 0) >= self.max_steps:  # the last decision did not end the search
             reason = (rejection or f"{tool} beendet die Suche nicht").rstrip(" .")
             message = (f"Schrittgrenze erreicht: Nach {self.max_steps} Suchschritten wurde die Suche nicht beendet "
@@ -213,9 +254,15 @@ class _Nodes:
             if observation.error and observation.data.get("error_kind") != ERROR_INVALID_ARGS:  # a tool failure
                 message = f"Werkzeug {tool} fehlgeschlagen: {observation.error}"
                 self.emit(step, "act", started, tool=tool, args=args, summary=_short(observation.text),
-                          error=message, data=observation.data)
+                          error=message, data={**observation.data, **guard_event})
                 return {"history": history + [observation], "error": message, "route": "finish"}
         search_steps = state.get("search_steps", 0) + 1
+        searches = {}
+        if observation.error is None:  # a rejected or failed search is no search
+            if tool == "suche_vorlagen":
+                searches["vote_searches"] = state.get("vote_searches", 0) + 1
+            elif tool in PASSAGE_SEARCH_TOOLS:
+                searches["passage_searches"] = state.get("passage_searches", 0) + 1
         shown = observation
         if search_steps >= self.max_steps:
             hint = (f"Hinweis: Die Schrittgrenze von {self.max_steps} Suchschritten ist erreicht. Beende die Suche "
@@ -224,9 +271,20 @@ class _Nodes:
         messages = list(state["messages"]) + self.decider.observation_messages(action, shown)
         self.emit(step, "act", started, tool=tool, args=args,
                   summary=_short(observation.text.splitlines()[0] if observation.text else ""),
-                  error=observation.error, data=observation.data)  # the candidates, passages and pool the model saw
+                  error=observation.error, data={**observation.data, **guard_event})  # what the model saw
         return {"messages": messages, "history": history + [observation], "search_steps": search_steps,
-                "route": "decide"}
+                "guard_done": guard_done, "route": "decide", **searches}
+
+    def _guard_applies(self, action: AgentAction) -> bool:
+        """True if the guard checks before this action: no fixed vote, a vote-bound tool with valid arguments and a
+        known vote id. Anything else is rejected as before and needs no guard."""
+        if self.tools.fixed_vote_id is not None or action.tool not in VOTE_BOUND_TOOLS:
+            return False
+        try:
+            self.tools.check_vote_id(validate_args(action.tool, action.args)["vorlage_id"])
+        except ValueError:
+            return False
+        return True
 
     @staticmethod
     def _precheck(action: AgentAction, offered: List[str]) -> Optional[str]:
@@ -237,7 +295,7 @@ class _Nodes:
             return f"{action.tool} ist in dieser Prüfung nicht verfügbar. Verfügbar: {', '.join(offered)}."
         return None
 
-    def _accept_terminal(self, action: AgentAction) -> Tuple[dict, str]:
+    def _accept_terminal(self, state: _State, action: AgentAction) -> Tuple[dict, str]:
         """The state update and trace summary of a valid terminal action; ValueError (German) otherwise."""
         args = validate_args(action.tool, action.args)
         if action.tool == "pruefen":
@@ -250,11 +308,27 @@ class _Nodes:
                     f"Prüfung mit {len(passages)} Passagen aus {vote.vote_id}")
         if action.tool == "rueckfrage":
             options = [self.tools.check_vote_id(vote_id) for vote_id in args["optionen"]]
-            return ({"outcome": "rueckfrage", "question": args["frage"], "options": options,
-                     "reasoning": QUESTION_REASON, "route": "finish"},
+            return ({"question": args["frage"], "options": options, "asked_by": "model",
+                     "ask_data": {"options": [{"vote_id": o.vote_id, "title": o.title, "date": o.date}
+                                              for o in options]}, "route": "ask"},
                     f"Rückfrage mit {len(options)} Optionen: {', '.join(o.vote_id for o in options)}")
+        if self.tools.fixed_vote_id is None and not state.get("vote_searches", 0):
+            raise ValueError(NO_SEARCH_YET)
+        if self.tools.fixed_vote_id is not None and not state.get("passage_searches", 0):
+            raise ValueError(NO_PASSAGE_SEARCH_YET)
         return ({"outcome": "quelle_fehlt", "reasoning": args["begruendung"], "route": "finish"},
                 f"Quelle fehlt: {_short(args['begruendung'])}")
+
+    def ask(self, state: _State) -> dict:
+        """The only node that sets the outcome `rueckfrage`. Stage 4 replaces ending here with `interrupt`."""
+        options, step = state["options"], state["steps"]
+        asked_by = state.get("asked_by", "model")
+        started = time.perf_counter()
+        ids = [option.vote_id for option in options]
+        self.emit(step, "ask", started, tool="rueckfrage", args={"optionen": ids}, data=state.get("ask_data"),
+                  summary=f"Rückfrage ({'Wächter' if asked_by == 'guard' else 'Modell'}) mit {len(ids)} Optionen: "
+                          f"{', '.join(ids)}")
+        return {"outcome": "rueckfrage", "reasoning": QUESTION_REASON, "route": "finish"}
 
     def verify(self, state: _State) -> dict:
         vote, passages, step = state["vote"], state["passages"], state["steps"]
@@ -362,11 +436,13 @@ def build_graph(tools: AgentTools, decider: Decider, engine, tracer: Tracer, max
         raise ValueError(f"max_steps must be at least 1, got {max_steps!r}")
     nodes = _Nodes(tools, decider, engine, tracer, max_steps, budget)
     graph = StateGraph(_State)
-    for name in ("decide", "act", "verify", "check_evidence", "finish"):
+    for name in ("decide", "act", "ask", "verify", "check_evidence", "finish"):
         graph.add_node(name, nodes.guarded(name, getattr(nodes, name)))
     graph.add_edge(START, "decide")
     graph.add_conditional_edges("decide", _route, {"act": "act", "finish": "finish"})
-    graph.add_conditional_edges("act", _route, {"decide": "decide", "verify": "verify", "finish": "finish"})
+    graph.add_conditional_edges("act", _route, {"decide": "decide", "ask": "ask", "verify": "verify",
+                                                "finish": "finish"})
+    graph.add_edge("ask", "finish")
     graph.add_conditional_edges("verify", _route, {"check_evidence": "check_evidence", "finish": "finish"})
     graph.add_edge("check_evidence", "finish")
     graph.add_edge("finish", END)
@@ -382,7 +458,8 @@ def _result(state: dict, events: List[TraceEvent]) -> AgentResult:
                            error=state.get("error") or NO_RESULT, **common)
     return AgentResult(outcome=state["outcome"], evidence=list(state.get("evidence", [])),
                        question=state.get("question"), options=list(state.get("options", [])),
-                       reasoning=state.get("reasoning", ""), note=state.get("note"), **common)
+                       reasoning=state.get("reasoning", ""), note=state.get("note"),
+                       asked_by=state.get("asked_by") if state["outcome"] == "rueckfrage" else None, **common)
 
 
 def run_check(claim: str, *, tools: AgentTools, decider: Decider, engine, tracer: Tracer,

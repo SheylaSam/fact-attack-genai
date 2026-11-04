@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import sys
 import tempfile
 import unittest
@@ -81,6 +82,18 @@ class FormatStepsTests(unittest.TestCase):
         self.assertNotIn('?', rows['suche_vorlagen'])
         self.assertNotIn('✗', rows['rueckfrage'])
         self.assertIn('Ungültige Argumente', text)
+
+    def test_format_steps_marks_the_question_step(self):
+        events = [
+            event(1, 'decide', 'suche_passagen', 'suche_passagen gewählt'),
+            event(1, 'act', 'suche_passagen', 'Wächter: mehrdeutig, Aktion nicht ausgeführt'),
+            event(1, 'ask', 'rueckfrage', 'Rückfrage mit 2 Optionen: a, b', args={'optionen': ['a', 'b']}),
+            event(1, 'finish', None, 'Ergebnis: rueckfrage, 2 Optionen'),
+        ]
+        rows = numbered(cli_format.format_steps(events))
+        self.assertIn('?', rows['Rückfrage'])
+        self.assertIn('✓', rows['suche_passagen'])
+        self.assertEqual(cli_format.NODE_LABELS['ask'], 'Rückfrage')
 
     def test_format_steps_numbers_each_step_once(self):
         events = [
@@ -170,6 +183,29 @@ class FormatResultTests(unittest.TestCase):
         for expected in ('rueckfrage', 'Welche Vorlage ist gemeint?', V1.vote_id, V2.vote_id, V1.title, V2.title):
             self.assertIn(expected, text)
         self.assertNotIn('S. ', text)
+
+    def test_answer_commands_quote_the_claim(self):
+        lines = cli_format.answer_commands('Er sagt "nein" & geht', [V2], ['--mock'])
+        self.assertEqual(lines, [f"python -m src.agent {shlex.quote('Er sagt \"nein\" & geht')} "
+                                 f"--quelle {V2.vote_id} --mock"])
+        self.assertEqual(cli_format.answer_commands(CLAIM, [V1, V2]),
+                         [f"python -m src.agent {shlex.quote(CLAIM)} --quelle {V1.vote_id}",
+                          f"python -m src.agent {shlex.quote(CLAIM)} --quelle {V2.vote_id}"])
+
+    def test_format_result_rueckfrage_shows_the_answer_commands(self):
+        result = AgentResult(outcome='rueckfrage', question='Welche?', options=[V1, V2], asked_by='guard')
+        text = cli_format.format_result(result, claim=CLAIM, answer_args=['--mock'])
+        self.assertIn('Antworten mit einer neuen Prüfung:', text)
+        for line in cli_format.answer_commands(CLAIM, [V1, V2], ['--mock']):
+            self.assertIn(line, text)
+        self.assertNotIn('Antworten mit einer neuen Prüfung:', cli_format.format_result(result))  # no claim: none
+        done = AgentResult(outcome='gestuetzt', vote=V1)
+        self.assertNotIn('--quelle', cli_format.format_result(done, claim=CLAIM))
+
+    def test_result_json_has_asked_by(self):
+        data = cli_format.result_to_dict(AgentResult(outcome='rueckfrage', options=[V1, V2], asked_by='guard'))
+        self.assertEqual(data['asked_by'], 'guard')
+        self.assertIsNone(cli_format.result_to_dict(AgentResult(outcome='quelle_fehlt'))['asked_by'])
 
     def test_format_result_technical_error_and_note(self):
         failed = AgentResult(outcome='technischer_fehler', reasoning='Abgebrochen.', error='Anfrage-Budget erschöpft')
@@ -324,12 +360,17 @@ class MainTests(unittest.TestCase):
         self.assertIn('rueckfrage', out)
         self.assertIn(V1.vote_id, out)
         self.assertIn(V2.vote_id, out)
+        self.assertIn('Rückfrage', numbered(out.split('Ergebnis:')[0]))  # its own step, from the guard
+        for vote in (V1, V2):
+            self.assertIn(f"{shlex.quote(CLAIM)} --quelle {vote.vote_id} --mock", out)
         self.assertEqual([client.kwargs for client in FakeClient.instances], [{'mock': True}])
         self.assertTrue(self.index.closed)
         self.assertTrue(self.engines[0].closed)
         traces = list(self.trace_dir.glob('*.trace.jsonl'))
         self.assertEqual(len(traces), 1)
         self.assertEqual(json.loads(traces[0].read_text(encoding='utf-8').splitlines()[0])['node'], 'decide')
+        nodes = [json.loads(line)['node'] for line in traces[0].read_text(encoding='utf-8').splitlines()]
+        self.assertEqual(nodes[-2:], ['ask', 'finish'])
         self.assertEqual(list(self.trace_dir.glob('*.requests.jsonl')), [])
 
     def test_main_json_output_is_the_result_and_question_exits_zero(self):

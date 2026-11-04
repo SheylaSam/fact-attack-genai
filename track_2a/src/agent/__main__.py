@@ -139,8 +139,10 @@ def _run(args: argparse.Namespace) -> int:
             print(footer, file=sys.stderr)
         else:
             label = "Mock (skriptgesteuert, ohne Netz)" if args.mock else f"echt, Entscheider {mode}"
+            answer_args = ["--mock"] if args.mock else []  # the run options an answer repeats
             print(f"Behauptung: {' '.join(claim.split())}\nModus: {label}\n\nSchritte:\n"
-                  f"{format_steps(result.events)}\n\n{format_result(result)}\n\n{footer}")
+                  f"{format_steps(result.events)}\n\n"
+                  f"{format_result(result, claim=claim, answer_args=answer_args)}\n\n{footer}")
     except _Abort:
         raise
     except Exception:

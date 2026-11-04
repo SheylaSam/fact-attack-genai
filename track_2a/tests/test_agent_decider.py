@@ -353,16 +353,12 @@ class ScriptedDeciderTests(unittest.TestCase):
         self.assertEqual((action.tool, action.args, action.error), ('suche_vorlagen', {'anfrage': CLAIM}, None))
         self.assertEqual(json.loads(action.raw), {'tool': 'suche_vorlagen', 'args': {'anfrage': CLAIM}})
 
-    def test_scripted_asks_when_top_two_close(self):
+    def test_scripted_takes_rank_one_and_leaves_the_question_to_the_guard(self):
         history = [votes_observation(vote_candidate(V1, 0.873, 'Untermiete', '2024-11-24'),
-                                     vote_candidate(V2, 0.861, 'Eigenbedarf', '2024-11-24'),
-                                     vote_candidate('2026-06-14_de#1', 0.80))]
+                                     vote_candidate(V2, 0.861, 'Eigenbedarf', '2024-11-24'))]
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, history)
-        self.assertEqual(action.tool, 'rueckfrage')
-        self.assertEqual(action.args['optionen'], [V1, V2])
-        for part in ('Untermiete', 'Eigenbedarf', '24.11.2024'):
-            self.assertIn(part, action.args['frage'])
-        self.assertEqual(validate_args('rueckfrage', action.args), action.args)
+        self.assertEqual((action.tool, action.args), ('suche_passagen', {'vorlage_id': V1}))
+        self.assertFalse(hasattr(ScriptedDecider(), 'margin'))
 
     def test_scripted_checks_when_clear(self):
         decider = ScriptedDecider()
@@ -379,11 +375,6 @@ class ScriptedDeciderTests(unittest.TestCase):
         self.assertIsNone(action.error)
         fixed = ScriptedDecider(fixed_vote_id=V2).decide(MESSAGES, fixed_vote_specs(), [])
         self.assertEqual(fixed.args, {'vorlage_id': V2})
-
-    def test_scripted_margin_is_a_strict_lower_bound(self):
-        votes = [votes_observation(vote_candidate(V1, 0.75), vote_candidate(V2, 0.5))]
-        self.assertEqual(ScriptedDecider(margin=0.25).decide(MESSAGES, TOOL_SPECS, votes).tool, 'suche_passagen')
-        self.assertEqual(ScriptedDecider(margin=0.3).decide(MESSAGES, TOOL_SPECS, votes).tool, 'rueckfrage')
 
     def test_scripted_single_candidate_needs_no_question(self):
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, [votes_observation(vote_candidate(V1, 0.5))])

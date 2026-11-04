@@ -72,18 +72,24 @@ def make_prediction(label, quotes=(), error=None):
                             tokens_total=107, latency_ms=12.0, error=error)
 
 
+CLOSE = [candidate(V1, 0.873), candidate(V2, 0.869)]  # V1 and V2 on par: the guard asks back
+CLEAR = [candidate(V1, 0.873), candidate(V2, 0.801)]  # V1 clearly ahead
+
+
 class FakeIndex:
-    def __init__(self, candidates=None, error=None, votes=(V1, V2)):
+    def __init__(self, candidates=None, error=None, votes=(V1, V2), candidates_by_query=None, error_for=None):
         self.votes = {vote.vote_id: vote for vote in votes}
-        self.candidates = [candidate(V1, 0.873), candidate(V2, 0.801)] if candidates is None else candidates
+        self.candidates = list(CLEAR) if candidates is None else candidates
+        self.candidates_by_query = dict(candidates_by_query or {})  # query -> candidates; others: `candidates`
         self.error = error
+        self.error_for = error_for  # fail only for this query
         self.vote_calls = []
 
     def search_votes(self, query, k=5):
         self.vote_calls.append(query)
-        if self.error:
-            raise self.error
-        return list(self.candidates)
+        if self.error or (self.error_for is not None and query.strip() == self.error_for):
+            raise self.error or RuntimeError('Vorlagensuche kaputt')
+        return list(self.candidates_by_query.get(query.strip(), self.candidates))
 
     def search_passages(self, vote_id, query, k=8):
         return []
@@ -288,7 +294,10 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(rejected.data, {'error_kind': ERROR_INVALID_ARGS})
         self.assertEqual(passages.data, {'vote_id': V1.vote_id, 'found': 1, 'new': 1, 'dropped': 0, 'outside': 0,
                                          'pool_size': 1,
-                                         'passages': [{'page_number': 2, 'section': 'COM', 'status': 'neu'}]})
+                                         'passages': [{'page_number': 2, 'section': 'COM', 'status': 'neu'}],
+                                         'guard': {'kind': 'eindeutig', 'top': V1.vote_id, 'close': [V1.vote_id],
+                                                   'thresholds': {'score_margin': 0.02, 'min_hits_ratio': 0.5,
+                                                                  'none_below': None}}})
         self.assertEqual(accepted.data, {})
         self.assertIsNot(votes.data, decider.calls[1]['history'][0].data)  # a copy, not the observation's dict
         json.dumps([asdict(e) for e in result.events])  # JSON-safe as they are
@@ -317,7 +326,7 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(result.steps, 3)
         self.assertEqual([e.tool for e in result.events if e.node == 'decide'],
                          ['suche_vorlagen', 'suche_passagen', 'pruefen'])
-        self.assertEqual(index.vote_calls, [CLAIM])
+        self.assertEqual(index.vote_calls, [CLAIM, CLAIM])  # the scripted search, then the guard's check
         self.assertEqual(len(engine.verify_calls), 1)
         self.assertEqual([len(call['history']) for call in decider.calls], [0, 1, 2])
         self.assertIn('Gefundene Vorlagen', contents(decider.calls[1]['messages']))
@@ -351,7 +360,7 @@ class GraphTests(unittest.TestCase):
         tracer = Tracer()
         graph = build_graph(tools, decider, engine, tracer, max_steps=1)
         self.assertEqual(set(graph.get_graph().nodes) - {'__start__', '__end__'},
-                         {'decide', 'act', 'verify', 'check_evidence', 'finish'})
+                         {'decide', 'act', 'ask', 'verify', 'check_evidence', 'finish'})
         state = graph.invoke({'claim': CLAIM, 'language': 'de',
                               'messages': [{'role': 'system', 'content': 'S'}, {'role': 'user', 'content': CLAIM}]})
         self.assertEqual(state['outcome'], 'technischer_fehler')
@@ -360,20 +369,20 @@ class GraphTests(unittest.TestCase):
 
     def test_invalid_action_counts_and_is_fed_back(self):
         broken = AgentAction(raw='Ich denke nach.', error='Keine Werkzeugwahl: Die Antwort enthält kein JSON-Objekt.')
-        decider = PresetDecider(broken, act('quelle_fehlt', begruendung='Keine Vorlage passt.'))
+        decider = PresetDecider(broken, search_votes(), act('quelle_fehlt', begruendung='Keine Vorlage passt.'))
         result, _, _ = check(decider)
         self.assertEqual(result.outcome, 'quelle_fehlt')
-        self.assertEqual(result.steps, 2)
+        self.assertEqual(result.steps, 3)
         self.assertIn(broken.error, contents(decider.calls[1]['messages']))
         [rejected] = decider.calls[1]['history']
         self.assertEqual(rejected.data['error_kind'], ERROR_INVALID_ARGS)
 
     def test_invalid_tool_arguments_are_fed_back(self):
-        decider = PresetDecider(act('suche_passagen', vorlage_id='../../.env'),
+        decider = PresetDecider(act('suche_passagen', vorlage_id='../../.env'), search_votes(),
                                 act('quelle_fehlt', begruendung='Keine Vorlage passt.'))
         result, engine, _ = check(decider)
         self.assertEqual(result.outcome, 'quelle_fehlt')
-        self.assertEqual(result.steps, 2)
+        self.assertEqual(result.steps, 3)
         self.assertIn('Unbekannte Vorlagen-ID', contents(decider.calls[1]['messages']))
 
     def test_rueckfrage_returns_question_and_options(self):
@@ -390,6 +399,119 @@ class GraphTests(unittest.TestCase):
         self.assertIsNone(result.prediction)
         self.assertEqual(engine.verify_calls, [])
 
+    def test_guard_asks_when_the_claim_fits_several_votes(self):
+        decider = PresetDecider(search_votes(), search_passages(V1))
+        result, engine, index = check(decider, index=FakeIndex(CLOSE))
+        self.assertEqual(result.outcome, 'rueckfrage')
+        self.assertEqual(result.asked_by, 'guard')
+        self.assertEqual([o.vote_id for o in result.options], [V1.vote_id, V2.vote_id])
+        self.assertIn('Welche Vorlage ist gemeint', result.question)
+        self.assertEqual(engine.retrieve_calls, [])
+        self.assertEqual(engine.verify_calls, [])
+        self.assertEqual(len(decider.calls), 2)  # the intercepted action ends the run
+        [ask] = [e for e in result.events if e.node == 'ask']
+        self.assertEqual((ask.tool, ask.args), ('rueckfrage', {'optionen': [V1.vote_id, V2.vote_id]}))
+        self.assertEqual(ask.data['kind'], 'mehrdeutig')
+        self.assertEqual(ask.data['close'], [V1.vote_id, V2.vote_id])
+        self.assertEqual([e.node for e in result.events[-2:]], ['ask', 'finish'])
+
+    def test_guard_uses_the_claim_not_the_model_query(self):
+        query = 'Untermiete schriftliche Zustimmung'
+        index = FakeIndex(candidates_by_query={CLAIM: CLOSE, query: CLEAR})
+        decider = PresetDecider(search_votes(query), search_passages(V1))
+        result, engine, _ = check(decider, index=index)
+        self.assertEqual(result.outcome, 'rueckfrage')
+        self.assertEqual(result.asked_by, 'guard')
+        self.assertIn(CLAIM, index.vote_calls)
+        self.assertEqual(engine.retrieve_calls, [])
+        self.assertIn('klar am besten', contents(decider.calls[1]['messages']))  # the model's own search looked clear
+
+    def test_guard_lets_a_clear_claim_through(self):
+        decider = PresetDecider(search_votes(), search_passages(V1), act('pruefen', vorlage_id=V1.vote_id))
+        result, engine, index = check(decider, index=FakeIndex(CLEAR))
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertIsNone(result.asked_by)
+        self.assertEqual(index.vote_calls, ['Untermiete', CLAIM])  # the model's search, then exactly one guard check
+        self.assertEqual(len(engine.retrieve_calls), 1)
+        acts = [e for e in result.events if e.node == 'act']
+        self.assertEqual(acts[1].data['guard']['kind'], 'eindeutig')
+        self.assertNotIn('guard', acts[0].data)
+        self.assertNotIn('guard', acts[2].data or {})
+
+    def test_guard_is_skipped_with_a_fixed_vote(self):
+        decider = PresetDecider(search_passages(V1), act('pruefen', vorlage_id=V1.vote_id))
+        result, _, index = check(decider, index=FakeIndex(CLOSE), fixed_vote_id=V1.vote_id)
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertNotIn(CLAIM, index.vote_calls)
+        self.assertEqual(index.vote_calls, [])
+
+    def test_guard_does_not_judge_an_action_with_unknown_vote(self):
+        decider = PresetDecider(act('suche_passagen', vorlage_id='2024-11-24_de#9'), search_votes(),
+                                act('quelle_fehlt', begruendung='Keine Vorlage passt.'))
+        result, _, index = check(decider, index=FakeIndex(CLOSE))
+        self.assertEqual(index.vote_calls, ['Untermiete'])  # the unknown id was rejected as before, not guarded
+        self.assertIn('Unbekannte Vorlagen-ID', contents(decider.calls[1]['messages']))
+        self.assertEqual(result.outcome, 'quelle_fehlt')
+
+    def test_guard_failure_is_technical_error(self):
+        index = FakeIndex(error_for=CLAIM)
+        decider = PresetDecider(search_votes('Untermiete'), search_passages(V1))
+        result, engine, _ = check(decider, index=index)
+        self.assertEqual(result.outcome, 'technischer_fehler')
+        self.assertIn('Wächter: Vorlagensuche zur Behauptung fehlgeschlagen', result.error)
+        self.assertIn('Vorlagensuche kaputt', result.error)
+        self.assertEqual(engine.retrieve_calls, [])
+
+    def test_model_rueckfrage_goes_through_ask(self):
+        decider = PresetDecider(search_votes(),
+                                act('rueckfrage', frage='Welche Mietrechtsvorlage?', optionen=[V1.vote_id, V2.vote_id]))
+        result, _, _ = check(decider)
+        self.assertEqual(result.outcome, 'rueckfrage')
+        self.assertEqual(result.asked_by, 'model')
+        self.assertIn('ask', {e.node for e in result.events})
+        [ask] = [e for e in result.events if e.node == 'ask']
+        self.assertEqual(ask.args, {'optionen': [V1.vote_id, V2.vote_id]})
+        self.assertEqual([e.node for e in result.events[-2:]], ['ask', 'finish'])
+
+    def test_quelle_fehlt_before_any_search_is_rejected(self):
+        reason = 'Keine Vorlage der Büchlein behandelt den Euro.'
+        decider = PresetDecider(act('quelle_fehlt', begruendung=reason), search_votes('Euro'),
+                                act('quelle_fehlt', begruendung=reason))
+        result, engine, _ = check(decider, claim='Die Schweiz führt den Euro ein.')
+        self.assertEqual(result.outcome, 'quelle_fehlt')
+        self.assertEqual(result.steps, 3)
+        self.assertIn('zuerst suche_vorlagen', decider.calls[1]['messages'][-1]['content'])
+        self.assertIn('quelle_fehlt erst nach einer Suche', decider.calls[1]['messages'][-1]['content'])
+        self.assertEqual(engine.verify_calls, [])
+
+    def test_quelle_fehlt_with_fixed_vote_needs_a_passage_search(self):
+        reason = 'In der Vorlage steht dazu nichts.'
+        decider = PresetDecider(act('quelle_fehlt', begruendung=reason), search_passages(V1),
+                                act('quelle_fehlt', begruendung=reason))
+        result, _, _ = check(decider, fixed_vote_id=V1.vote_id)
+        self.assertEqual(result.outcome, 'quelle_fehlt')
+        self.assertEqual(result.steps, 3)
+        self.assertIn('suche_passagen oder suche_passagen_vektor', decider.calls[1]['messages'][-1]['content'])
+
+    def test_answer_by_fixed_vote_continues_to_a_verdict(self):
+        first, _, _ = check(ScriptedDecider(), index=FakeIndex(CLOSE))
+        self.assertEqual(first.outcome, 'rueckfrage')
+        chosen = first.options[1]
+        self.assertEqual(chosen, V2)
+        decider = ScriptedDecider(fixed_vote_id=chosen.vote_id)
+        page_4 = 'Eigenbedarf\n' + QUOTE
+        engine = FakeEngine(prediction=make_prediction(0, [(4, QUOTE)]), pages={4: page_4})  # V2 has pages 4 and 5
+        engine.passages = [passage(4, page_4)]
+        result, engine, _ = check(decider, index=FakeIndex(CLOSE), engine=engine, fixed_vote_id=chosen.vote_id)
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertEqual(engine.verify_calls[0]['vote'], V2.title)
+
+    def test_scripted_decider_is_caught_by_the_guard_in_a_full_run(self):
+        result, engine, _ = check(RecordingDecider(ScriptedDecider()), index=FakeIndex(CLOSE))
+        self.assertEqual((result.outcome, result.asked_by), ('rueckfrage', 'guard'))
+        self.assertEqual([e.tool for e in result.events if e.node == 'decide'], ['suche_vorlagen', 'suche_passagen'])
+        self.assertEqual(engine.verify_calls, [])
+
     def test_rueckfrage_with_unknown_option_is_rejected(self):
         decider = PresetDecider(search_votes(),
                                 act('rueckfrage', frage='Welche?', optionen=[V1.vote_id, '2024-11-24_de#7']),
@@ -401,10 +523,10 @@ class GraphTests(unittest.TestCase):
 
     def test_terminal_tool_that_is_not_offered_is_rejected(self):
         decider = PresetDecider(act('rueckfrage', frage='Welche?', optionen=[V1.vote_id, V2.vote_id]),
-                                act('quelle_fehlt', begruendung='Keine Vorlage passt.'))
+                                search_passages(V1), act('quelle_fehlt', begruendung='Keine Vorlage passt.'))
         result, _, _ = check(decider, fixed_vote_id=V1.vote_id)
         self.assertEqual(result.outcome, 'quelle_fehlt')
-        self.assertEqual(result.steps, 2)
+        self.assertEqual(result.steps, 3)
         self.assertIn('rueckfrage ist in dieser Prüfung nicht verfügbar', contents(decider.calls[1]['messages'][-1:]))
 
     def test_quelle_fehlt(self):
@@ -627,7 +749,7 @@ class GraphTests(unittest.TestCase):
                     check(decider, claim=claim)
                 self.assertEqual(decider.calls, [])
         longest = ('Die Miete steigt. ' * 60)[:settings.MAX_CLAIM_CHARS]
-        result, _, _ = check(PresetDecider(act('quelle_fehlt', begruendung='Keine Vorlage passt.')), claim=longest)
+        result, _, _ = check(PresetDecider(search_votes(), act('quelle_fehlt', begruendung='Keine Vorlage passt.')), claim=longest)
         self.assertEqual(result.outcome, 'quelle_fehlt')
 
     def test_events_are_those_of_this_run(self):

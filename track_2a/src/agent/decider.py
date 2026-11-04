@@ -15,7 +15,6 @@ Exceptions of the chat model (timeouts, a spent request budget) are not caught h
 `make_chat_model` is the only place that builds the LLM client: sync only, one HTTP request per call, counted on the
 check's `RequestBudget`, at most `settings.LLM_MAX_TOKENS` output tokens per answer.
 """
-import datetime
 import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, Tuple
@@ -32,13 +31,11 @@ if TYPE_CHECKING:  # langchain-openai is optional (requirements-agent.txt); make
     from langchain_openai import ChatOpenAI
 
 MODES = ("native", "json", "scripted")
-DEFAULT_MARGIN = 0.02  # top-1 must lead top-2 by at least this much, or the scripted policy asks
 RAW_CHARS = 2000  # cap on a model answer that parsed to nothing; it goes into the history again
 THINKING_START, THINKING_END = "<|inner_prefix|>", "<|inner_suffix|>"  # Apertus thinking markers
 CUT_OFF_RAW = "(Antwort im Denkanteil abgebrochen; der Denktext wird nicht übernommen.)"  # history entry for it
 CUT_OFF_ERROR = ("Denkanteil abgeschnitten: Die Antwort endete, bevor das Nachdenken abgeschlossen war. Es wurde keine "
                  "Aktion ausgeführt. Antworte knapp mit genau einem JSON-Objekt.")
-TITLE_CHARS = 90  # a vote title inside the scripted question
 CONNECT_TIMEOUT_S = 10.0
 FORMAT_INSTRUCTION = (
     'Antworte ausschließlich mit genau einem JSON-Objekt der Form {"tool": "<Werkzeugname>", "args": {<Argumente>}}. '
@@ -229,28 +226,16 @@ def _claim(messages: List[dict]) -> Optional[str]:
     return None
 
 
-def _german_date(iso_date: Any) -> str:
-    try:
-        return datetime.date.fromisoformat(str(iso_date)).strftime("%d.%m.%Y")
-    except ValueError:
-        return str(iso_date)
-
-
-def _short(title: Any) -> str:
-    title = " ".join(str(title).split())
-    return title if len(title) <= TITLE_CHARS else title[:TITLE_CHARS].rstrip() + "…"
-
-
 class ScriptedDecider:
-    """Deterministic policy, no network: find the vote, ask when the two best votes are too close to call, search the
-    best vote's passages, check. Reads only the last observation (`history[-1].data`) and the claim.
+    """Deterministic policy, no network: find the vote, take rank 1 like the model in run 1 of stage 1, search its
+    passages, check. It never asks back: the guard in the graph catches an ambiguous claim, so there is a single
+    source of ambiguity. Reads only the last observation (`history[-1].data`) and the claim.
 
     With `fixed_vote_id` the vote is given: the policy goes straight to `suche_passagen(fixed vote)`; the graph
     searches with the claim.
     """
 
-    def __init__(self, margin: float = DEFAULT_MARGIN, fixed_vote_id: Optional[str] = None):
-        self.margin = margin
+    def __init__(self, fixed_vote_id: Optional[str] = None):
         self.fixed_vote_id = fixed_vote_id
 
     def decide(self, messages: List[dict], tools: List[dict], history: List[Observation]) -> AgentAction:
@@ -278,12 +263,6 @@ class ScriptedDecider:
             return self._act("quelle_fehlt", {"begruendung": "Keine Vorlage der Büchlein passt zur Behauptung."},
                              offered)
         top = candidates[0]
-        if len(candidates) > 1 and top["score"] - candidates[1]["score"] < self.margin:
-            first, second = candidates[:2]
-            question = (f"Welche Vorlage ist gemeint: «{_short(first['title'])}» ({_german_date(first['date'])}) "
-                        f"oder «{_short(second['title'])}» ({_german_date(second['date'])})?")
-            return self._act("rueckfrage", {"frage": question, "optionen": [first["vote_id"], second["vote_id"]]},
-                             offered)
         return self._act("suche_passagen", {"vorlage_id": top["vote_id"]}, offered)
 
     def _after_passage_search(self, data: dict, offered: List[str]) -> AgentAction:
