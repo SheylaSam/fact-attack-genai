@@ -273,10 +273,14 @@ class SearchToolTests(unittest.TestCase):
 class PassagePoolTests(unittest.TestCase):
     def test_passages_are_pooled_deduplicated_and_capped(self):
         first = [passage(page) for page in range(1, 9)]  # pages 1-8
-        second = [passage(page) for page in range(5, 15)]  # pages 5-8 repeat, 9-14 are new
+        second = [passage(page) for page in range(5, 30)]  # pages 5-8 repeat, 9-29 are new
         tools, index, engine = make_tools(index=FakeIndex(passages=second), engine=FakeEngine(first))
         tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
         tools.run('suche_passagen_vektor', {'vorlage_id': WIDE.vote_id, 'anfrage': 'b'})
+        stored = tools._pool[WIDE.vote_id]
+        self.assertEqual(len(stored), tools_module.POOL_LIMIT)  # the pool cap
+        self.assertEqual(len({key(p) for p in stored}), len(stored))
+        self.assertEqual([p['page_number'] for p in stored], list(range(1, tools_module.POOL_LIMIT + 1)))
         pooled = tools.passages_for(WIDE.vote_id)
         self.assertEqual(len(pooled), settings.MAX_PASSAGES)
         self.assertEqual(len({key(p) for p in pooled}), len(pooled))

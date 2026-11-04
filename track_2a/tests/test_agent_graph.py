@@ -851,6 +851,17 @@ class NachsucheTests(unittest.TestCase):
         self.assertIsNone(result.error)
         self.assertEqual(len(index.vector_calls), 1)
 
+    def test_nachsuche_without_new_passages_keeps_the_discard_note_too(self):
+        from src.agent.graph import DISCARDED_REASON, NO_NEW_PASSAGES_NOTE
+        discarded = make_prediction(0, [(2, NOT_FOUND)])
+        result, _, engine, _ = self.run_nachsuche(vector_search(), predictions=(discarded, GESTUETZT),
+                                                  vector=[passage(2, PAGE_2)])
+        self.assertEqual(result.outcome, 'nicht_belegt')
+        self.assertEqual(len(engine.verify_calls), 1)
+        self.assertEqual(result.note, f'{NOTE}. {NO_NEW_PASSAGES_NOTE}')
+        self.assertEqual(result.reasoning, DISCARDED_REASON.format(verdict='gestuetzt'))
+        self.assertEqual(result.evidence, [])
+
     def test_nachsuche_without_any_hit_keeps_the_first_result(self):
         result, _, engine, _ = self.run_nachsuche(vector_search(), vector=[])
         self.assertEqual((result.outcome, len(engine.verify_calls)), ('nicht_belegt', 1))

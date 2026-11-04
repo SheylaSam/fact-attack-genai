@@ -340,8 +340,9 @@ class _Nodes:
         if not passages:  # nothing new to check: the first result stands
             self.emit(step, "act", started, tool=tool, args=args, data=observation.data,
                       summary=f"{summary} Keine neuen Passagen, keine zweite Prüfung")
+            note = f"{first['note']}. {NO_NEW_PASSAGES_NOTE}" if first.get("note") else NO_NEW_PASSAGES_NOTE
             return {**update, "outcome": first["outcome"], "evidence": first["evidence"],
-                    "reasoning": first["reasoning"], "note": NO_NEW_PASSAGES_NOTE, "route": "finish"}
+                    "reasoning": first["reasoning"], "note": note, "route": "finish"}
         self.emit(step, "act", started, tool=tool, args=args, data=observation.data,
                   summary=f"{summary} Zweite Prüfung mit {len(passages)} Passagen")
         return {**update, "passages": passages, "route": "verify"}
