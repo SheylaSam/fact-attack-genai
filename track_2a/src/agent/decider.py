@@ -117,7 +117,8 @@ class NativeToolDecider:
         self.chat_model = chat_model
 
     def decide(self, messages: List[dict], tools: List[dict], history: List[Observation]) -> AgentAction:
-        reply = self.chat_model.bind_tools(tools).invoke(messages)
+        # "required": the endpoint must answer with a tool call, plain text is no action
+        reply = self.chat_model.bind_tools(tools, tool_choice="required").invoke(messages)
         tokens_prompt, tokens_completion = _usage(reply)
         usage = {"tokens_prompt": tokens_prompt, "tokens_completion": tokens_completion}
         calls = list(getattr(reply, "tool_calls", None) or [])
@@ -304,18 +305,19 @@ class _SyncOnlyTransport(httpx.AsyncBaseTransport):
                            "Anfrage-Budget umgehen.")
 
 
-def make_chat_model(budget: RequestBudget) -> "ChatOpenAI":
+def make_chat_model(budget: RequestBudget, *, transport: Optional[httpx.BaseTransport] = None) -> "ChatOpenAI":
     """The agent's LLM client: every HTTP request is counted on `budget` and none is retried by the SDK.
 
     `timeout` is passed on because the SDK hands its own (by default: no) timeout to every request, which would
     override the one of the httpx client. An unreachable host fails after `CONNECT_TIMEOUT_S`, a silent one after
     `settings.LLM_TIMEOUT_S`. `max_tokens` caps every answer (langchain-openai sends it as `max_completion_tokens`).
+    `transport` replaces the network transport beneath the budget (tests, the recording of the native smoke).
     """
     from langchain_openai import ChatOpenAI
     return ChatOpenAI(model=config.LLM_NAME, base_url=config.LLM_BASE_URL, api_key=config.LLM_API_KEY, temperature=0,
                       max_retries=0, max_tokens=settings.LLM_MAX_TOKENS,
                       timeout=httpx.Timeout(settings.LLM_TIMEOUT_S, connect=CONNECT_TIMEOUT_S),
-                      http_client=budget_http_client(budget),
+                      http_client=budget_http_client(budget, **({"transport": transport} if transport else {})),
                       http_async_client=httpx.AsyncClient(transport=_SyncOnlyTransport()))
 
 

@@ -81,10 +81,12 @@ class StubChat:
     def __init__(self, reply):
         self.reply = reply
         self.bound_tools = None
+        self.bind_kwargs = None
         self.calls = []
 
-    def bind_tools(self, tools):
+    def bind_tools(self, tools, **kwargs):
         self.bound_tools = tools
+        self.bind_kwargs = kwargs
         return self
 
     def invoke(self, messages):
@@ -243,6 +245,28 @@ class NativeToolDeciderTests(unittest.TestCase):
             action, Observation('suche_vorlagen', 'Fehler: Keine Werkzeugwahl'))
         self.assertEqual(assistant, {'role': 'assistant', 'content': 'kaputt'})
         self.assertEqual(user, {'role': 'user', 'content': 'Ergebnis von suche_vorlagen: Fehler: Keine Werkzeugwahl'})
+
+    def test_native_decider_requires_a_tool_call(self):
+        chat = StubChat(self.reply(('suche_vorlagen', {'anfrage': 'Miete'}, 'call_a')))
+        NativeToolDecider(chat).decide(MESSAGES, TOOL_SPECS, [])
+        self.assertEqual(chat.bind_kwargs, {'tool_choice': 'required'})
+
+    def test_native_request_body_has_required_and_completion_cap(self):
+        sent = []
+
+        def handler(request):
+            sent.append(json.loads(request.content))
+            return httpx.Response(200, json={
+                'id': 'x', 'object': 'chat.completion', 'created': 1, 'model': 'm',
+                'choices': [{'index': 0, 'finish_reason': 'tool_calls', 'message': {
+                    'role': 'assistant', 'content': None, 'tool_calls': [
+                        {'id': 'call_1', 'type': 'function',
+                         'function': {'name': 'suche_vorlagen', 'arguments': json.dumps({'anfrage': 'Miete'})}}]}}]})
+
+        NativeToolDecider(self.chat_model(RequestBudget(limit=1), handler)).decide(MESSAGES, TOOL_SPECS, [])
+        (body,) = sent
+        self.assertEqual(body['tool_choice'], 'required')
+        self.assertEqual(body['max_completion_tokens'], settings.LLM_MAX_TOKENS)
 
     def test_native_decider_with_real_chat_model_sends_tools_and_reads_the_call(self):
         sent = []
