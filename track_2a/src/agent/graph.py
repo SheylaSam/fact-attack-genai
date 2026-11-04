@@ -340,7 +340,7 @@ class _Nodes:
                                f"{clean['vorlage_id']!r}.")
         observation = None
         if problem is None:
-            observation = self.tools.run(RESEARCH_TOOL, action.args, claim=state["claim"])
+            observation = self.tools.run(RESEARCH_TOOL, action.args, claim=state["claim"], research=True)
             if observation.error:
                 problem = f"Werkzeug {RESEARCH_TOOL} fehlgeschlagen: {observation.error}"
         if problem is not None:

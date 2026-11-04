@@ -308,6 +308,30 @@ class PassagePoolTests(unittest.TestCase):
         again[0]['text'] = 'verändert'
         self.assertEqual(tools.recheck_passages(WIDE.vote_id, checked)[0]['text'], 'Originaltext von Seite 21.')
 
+    def test_research_passages_are_admitted_past_the_full_pool_and_rechecked_first(self):
+        limit = tools_module.POOL_LIMIT
+        tools, index, engine = make_tools(engine=FakeEngine([passage(page) for page in range(1, limit + 1)]))
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)  # the pool is full now
+        checked = tools.passages_for(WIDE.vote_id)  # pages 1-10
+        index.passages = [passage(page) for page in (25, 26, 27)]
+        research = tools.run('suche_passagen_vektor', {'vorlage_id': WIDE.vote_id, 'anfrage': 'b'}, research=True)
+        self.assertEqual((research.data['new'], research.data['dropped']), (3, 0))
+        self.assertNotIn('nicht aufgenommen', research.text)
+        self.assertEqual(len(tools._pool[WIDE.vote_id]), limit + 3)
+        again = tools.recheck_passages(WIDE.vote_id, checked)
+        # the Nachsuche's passages first, then the other unchecked ones (pages 11-20), capped
+        self.assertEqual([p['page_number'] for p in again], [25, 26, 27] + list(range(11, 18)))
+        self.assertEqual(len(again), settings.MAX_PASSAGES)
+
+    def test_a_full_pool_still_drops_new_passages_outside_the_research_phase(self):
+        limit = tools_module.POOL_LIMIT
+        tools, index, _ = make_tools(engine=FakeEngine([passage(page) for page in range(1, limit + 1)]))
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        index.passages = [passage(25)]
+        obs = tools.run('suche_passagen_vektor', {'vorlage_id': WIDE.vote_id, 'anfrage': 'b'})
+        self.assertEqual((obs.data['new'], obs.data['dropped']), (0, 1))
+        self.assertEqual(len(tools._pool[WIDE.vote_id]), limit)
+
     def test_recheck_orders_the_new_passages_by_discovery(self):
         tools, _, engine = make_tools(engine=FakeEngine([passage(2), passage(3)]))
         tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)

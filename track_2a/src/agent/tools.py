@@ -4,8 +4,8 @@ The LLM only ever sees `Observation.text`. Tool arguments are vote ids of the in
 characters; nothing else (no paths, no URLs) reaches the index or the engine. The passages every search finds go into
 a per-run pool that keeps their original text and deduplicates by (page_number, sha256(text)); only the pool is
 checked against the claim. The pool stores `POOL_LIMIT` (twice the check size) passages per vote: the first
-`MAX_PASSAGES` of them go into the first check; `recheck_passages` puts the passages the first check has not seen
-first.
+`MAX_PASSAGES` of them go into the first check; `recheck_passages` puts the Nachsuche's passages first (they are
+admitted past the limit), then the other passages the first check has not seen.
 """
 import copy
 import datetime
@@ -221,7 +221,8 @@ class AgentTools:
         self._assessments: Dict[str, guard.Assessment] = {}  # claim_assessment cache, keyed by the search text
         self._pool: Dict[str, List[Dict[str, Any]]] = {}
         self._seen: Dict[str, Set[Tuple[int, str]]] = {}
-        self._handlers: Dict[str, Callable[[dict, Optional[str]], Observation]] = {
+        self._research_keys: Dict[str, Set[Tuple[int, str]]] = {}  # passages the Nachsuche added, per vote
+        self._handlers: Dict[str, Callable[[dict, Optional[str], bool], Observation]] = {
             "suche_vorlagen": self._search_votes,
             "suche_passagen": self._search_passages,
             "suche_passagen_vektor": self._search_passages_by_vector,
@@ -266,20 +267,25 @@ class AgentTools:
         return [dict(p) for p in self._pool.get(vote_id, [])[:settings.MAX_PASSAGES]]
 
     def recheck_passages(self, vote_id: str, checked: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """The passages of the second check: the pooled passages `checked` does not contain (by key) first, in order
-        of discovery, then `checked` itself; at most `MAX_PASSAGES`. Empty if the pool holds nothing new."""
+        """The passages of the second check: first those the Nachsuche added (`run(..., research=True)`), then the
+        other pooled passages `checked` does not contain (by key), each group in order of discovery, then `checked`
+        itself; at most `MAX_PASSAGES`. Empty if the pool holds nothing new."""
         known = {_passage_key(p) for p in checked}
-        fresh = [dict(p) for p in self._pool.get(vote_id, []) if _passage_key(p) not in known]
+        added = self._research_keys.get(vote_id, set())
+        unseen = [p for p in self._pool.get(vote_id, []) if _passage_key(p) not in known]
+        fresh = ([dict(p) for p in unseen if _passage_key(p) in added]
+                 + [dict(p) for p in unseen if _passage_key(p) not in added])
         if not fresh:
             return []
         return (fresh + [dict(p) for p in checked])[:settings.MAX_PASSAGES]
 
-    def run(self, tool: str, args: dict, *, claim: Optional[str] = None) -> Observation:
+    def run(self, tool: str, args: dict, *, claim: Optional[str] = None, research: bool = False) -> Observation:
         """Runs a search tool. Rejected calls and exceptions of the index or engine come back as an observation
         with `error`; `data["error_kind"]` tells `ERROR_INVALID_ARGS` (the model's mistake) from a tool failure.
 
         `claim` is the claim under check: `suche_passagen` searches with it (the graph always passes it); without it
-        that tool fails technically."""
+        that tool fails technically. `research=True` marks the Nachsuche's step: its new passages enter the pool even
+        past `POOL_LIMIT` (the second check must see them) and come first in `recheck_passages`."""
         if not isinstance(tool, str) or tool not in _TOOLS:
             return self._rejected((tool if isinstance(tool, str) else repr(tool))[:60], _unknown_tool(tool))
         if tool in TERMINAL_TOOLS:
@@ -294,7 +300,7 @@ class AgentTools:
         except ValueError as exc:
             return self._rejected(tool, str(exc))
         try:
-            return self._handlers[tool](clean, claim)
+            return self._handlers[tool](clean, claim, research)
         except Exception as exc:  # index or engine failed: reported, never raised into the graph
             detail = f"{type(exc).__name__}: {str(exc)[:ERROR_CHARS]}"
             return Observation(tool, f"Fehler: Das Werkzeug {tool} ist ausgefallen ({type(exc).__name__}).",
@@ -304,7 +310,7 @@ class AgentTools:
     def _rejected(tool: str, message: str) -> Observation:
         return Observation(tool, f"Fehler: {message}", {"error_kind": ERROR_INVALID_ARGS}, message)
 
-    def _search_votes(self, args: dict, claim: Optional[str]) -> Observation:
+    def _search_votes(self, args: dict, claim: Optional[str], research: bool) -> Observation:
         candidates = self.backend.search_votes(args["anfrage"], k=VOTE_CANDIDATES)
         self._recent_ids = [c.vote.vote_id for c in candidates]
         assessment = guard.assess(candidates)
@@ -327,25 +333,29 @@ class AgentTools:
         return {"vote_id": found.vote.vote_id, "title": found.vote.title, "date": found.vote.date,
                 "score": found.score, "hits": found.hits, "best_page": found.best_page}
 
-    def _search_passages(self, args: dict, claim: Optional[str]) -> Observation:
+    def _search_passages(self, args: dict, claim: Optional[str], research: bool) -> Observation:
         """The proven search with the claim runs over the vote's whole booklet; only the vote's pages are pooled."""
         if not isinstance(claim, str) or not claim.strip():
             message = "Behauptung fehlt: suche_passagen sucht mit dem Wortlaut der Behauptung."
             return Observation("suche_passagen", f"Fehler: {message}", {"error_kind": ERROR_TOOL_FAILURE}, message)
         vote = self.votes[args["vorlage_id"]]
         found = self.backend.proven_passages(vote.vote_id, claim)
-        return self._pooled("suche_passagen", "bewährte Suche mit der Behauptung", vote, found)
+        return self._pooled("suche_passagen", "bewährte Suche mit der Behauptung", vote, found, research)
 
-    def _search_passages_by_vector(self, args: dict, claim: Optional[str]) -> Observation:
+    def _search_passages_by_vector(self, args: dict, claim: Optional[str], research: bool) -> Observation:
         found = self.backend.vector_passages(args["vorlage_id"], args["anfrage"], k=VECTOR_PASSAGES)
-        return self._pooled("suche_passagen_vektor", "Vektorsuche", self.votes[args["vorlage_id"]], found)
+        return self._pooled("suche_passagen_vektor", "Vektorsuche", self.votes[args["vorlage_id"]], found, research)
 
-    def _pooled(self, tool: str, label: str, vote: VoteRef, found: List[Dict[str, Any]]) -> Observation:
-        """Pools the passages on the pages of `vote`; a passage of another page is shown but never pooled."""
+    def _pooled(self, tool: str, label: str, vote: VoteRef, found: List[Dict[str, Any]],
+                research: bool = False) -> Observation:
+        """Pools the passages on the pages of `vote`; a passage of another page is shown but never pooled. In the
+        Nachsuche (`research`) a new passage is admitted even when the pool is full, and remembered as the
+        Nachsuche's."""
         keyed = [(_passage_key(p), dict(p)) for p in found]  # fails before anything enters the pool
         pool = self._pool.setdefault(vote.vote_id, [])
         seen = self._seen.setdefault(vote.vote_id, set())
-        limit = POOL_LIMIT
+        added = self._research_keys.setdefault(vote.vote_id, set())
+        limit = None if research else POOL_LIMIT
         vote_pages = set(vote.pages)
         shown, new, dropped, outside = [], 0, 0, 0
         for passage_key, passage in keyed:
@@ -353,11 +363,13 @@ class AgentTools:
                 status, outside = OUTSIDE_STATUS, outside + 1
             elif passage_key in seen:
                 status = "schon im Pool"
-            elif len(pool) >= limit:
+            elif limit is not None and len(pool) >= limit:
                 status, dropped = "Pool voll, nicht aufgenommen", dropped + 1
             else:
                 seen.add(passage_key)
                 pool.append(passage)
+                if research:
+                    added.add(passage_key)
                 status, new = "neu", new + 1
             shown.append({"page_number": passage_key[0], "section": passage.get("section"), "status": status})
         if not keyed:

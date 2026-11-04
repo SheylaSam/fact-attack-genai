@@ -882,6 +882,31 @@ class NachsucheTests(unittest.TestCase):
         self.assertEqual(len(second), settings.MAX_PASSAGES)
         self.assertEqual([p['page_number'] for p in second][3:], list(range(1, 8)))
 
+    def test_full_pool_before_nachsuche_admits_and_checks_the_research_passages_first(self):
+        class SequenceEngine(FakeEngine):
+            """The proven search finds the next batch of passages on every call."""
+            def __init__(self, batches, **kwargs):
+                super().__init__(**kwargs)
+                self.batches = [list(batch) for batch in batches]
+
+            def retrieve_passages(self, *args, **kwargs):
+                return self.batches.pop(0)
+
+        batches = [[passage(page, f'Text von Seite {page}.') for page in pages]
+                   for pages in (range(1, 9), range(9, 17), range(17, 21))]  # 20 passages: the pool is full
+        new_pages = [25, 26]
+        decider = PresetDecider(search_passages(VW), search_passages(VW), search_passages(VW),
+                                act('pruefen', vorlage_id=VW.vote_id), vector_search(VW))
+        engine = SequenceEngine(batches, predictions=[NICHT_BELEGT, NICHT_BELEGT])
+        index = FakeIndex(votes=(V1, V2, VW), vector=[passage(page, f'Neu auf Seite {page}.') for page in new_pages])
+        result, engine, _ = check(decider, engine=engine, index=index, fixed_vote_id=VW.vote_id)
+        self.assertEqual(result.checks, 2)
+        first, second = (call['passages'] for call in engine.verify_calls)
+        self.assertEqual([p['page_number'] for p in first], list(range(1, 11)))
+        self.assertEqual([p['page_number'] for p in second], new_pages + list(range(11, 19)))
+        [research] = [e for e in result.events if e.node == 'act' and e.tool == 'suche_passagen_vektor']
+        self.assertEqual((research.data['new'], research.data['dropped']), (2, 0))
+
     def test_second_nicht_belegt_is_final(self):
         result, decider, engine, _ = self.run_nachsuche(vector_search(), predictions=(NICHT_BELEGT, NICHT_BELEGT))
         self.assertEqual(result.outcome, 'nicht_belegt')
