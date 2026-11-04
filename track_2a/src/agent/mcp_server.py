@@ -36,7 +36,8 @@ from src import config
 from src.agent import settings
 from src.agent.search_backend import LocalBackend, SearchBackend
 from src.agent.source_index import SourceIndex
-from src.agent.tools import _TOOLS, VECTOR_PASSAGES, VOTE_CANDIDATES, validate_args
+from src.agent.tools import (_TOOLS, MAX_ID_CHARS, MAX_QUERY_CHARS, VECTOR_PASSAGES, VOTE_CANDIDATES,
+                             validate_args)
 from src.apertus_client import ApertusClient
 from src.booklet_catalog import load_catalog
 from src.inference import ClaimVerificationEngine
@@ -82,6 +83,15 @@ def _param_description(tool: str, field: str) -> str:
     return _TOOLS[tool][0].model_json_schema()["properties"][field]["description"]
 
 
+def _query_field(tool: str) -> Any:
+    """The `anfrage` parameter with the local constraints (1 to MAX_QUERY_CHARS), so the schema equals the local one."""
+    return Field(description=_param_description(tool, "anfrage"), min_length=1, max_length=MAX_QUERY_CHARS)
+
+
+def _vote_field(tool: str) -> Any:
+    return Field(description=_param_description(tool, "vorlage_id"), min_length=1, max_length=MAX_ID_CHARS)
+
+
 def _json_default(value: Any) -> Any:
     """numpy scalars become Python numbers (a page number must stay a number for the agent's page filter); any
     other object json cannot write (a path, say) becomes text."""
@@ -114,8 +124,7 @@ def build_server(backend: SearchBackend) -> FastMCP:
     """The FastMCP server for `backend`; every tool validates its arguments itself and fails with a German message."""
     server = FastMCP(SERVER_NAME)
 
-    def suche_vorlagen(
-            anfrage: Annotated[str, Field(description=_param_description("suche_vorlagen", "anfrage"))]) -> dict:
+    def suche_vorlagen(anfrage: Annotated[str, _query_field("suche_vorlagen")]) -> dict:
         args = _checked("suche_vorlagen", {"anfrage": anfrage})
         candidates = backend.search_votes(args["anfrage"], k=VOTE_CANDIDATES)
         return _plain({"candidates": [
@@ -123,7 +132,7 @@ def build_server(backend: SearchBackend) -> FastMCP:
              "snippet": c.snippet} for c in candidates]})
 
     def suche_passagen(
-            vorlage_id: Annotated[str, Field(description=_param_description("suche_passagen", "vorlage_id"))],
+            vorlage_id: Annotated[str, _vote_field("suche_passagen")],
             behauptung: Annotated[str, Field(description=CLAIM_DESCRIPTION)]) -> dict:
         args = _checked("suche_passagen", {"vorlage_id": vorlage_id})
         if not 1 <= len(behauptung.strip()) <= settings.MAX_CLAIM_CHARS:  # pydantic has already checked the type
@@ -135,14 +144,22 @@ def build_server(backend: SearchBackend) -> FastMCP:
         return _plain({"passages": backend.proven_passages(vote.vote_id, behauptung)})
 
     def suche_passagen_vektor(
-            vorlage_id: Annotated[str, Field(description=_param_description("suche_passagen_vektor", "vorlage_id"))],
-            anfrage: Annotated[str, Field(description=_param_description("suche_passagen_vektor", "anfrage"))]) -> dict:
+            vorlage_id: Annotated[str, _vote_field("suche_passagen_vektor")],
+            anfrage: Annotated[str, _query_field("suche_passagen_vektor")]) -> dict:
         args = _checked("suche_passagen_vektor", {"vorlage_id": vorlage_id, "anfrage": anfrage})
         vote = _known_vote(backend, args["vorlage_id"])
         return _plain({"passages": backend.vector_passages(vote.vote_id, args["anfrage"], k=VECTOR_PASSAGES)})
 
     for function in (suche_vorlagen, suche_passagen, suche_passagen_vektor):
         server.add_tool(function, name=function.__name__, description=_TOOLS[function.__name__][1])
+    for tool in server._tool_manager.list_tools():
+        # The local schema forbids unknown arguments (`extra="forbid"`); FastMCP's argument model ignores them. Forbid
+        # them there too (FastMCP validates calls with that model, not with the advertised schema) and say so in the
+        # advertised schema.
+        arguments = tool.fn_metadata.arg_model
+        arguments.model_config["extra"] = "forbid"
+        arguments.model_rebuild(force=True)
+        tool.parameters["additionalProperties"] = False
 
     @server.resource(VOTES_URI, name="vorlagen_katalog", mime_type="application/json",
                      description="Alle Vorlagen der Abstimmungsbüchlein mit Vorlagen-ID, Termin, Sprache, Titel "

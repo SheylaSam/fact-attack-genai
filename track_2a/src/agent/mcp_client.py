@@ -240,6 +240,8 @@ class McpBackend:
                 loop.call_soon_threadsafe(loop.stop)
             if thread is not None:
                 thread.join(CLOSE_TIMEOUT_S)
+            if loop is not None and (thread is None or not thread.is_alive()) and not loop.is_running():
+                loop.close()  # only once the loop has stopped and its thread has ended
         finally:
             errlog, self._errlog = self._errlog, None
             if errlog is not None:

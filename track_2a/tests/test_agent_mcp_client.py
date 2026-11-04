@@ -79,6 +79,8 @@ class McpBackendTests(unittest.TestCase):
                 self.assertEqual(set(mcp_spec['parameters']['properties']), set(local['parameters']['properties']))
                 self.assertEqual(sorted(mcp_spec['parameters'].get('required', [])),
                                  sorted(local['parameters']['required']))
+                # the whole schema: minLength/maxLength of every property and additionalProperties: false included
+                self.assertEqual(mcp_spec['parameters'], local['parameters'])
 
     def test_model_spec_drops_injected_arguments_and_titles(self):
         for spec in self.backend().tool_specs():
@@ -207,6 +209,21 @@ class McpBackendTests(unittest.TestCase):
         while pid_alive(pid) and time.monotonic() < deadline:
             time.sleep(0.1)
         self.assertFalse(pid_alive(pid))
+
+    def test_close_also_closes_the_event_loop_after_its_thread_ended(self):
+        backend = self.backend()
+        loop, thread = backend._loop, backend._thread
+        self.assertFalse(loop.is_closed())
+        backend.close()
+        self.assertFalse(thread.is_alive())
+        self.assertTrue(loop.is_closed())
+        backend.close()  # still harmless
+
+    def test_failed_start_also_closes_the_event_loop(self):
+        backend = self.backend(command=[sys.executable, '-c', 'import sys; sys.exit(3)'], start=False)
+        with self.assertRaises(McpStartError):
+            backend.start()
+        self.assertTrue(backend._loop.is_closed())
 
     def test_close_without_start_is_harmless(self):
         self.backend(start=False).close()

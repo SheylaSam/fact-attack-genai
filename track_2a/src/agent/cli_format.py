@@ -187,4 +187,5 @@ def result_to_dict(result: "AgentResult") -> Dict[str, Any]:
         "events": [dataclasses.asdict(item) for item in result.events],
         "steps": result.steps,
         "asked_by": result.asked_by,
+        "checks": result.checks,
     }

@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -248,6 +249,8 @@ class FormatResultTests(unittest.TestCase):
         self.assertEqual(data['events'][0]['args'], {'vorlage_id': V1.vote_id})
         self.assertEqual(data['events'][1]['data'], {'candidates': [{'vote_id': V1.vote_id}]})
         self.assertEqual(data['steps'], 2)
+        self.assertEqual(data['checks'], 0)
+        self.assertEqual(cli_format.result_to_dict(AgentResult(outcome='nicht_belegt', checks=2))['checks'], 2)
         self.assertIsNone(data['error'])
         empty = cli_format.result_to_dict(AgentResult(outcome='quelle_fehlt'))
         self.assertIsNone(empty['vote'])
@@ -445,6 +448,44 @@ class MainTests(unittest.TestCase):
         code, out, err = self.run_main(CLAIM, '--mock', '--trace-dir', str(self.trace_dir))
         self.assertEqual(code, 0, err)
         self.assertNotIn('--werkzeuge', out)
+        for option in ('--index-dir', '--modus', '--max-requests'):
+            self.assertNotIn(option, out)  # only what was given on the command line is repeated
+
+    def test_answer_commands_repeat_explicit_index_dir_modus_and_max_requests(self):
+        index_dir = Path(self.tmp.name) / 'index mit Leerzeichen'
+        code, out, err = self.run_main(CLAIM, '--mock', '--modus', 'scripted', '--max-requests', '7',
+                                       '--index-dir', str(index_dir), '--trace-dir', str(self.trace_dir))
+        self.assertEqual(code, 0, err)
+        tail = f"--mock --modus scripted --index-dir {shlex.quote(str(index_dir))} --max-requests 7"
+        for vote in (V1, V2):
+            self.assertIn(f"{shlex.quote(CLAIM)} --quelle {vote.vote_id} {tail}", out)
+
+    def test_answer_args_follow_the_given_options(self):
+        parser = agent_cli.build_parser()
+        self.assertEqual(agent_cli._answer_args(parser.parse_args([CLAIM, '--mock'])), ['--mock'])
+        self.assertEqual(agent_cli._answer_args(parser.parse_args([CLAIM, '--max-requests', '12'])),
+                         ['--max-requests', '12'])  # explicit, even if it equals the default
+        self.assertEqual(agent_cli._answer_args(parser.parse_args([CLAIM, '--modus', 'json', '--werkzeuge', 'lokal'])),
+                         ['--modus', 'json', '--werkzeuge', 'lokal'])
+
+    def test_the_cli_module_does_not_import_the_mcp_server_at_the_top(self):
+        code = ("import sys\n"
+                "import src.agent.__main__\n"
+                "bad = [m for m in ('mcp', 'src.agent.mcp_server', 'src.agent.mcp_client') if m in sys.modules]\n"
+                "sys.exit(1 if bad else 0)\n")
+        result = subprocess.run([sys.executable, '-c', code], cwd=str(Path(__file__).resolve().parents[1]),
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_missing_mcp_gives_the_german_hint_and_local_tools_still_run(self):
+        with mock.patch.dict(sys.modules, {'src.agent.mcp_server': None, 'src.agent.mcp_client': None}):
+            code, out, err = self.run_main(CLAIM, '--mock', '--werkzeuge', 'mcp', '--trace-dir', str(self.trace_dir))
+            self.assertEqual(code, 1)
+            self.assertIn('Die MCP-Anbindung ist nicht installiert', err)
+            self.assertIn('requirements-agent.txt', err)
+            code, out, err = self.run_main(CLAIM, '--mock', '--werkzeuge', 'lokal', '--trace-dir',
+                                           str(self.trace_dir))
+            self.assertEqual(code, 0, err)  # the local path never needs mcp
 
     def test_werkzeuge_rejects_other_values(self):
         err = io.StringIO()

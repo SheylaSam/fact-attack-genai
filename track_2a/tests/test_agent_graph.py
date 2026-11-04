@@ -1007,6 +1007,28 @@ class NachsucheTests(unittest.TestCase):
                 self.assertEqual(len(decider.calls), 3)
                 self.assertNotIn('nachsuche', [e.node for e in result.events])
 
+    def test_research_step_limit_comes_from_the_settings(self):
+        with patch.object(settings, 'MAX_RESEARCH_STEPS', 0):  # no research step: the first result is final
+            decider = PresetDecider(*prove_and_check())
+            result, engine, _ = check(decider, engine=FakeEngine(predictions=[NICHT_BELEGT]))
+            self.assertEqual((result.outcome, result.checks, len(engine.verify_calls)), ('nicht_belegt', 1, 1))
+            self.assertNotIn('nachsuche', [e.node for e in result.events])
+        tools = AgentTools(LocalBackend(FakeIndex(), FakeEngine(), BOOKLETS), BOOKLETS)
+        with patch.object(settings, 'MAX_RESEARCH_STEPS', 3):
+            graph = build_graph(tools, PresetDecider(), FakeEngine(), Tracer(), max_steps=5)
+            self.assertEqual(graph.config['recursion_limit'], 2 * (5 + 1 + 3) + 9)
+
+    def test_a_research_phase_without_steps_left_is_technical_error(self):
+        # the phase never asks twice, but the limit is enforced where the step is decided
+        decider = PresetDecider()
+        tools = AgentTools(LocalBackend(FakeIndex(), FakeEngine(), BOOKLETS), BOOKLETS)
+        graph = build_graph(tools, decider, FakeEngine(), Tracer(), max_steps=5)
+        state = graph.invoke({'claim': CLAIM, 'language': 'de', 'messages': [], 'history': [], 'steps': 4,
+                              'search_steps': 1, 'phase': 'nachsuche', 'research_steps': settings.MAX_RESEARCH_STEPS})
+        self.assertEqual(state['outcome'], 'technischer_fehler')
+        self.assertIn('Nachsuche ohne gültigen Suchschritt', state['error'])
+        self.assertEqual(decider.calls, [])  # no decision was asked for
+
     def test_nachsuche_can_be_switched_off(self):
         decider = PresetDecider(*prove_and_check())
         result, engine, _ = check(decider, engine=FakeEngine(predictions=[NICHT_BELEGT]), nachsuche=False)

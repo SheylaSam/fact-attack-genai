@@ -17,14 +17,16 @@ journal on stderr.
 import argparse
 import contextlib
 from datetime import datetime, timezone
+import importlib
 import json
 import os
 from pathlib import Path
+import shlex
 import sys
 from typing import Optional, Sequence
 
 from src import config
-from src.agent import mcp_server, settings
+from src.agent import settings
 from src.agent.budget import RequestBudget, install_on_apertus
 from src.agent.cli_format import format_result, format_steps, result_to_dict
 from src.agent.decider import MODES, make_decider
@@ -56,11 +58,13 @@ class _StartFailed(Exception):
 def _open_mcp_backend(args: argparse.Namespace, cleanup: contextlib.ExitStack) -> SearchBackend:
     """The started `McpBackend`. The agent process opens no local index: the local Qdrant index allows one process,
     and the server holds it."""
-    try:
-        from src.agent.mcp_client import McpBackend, McpStartError
+    try:  # imported here only: `--werkzeuge lokal` needs neither mcp nor langchain-mcp-adapters
+        mcp_server = importlib.import_module("src.agent.mcp_server")
+        mcp_client = importlib.import_module("src.agent.mcp_client")
     except ImportError as exc:  # mcp and langchain-mcp-adapters are optional
         raise _Abort(f"Die MCP-Anbindung ist nicht installiert ({exc}). "
                      "Bitte track_2a/requirements-agent.txt installieren.") from None
+    McpBackend, McpStartError = mcp_client.McpBackend, mcp_client.McpStartError
     backend = McpBackend(mcp_server.server_command(args.index_dir.expanduser()), env=mcp_server.server_environment(),
                          cwd=config.BASE_DIR)
     cleanup.callback(backend.close)  # idempotent; also ends a server that did not become ready
@@ -99,15 +103,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--werkzeuge", choices=settings.TOOL_TRANSPORTS, default=None,
                         help="Suchwerkzeuge lokal im Prozess oder über den eigenen MCP-Server "
                              f"(Standard: {settings.TOOL_TRANSPORT}).")
-    parser.add_argument("--max-requests", type=_request_limit, default=settings.MAX_REQUESTS, metavar="N",
+    parser.add_argument("--max-requests", type=_request_limit, default=None, metavar="N",
                         help=f"Harte Obergrenze der HTTP-Anfragen dieser Prüfung, 1 bis {settings.MAX_REQUESTS} "
                              f"(Standard: {settings.MAX_REQUESTS}).")
     parser.add_argument("--trace-dir", type=Path, default=settings.TRACE_DIR, metavar="DIR",
                         help=f"Ordner für Trace und Anfrage-Journal (Standard: {settings.TRACE_DIR}).")
-    parser.add_argument("--index-dir", type=Path, default=settings.INDEX_DIR, metavar="DIR",
+    parser.add_argument("--index-dir", type=Path, default=None, metavar="DIR",
                         help=f"Ordner des Quellenindex (Standard: {settings.INDEX_DIR}).")
     parser.add_argument("--json", action="store_true", help="Das Ergebnis als JSON ausgeben, sonst nichts auf stdout.")
     return parser
+
+
+def _answer_args(args: argparse.Namespace) -> list:
+    """The run options an answer to a question repeats: `--mock` and every option that was given explicitly on the
+    command line (not the defaults), so the new check runs the same way."""
+    repeated = ["--mock"] if args.mock else []
+    for option, value in (("--modus", args.modus), ("--werkzeuge", args.werkzeuge),
+                          ("--index-dir", shlex.quote(str(args.index_dir)) if args.index_dir is not None else None),
+                          ("--max-requests", args.max_requests)):
+        if value is not None:
+            repeated += [option, str(value)]
+    return repeated
 
 
 def _require_real_run() -> None:
@@ -124,6 +140,9 @@ def _run(args: argparse.Namespace) -> int:
     claim = args.claim
     if not claim.strip() or len(claim) > settings.MAX_CLAIM_CHARS:
         raise _Abort(f"Die Behauptung muss 1 bis {settings.MAX_CLAIM_CHARS} Zeichen lang sein (erhalten: {len(claim)}).")
+    answer_args = _answer_args(args)  # the options an answer repeats; taken before the defaults are filled in
+    args.max_requests = settings.MAX_REQUESTS if args.max_requests is None else args.max_requests
+    args.index_dir = settings.INDEX_DIR if args.index_dir is None else args.index_dir
     mode = args.modus or settings.TOOL_MODE
     if args.mock:
         if mode != "scripted" and args.modus is not None:
@@ -175,8 +194,6 @@ def _run(args: argparse.Namespace) -> int:
             print(footer, file=sys.stderr)
         else:
             label = "Mock (skriptgesteuert, ohne Netz)" if args.mock else f"echt, Entscheider {mode}"
-            # the run options an answer repeats; the transport only if it was given on the command line
-            answer_args = (["--mock"] if args.mock else []) + (["--werkzeuge", args.werkzeuge] if args.werkzeuge else [])
             print(f"Behauptung: {' '.join(claim.split())}\nModus: {label}\n\nSchritte:\n"
                   f"{format_steps(result.events)}\n\n"
                   f"{format_result(result, claim=claim, answer_args=answer_args)}\n\n{footer}")

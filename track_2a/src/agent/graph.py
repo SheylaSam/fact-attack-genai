@@ -132,6 +132,7 @@ class _State(TypedDict, total=False):
     vote_searches: int  # suche_vorlagen runs without error
     passage_searches: int  # suche_passagen / suche_passagen_vektor runs without error
     phase: str  # "nachsuche" while the single research step runs
+    research_steps: int  # decisions of the Nachsuche so far (at most settings.MAX_RESEARCH_STEPS)
     checks: int  # evidence checks run so far (verify calls)
     checked: List[Dict[str, Any]]  # the passages of the first check
     first: dict  # the first check's outcome, reasoning, note and evidence, kept for a Nachsuche without new passages
@@ -215,9 +216,16 @@ class _Nodes:
     def decide(self, state: _State) -> dict:
         step = state.get("steps", 0) + 1
         specs = self.tools.available_specs()
-        researching = state.get("phase") == "nachsuche"  # one search step, governed by MAX_RESEARCH_STEPS
+        researching = state.get("phase") == "nachsuche"  # its steps are governed by MAX_RESEARCH_STEPS
         last = not researching and state.get("search_steps", 0) >= self.max_steps  # it must end the search
+        research_steps = state.get("research_steps", 0)
+        if researching and research_steps >= settings.MAX_RESEARCH_STEPS:  # the Nachsuche never gets another step
+            message = NACHSUCHE_ERROR.format(reason=f"Die Grenze von {settings.MAX_RESEARCH_STEPS} Suchschritten ist "
+                                                    "erreicht.")
+            self.emit(step, "decide", time.perf_counter(), summary="Schrittgrenze der Nachsuche", error=message)
+            return {"steps": step, "error": message, "route": "finish"}
         if researching:
+            research_steps += 1
             specs = [spec for spec in specs if spec["name"] == RESEARCH_TOOL]
         elif last:
             specs = [spec for spec in specs if spec["name"] in TERMINAL_TOOLS]
@@ -235,7 +243,8 @@ class _Nodes:
             summary += " (nach der Schrittgrenze, nur abschließende Werkzeuge angeboten)"
         self.emit(step, "decide", started, tool=action.tool, args=dict(action.args or {}), summary=summary,
                   tokens_prompt=action.tokens_prompt, tokens_completion=action.tokens_completion, error=action.error)
-        return {"steps": step, "offered": offered, "action": action, "route": "act"}
+        return {"steps": step, "offered": offered, "action": action, "research_steps": research_steps,
+                "route": "act"}
 
     def act(self, state: _State) -> dict:
         action, step = state["action"], state["steps"]
@@ -470,7 +479,8 @@ class _Nodes:
 
     def _after_not_proven(self, state: _State) -> str:
         """After `nicht_belegt` (a discarded verdict too) the run searches once more, while a check is left."""
-        return "nachsuche" if self.nachsuche_enabled and state.get("checks", 0) < settings.MAX_CHECKS else "finish"
+        research = self.nachsuche_enabled and settings.MAX_RESEARCH_STEPS > 0  # 0 research steps: no Nachsuche
+        return "nachsuche" if research and state.get("checks", 0) < settings.MAX_CHECKS else "finish"
 
     def nachsuche(self, state: _State) -> dict:
         """Starts the research phase: remembers the first check and offers one more search step (`decide` and `act`
@@ -565,7 +575,8 @@ def build_graph(tools: AgentTools, decider: Decider, engine, tracer: Tracer, max
     graph.add_edge("finish", END)
     # decide + act for each of at most max_steps + 2 decisions (the last search decision and the Nachsuche), then
     # verify, check_evidence, nachsuche, verify, check_evidence, finish, plus 3 spare
-    return graph.compile().with_config(recursion_limit=2 * (max_steps + 2) + 9)
+    return graph.compile().with_config(
+        recursion_limit=2 * (max_steps + 1 + settings.MAX_RESEARCH_STEPS) + 9)
 
 
 def _result(state: dict, events: List[TraceEvent]) -> AgentResult:

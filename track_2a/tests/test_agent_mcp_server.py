@@ -31,6 +31,7 @@ if HAS_MCP:
     from mcp.client.stdio import stdio_client
     from src.agent import mcp_server
     from src.agent.mcp_server import SEARCH_TOOLS, VOTES_URI, server_environment
+    from src.agent import tools as tools_module
     from src.agent.tools import _TOOLS
     from tests.fixtures.mcp_fake_server import CANDIDATES, V1, V2
 
@@ -178,7 +179,10 @@ class McpServerOverStdioTests(unittest.TestCase):
         cases = (('suche_vorlagen', {'anfrage': '   '}),
                  ('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': '   '}),
                  ('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': 'x' * (settings.MAX_CLAIM_CHARS + 1)}),
-                 ('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': 123}))
+                 ('suche_passagen', {'vorlage_id': V1.vote_id, 'behauptung': 123}),
+                 ('suche_vorlagen', {'anfrage': ''}),
+                 ('suche_vorlagen', {'anfrage': 'x' * (tools_module.MAX_QUERY_CHARS + 1)}),
+                 ('suche_vorlagen', {'anfrage': 'Untermiete', 'dateipfad': '/etc/passwd'}))  # unknown argument
         for tool, args in cases:
             with self.subTest(tool=tool, args=str(args)[:50]):
                 self.assertTrue(self.server.call_tool(tool, args).isError)
