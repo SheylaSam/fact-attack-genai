@@ -232,7 +232,8 @@ class ScriptedDecider:
     source of ambiguity. Reads only the last observation (`history[-1].data`) and the claim.
 
     With `fixed_vote_id` the vote is given: the policy goes straight to `suche_passagen(fixed vote)`; the graph
-    searches with the claim.
+    searches with the claim. In the Nachsuche only `suche_passagen_vektor` is offered: the policy runs it for the
+    vote of the latest passage search with the claim as the query.
     """
 
     def __init__(self, fixed_vote_id: Optional[str] = None):
@@ -248,6 +249,8 @@ class ScriptedDecider:
             if self.fixed_vote_id is not None:
                 return self._act("suche_passagen", {"vorlage_id": self.fixed_vote_id}, offered)
             return self._act("suche_vorlagen", {"anfrage": query}, offered)
+        if offered == ["suche_passagen_vektor"]:
+            return self._research(query, history, offered)
         last = history[-1]
         if last.error:
             return AgentAction(error=f"Das Werkzeug {last.tool} ist fehlgeschlagen: {last.error}")
@@ -256,6 +259,14 @@ class ScriptedDecider:
         if last.tool in ("suche_passagen", "suche_passagen_vektor"):
             return self._after_passage_search(last.data, offered)
         return AgentAction(error=f"Keine Regel für das Ergebnis von {last.tool}.")
+
+    def _research(self, query: str, history: List[Observation], offered: List[str]) -> AgentAction:
+        """The Nachsuche: the vector search in the vote of the latest passage search, with the claim as the query."""
+        vote_id = next((item.data.get("vote_id") for item in reversed(history)
+                        if item.tool in ("suche_passagen", "suche_passagen_vektor") and not item.error), None)
+        if vote_id is None:
+            return AgentAction(error="Keine Passagensuche gefunden, deren Vorlage die Nachsuche durchsuchen soll.")
+        return self._act("suche_passagen_vektor", {"vorlage_id": vote_id, "anfrage": query}, offered)
 
     def _after_vote_search(self, data: dict, offered: List[str]) -> AgentAction:
         candidates = data.get("candidates") or []

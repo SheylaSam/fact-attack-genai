@@ -77,8 +77,12 @@ CLEAR = [candidate(V1, 0.873), candidate(V2, 0.801)]  # V1 clearly ahead
 
 
 class FakeIndex:
-    def __init__(self, candidates=None, error=None, votes=(V1, V2), candidates_by_query=None, error_for=None):
+    def __init__(self, candidates=None, error=None, votes=(V1, V2), candidates_by_query=None, error_for=None,
+                 vector=(), vector_error=None):
         self.votes = {vote.vote_id: vote for vote in votes}
+        self.vector = list(vector)  # what the vector search finds, whatever the query
+        self.vector_error = vector_error
+        self.vector_calls = []
         self.candidates = list(CLEAR) if candidates is None else candidates
         self.candidates_by_query = dict(candidates_by_query or {})  # query -> candidates; others: `candidates`
         self.error = error
@@ -92,13 +96,18 @@ class FakeIndex:
         return list(self.candidates_by_query.get(query.strip(), self.candidates))
 
     def search_passages(self, vote_id, query, k=8):
-        return []
+        self.vector_calls.append((vote_id, query))
+        if self.vector_error:
+            raise self.vector_error
+        return [dict(p) for p in self.vector]
 
 
 class FakeEngine:
-    def __init__(self, prediction=None, pages=None, blocks=None, verify_error=None):
+    def __init__(self, prediction=None, pages=None, blocks=None, verify_error=None, predictions=None):
         self.passages = [passage(2, PAGE_2)]
-        self.prediction = make_prediction(0, [(2, QUOTE)]) if prediction is None else prediction
+        self.predictions = list(predictions or [])  # given in order, one per verify call; the last one repeats
+        self.prediction = (self.predictions[0] if self.predictions
+                           else make_prediction(0, [(2, QUOTE)]) if prediction is None else prediction)
         self.pages = {2: PAGE_2} if pages is None else pages  # page number -> PDF text; a missing page is None
         self.blocks = blocks or {}  # page number -> the page's text blocks
         self.verify_error = verify_error
@@ -114,6 +123,8 @@ class FakeEngine:
                                   'vote': vote, 'claim_language': claim_language})
         if self.verify_error:
             raise self.verify_error
+        if self.predictions:
+            return self.predictions[min(len(self.verify_calls), len(self.predictions)) - 1]
         return self.prediction
 
     def source_page(self, booklet_pdf, page_number):
@@ -253,7 +264,7 @@ class GraphTests(unittest.TestCase):
         engine = FakeEngine(prediction=make_prediction(0, [(4, on_other_vote)]),
                             pages={2: PAGE_2, 4: f'Kündigung\n{on_other_vote} Mehr.'})
         decider = PresetDecider(search_votes(), search_passages(), act('pruefen', vorlage_id=V1.vote_id))
-        result, _, _ = check(decider, engine=engine)
+        result, _, _ = check(decider, engine=engine, nachsuche=False)  # the first check alone
         self.assertEqual(result.outcome, 'nicht_belegt')
         self.assertEqual(result.note, NOTE)
         self.assertEqual(result.evidence, [])
@@ -360,7 +371,7 @@ class GraphTests(unittest.TestCase):
         tracer = Tracer()
         graph = build_graph(tools, decider, engine, tracer, max_steps=1)
         self.assertEqual(set(graph.get_graph().nodes) - {'__start__', '__end__'},
-                         {'decide', 'act', 'ask', 'verify', 'check_evidence', 'finish'})
+                         {'decide', 'act', 'ask', 'verify', 'check_evidence', 'nachsuche', 'finish'})
         state = graph.invoke({'claim': CLAIM, 'language': 'de',
                               'messages': [{'role': 'system', 'content': 'S'}, {'role': 'user', 'content': CLAIM}]})
         self.assertEqual(state['outcome'], 'technischer_fehler')
@@ -581,7 +592,7 @@ class GraphTests(unittest.TestCase):
                 with self.subTest(label=label, case=name):
                     engine = FakeEngine(prediction=make_prediction(label, quotes))
                     decider = PresetDecider(search_votes(), search_passages(), act('pruefen', vorlage_id=V1.vote_id))
-                    result, _, _ = check(decider, engine=engine)
+                    result, _, _ = check(decider, engine=engine, nachsuche=False)
                     self.assertEqual(result.outcome, 'nicht_belegt')
                     self.assertEqual(result.note, NOTE)
                     self.assertEqual(result.evidence, [])
@@ -604,7 +615,7 @@ class GraphTests(unittest.TestCase):
         engine = FakeEngine(prediction=make_prediction(0, [(2, block)]), pages={2: page, 3: 'Seite 3'},
                             blocks={3: [block]})
         decider = PresetDecider(search_votes(), search_passages(), act('pruefen', vorlage_id=V1.vote_id))
-        result, _, _ = check(decider, engine=engine)
+        result, _, _ = check(decider, engine=engine, nachsuche=False)
         self.assertEqual(result.outcome, 'nicht_belegt')
         self.assertEqual(result.note, NOTE)
 
@@ -652,7 +663,7 @@ class GraphTests(unittest.TestCase):
                 self.assertIsNone(result.note)
         engine = FakeEngine(prediction=make_prediction(1, [(2, QUOTE)]))
         decider = PresetDecider(search_votes(), search_passages(), act('pruefen', vorlage_id=V1.vote_id))
-        result, _, _ = check(decider, engine=engine)
+        result, _, _ = check(decider, engine=engine, nachsuche=False)
         self.assertEqual(result.outcome, 'nicht_belegt')
         self.assertIsNone(result.note)
         self.assertIsNone(result.error)
@@ -758,6 +769,194 @@ class GraphTests(unittest.TestCase):
         before = len(tracer.events)
         result, _, _ = check(PresetDecider(act('quelle_fehlt', begruendung='Keine Vorlage passt.')), tracer=tracer)
         self.assertEqual(result.events, tracer.events[before:])
+
+
+NEW_TEXT = 'Neue Fundstelle: Die Zustimmung zur Untermiete muss schriftlich vorliegen.'
+VW = VoteRef('2024-11-24_de#9', '2024-11-24_de', '2024-11-24', 'de', 'Vorlage über viele Seiten',
+             tuple(range(1, 31)))  # a vote over 30 pages, for the full pool
+NOT_FOUND = 'Dieses Zitat steht nirgends im PDF.'
+
+
+def vector_search(vote=V1, query='Zustimmung schriftlich'):
+    return act('suche_passagen_vektor', vorlage_id=vote.vote_id, anfrage=query)
+
+
+def prove_and_check(vote=V1):
+    return [search_votes(), search_passages(vote), act('pruefen', vorlage_id=vote.vote_id)]
+
+
+NICHT_BELEGT, GESTUETZT = make_prediction(1), make_prediction(0, [(2, QUOTE)])
+
+
+@unittest.skipUnless(HAS_LANGGRAPH, 'Install requirements-agent.txt')
+class NachsucheTests(unittest.TestCase):
+    def run_nachsuche(self, *tail, predictions=(NICHT_BELEGT, GESTUETZT), vector=(passage(3, NEW_TEXT),), **kwargs):
+        decider = PresetDecider(*prove_and_check(), *tail)
+        engine = FakeEngine(predictions=list(predictions))
+        result, engine, index = check(decider, engine=engine, index=FakeIndex(vector=vector), **kwargs)
+        return result, decider, engine, index
+
+    def test_nachsuche_runs_one_vector_search_and_a_second_check(self):
+        result, decider, engine, index = self.run_nachsuche(vector_search())
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertEqual(result.checks, 2)
+        self.assertEqual(len(engine.verify_calls), 2)
+        self.assertEqual(decider.calls[-1]['tools'], ['suche_passagen_vektor'])
+        self.assertIn('kein Beleg gefunden', decider.calls[-1]['messages'][-1]['content'])
+        self.assertEqual(decider.calls[-1]['messages'][-1]['role'], 'user')
+        self.assertIn(V1.vote_id, decider.calls[-1]['messages'][-1]['content'])
+        self.assertEqual(index.vector_calls, [(V1.vote_id, 'Zustimmung schriftlich')])
+        self.assertEqual([p['page_number'] for p in engine.verify_calls[1]['passages']], [3, 2])  # new first
+        self.assertEqual(result.evidence, [EvidenceItem(page=2, quote=QUOTE)])
+        self.assertIsNone(result.note)  # nothing of the first check lingers
+        self.assertIsNone(result.error)
+        self.assertEqual(result.steps, 4)
+        self.assertIs(result.prediction, GESTUETZT)
+        self.assertIn('nachsuche', [e.node for e in result.events])
+
+    def test_pool_full_before_nachsuche_still_checks_new_passages(self):
+        new_pages = [21, 22, 23]
+        decider = PresetDecider(search_passages(VW), act('pruefen', vorlage_id=VW.vote_id), vector_search(VW))
+        engine = FakeEngine(predictions=[NICHT_BELEGT, NICHT_BELEGT])
+        engine.passages = [passage(page, f'Text von Seite {page}.') for page in range(1, 11)]  # ten, all checked
+        index = FakeIndex(votes=(V1, V2, VW), vector=[passage(page, f'Neu auf Seite {page}.') for page in new_pages])
+        result, engine, _ = check(decider, engine=engine, index=index, fixed_vote_id=VW.vote_id)
+        self.assertEqual(result.checks, 2)
+        first, second = (call['passages'] for call in engine.verify_calls)
+        self.assertEqual([p['page_number'] for p in first], list(range(1, 11)))
+        self.assertEqual([p['page_number'] for p in second][:3], new_pages)
+        self.assertEqual(len(second), settings.MAX_PASSAGES)
+        self.assertEqual([p['page_number'] for p in second][3:], list(range(1, 8)))
+
+    def test_second_nicht_belegt_is_final(self):
+        result, decider, engine, _ = self.run_nachsuche(vector_search(), predictions=(NICHT_BELEGT, NICHT_BELEGT))
+        self.assertEqual(result.outcome, 'nicht_belegt')
+        self.assertEqual(result.checks, 2)
+        self.assertEqual(len(engine.verify_calls), 2)
+        self.assertEqual(len(decider.calls), 4)
+        self.assertIsNone(result.error)
+        self.assertIsNone(result.note)
+        self.assertEqual([e.node for e in result.events].count('nachsuche'), 1)  # no second round
+
+    def test_nachsuche_without_new_passages_keeps_the_first_result(self):
+        from src.agent.graph import NO_NEW_PASSAGES_NOTE
+        self.assertEqual(NO_NEW_PASSAGES_NOTE,
+                         'Nachsuche ohne neue Passagen; es bleibt beim Ergebnis der ersten Prüfung')
+        result, decider, engine, index = self.run_nachsuche(vector_search(), vector=[passage(2, PAGE_2)])
+        self.assertEqual(result.outcome, 'nicht_belegt')
+        self.assertEqual(result.note, NO_NEW_PASSAGES_NOTE)
+        self.assertEqual(len(engine.verify_calls), 1)
+        self.assertEqual(result.checks, 1)
+        self.assertEqual(result.reasoning, 'Begründung')
+        self.assertIsNone(result.error)
+        self.assertEqual(len(index.vector_calls), 1)
+
+    def test_nachsuche_without_any_hit_keeps_the_first_result(self):
+        result, _, engine, _ = self.run_nachsuche(vector_search(), vector=[])
+        self.assertEqual((result.outcome, len(engine.verify_calls)), ('nicht_belegt', 1))
+        self.assertEqual(result.note, 'Nachsuche ohne neue Passagen; es bleibt beim Ergebnis der ersten Prüfung')
+
+    def test_invalid_nachsuche_step_is_technical_error(self):
+        steps = {'pruefen': act('pruefen', vorlage_id=V1.vote_id),
+                 'ungültiges JSON': AgentAction(error='Antwort ist kein gültiges JSON.'),
+                 'anderes Werkzeug': search_passages(),
+                 'fehlendes Argument': act('suche_passagen_vektor', vorlage_id=V1.vote_id),
+                 'unbekannte Vorlage': vector_search(VoteRef('x#1', 'x', '2024-01-01', 'de', 'X', (1,)))}
+        for name, step in steps.items():
+            with self.subTest(step=name):
+                result, _, engine, _ = self.run_nachsuche(step)
+                self.assertEqual(result.outcome, 'technischer_fehler')
+                self.assertIn('Nachsuche ohne gültigen Suchschritt', result.error)
+                self.assertEqual(len(engine.verify_calls), 1)
+                self.assertEqual(result.evidence, [])
+
+    def test_nachsuche_in_another_vote_is_technical_error(self):
+        result, _, engine, index = self.run_nachsuche(vector_search(V2))
+        self.assertEqual(result.outcome, 'technischer_fehler')
+        self.assertIn('Nachsuche ohne gültigen Suchschritt', result.error)
+        self.assertIn(V1.vote_id, result.error)
+        self.assertEqual((len(engine.verify_calls), index.vector_calls), (1, []))
+
+    def test_tool_failure_in_nachsuche_is_technical_error(self):
+        decider = PresetDecider(*prove_and_check(), vector_search())
+        index = FakeIndex(vector_error=RuntimeError('Qdrant nicht erreichbar'))
+        result, engine, _ = check(decider, engine=FakeEngine(predictions=[NICHT_BELEGT]), index=index)
+        self.assertEqual(result.outcome, 'technischer_fehler')
+        self.assertIn('Qdrant nicht erreichbar', result.error)
+        self.assertEqual(len(engine.verify_calls), 1)
+
+    def test_budget_spent_in_nachsuche_is_technical_error(self):
+        result, _, engine, _ = self.run_nachsuche(BudgetExceeded('Anfrage-Budget erschöpft'))
+        self.assertEqual(result.outcome, 'technischer_fehler')
+        self.assertIn('BudgetExceeded', result.error)
+        self.assertEqual(len(engine.verify_calls), 1)
+        self.assertEqual(result.evidence, [])
+
+    def test_failure_of_the_second_check_is_technical_error(self):
+        result, _, engine, _ = self.run_nachsuche(
+            vector_search(), predictions=(NICHT_BELEGT, make_prediction(1, error='timeout')))
+        self.assertEqual(result.outcome, 'technischer_fehler')
+        self.assertIn('timeout', result.error)
+        self.assertEqual(len(engine.verify_calls), 2)
+
+    def test_discarded_verdict_also_triggers_nachsuche(self):
+        discarded = make_prediction(0, [(2, NOT_FOUND)])
+        result, decider, engine, _ = self.run_nachsuche(vector_search(), predictions=(discarded, GESTUETZT))
+        self.assertEqual((result.outcome, result.checks, len(engine.verify_calls)), ('gestuetzt', 2, 2))
+        self.assertIsNone(result.note)  # the discard note belongs to the first check only
+        self.assertEqual(decider.calls[-1]['tools'], ['suche_passagen_vektor'])
+        result, _, _, _ = self.run_nachsuche(vector_search(), predictions=(discarded, discarded))
+        self.assertEqual((result.outcome, result.note, result.checks), ('nicht_belegt', NOTE, 2))
+
+    def test_verdict_after_first_check_has_no_nachsuche(self):
+        for prediction, outcome in ((GESTUETZT, 'gestuetzt'), (make_prediction(2, [(2, QUOTE)]), 'widersprochen')):
+            with self.subTest(outcome=outcome):
+                decider = PresetDecider(*prove_and_check())
+                result, engine, _ = check(decider, engine=FakeEngine(predictions=[prediction]))
+                self.assertEqual((result.outcome, result.checks, len(engine.verify_calls)), (outcome, 1, 1))
+                self.assertEqual(len(decider.calls), 3)
+                self.assertNotIn('nachsuche', [e.node for e in result.events])
+
+    def test_nachsuche_can_be_switched_off(self):
+        decider = PresetDecider(*prove_and_check())
+        result, engine, _ = check(decider, engine=FakeEngine(predictions=[NICHT_BELEGT]), nachsuche=False)
+        self.assertEqual((result.outcome, result.checks, len(engine.verify_calls)), ('nicht_belegt', 1, 1))
+        self.assertEqual(len(decider.calls), 3)
+        self.assertNotIn('nachsuche', [e.node for e in result.events])
+
+    def test_nachsuche_after_all_search_steps_is_governed_by_the_research_limit(self):
+        searches = [search_votes()] + [search_passages() for _ in range(settings.MAX_STEPS - 1)]
+        decider = PresetDecider(*searches, act('pruefen', vorlage_id=V1.vote_id), vector_search())
+        engine = FakeEngine(predictions=[NICHT_BELEGT, GESTUETZT])
+        result, engine, _ = check(decider, engine=engine, index=FakeIndex(vector=[passage(3, NEW_TEXT)]))
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertEqual((result.checks, result.steps), (2, settings.MAX_STEPS + 2))
+        self.assertEqual([set(call['tools']) <= TERMINAL_TOOLS for call in decider.calls[:-1]],
+                         [False] * settings.MAX_STEPS + [True])  # the last decision before pruefen
+        self.assertEqual(decider.calls[-1]['tools'], ['suche_passagen_vektor'])  # the Nachsuche: no step limit
+        self.assertNotIn('Schrittgrenze', str(result.error))
+
+    def test_scripted_decider_runs_the_nachsuche(self):
+        decider = RecordingDecider(ScriptedDecider())
+        engine = FakeEngine(predictions=[NICHT_BELEGT, GESTUETZT])
+        result, engine, index = check(decider, engine=engine, index=FakeIndex(vector=[passage(3, NEW_TEXT)]))
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertEqual([e.tool for e in result.events if e.node == 'decide'],
+                         ['suche_vorlagen', 'suche_passagen', 'pruefen', 'suche_passagen_vektor'])
+        self.assertEqual(index.vector_calls, [(V1.vote_id, CLAIM)])
+
+    def test_recursion_limit_covers_the_nachsuche(self):
+        tools = AgentTools(LocalBackend(FakeIndex(), FakeEngine(), BOOKLETS), BOOKLETS)
+        for max_steps in (1, 5):
+            graph = build_graph(tools, PresetDecider(), FakeEngine(), Tracer(), max_steps=max_steps)
+            self.assertEqual(graph.config['recursion_limit'], 2 * (max_steps + 2) + 9)
+
+    def test_nachsuche_prompt_is_a_user_message_naming_the_vote(self):
+        from src.agent.graph import NACHSUCHE_PROMPT
+        self.assertEqual(NACHSUCHE_PROMPT.format(vote_id='V'), (
+            'Ergebnis der Prüfung: im Dokument nicht belegt, kein Beleg gefunden. Nachsuche: Du hast genau einen '
+            'weiteren Suchschritt. Rufe suche_passagen_vektor für die Vorlage V mit einer anders formulierten '
+            'Anfrage auf. Danach wird ein letztes Mal geprüft.'))
 
 
 @unittest.skipUnless(HAS_LANGGRAPH, 'Install requirements-agent.txt')

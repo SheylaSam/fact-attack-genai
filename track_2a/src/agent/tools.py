@@ -3,7 +3,9 @@
 The LLM only ever sees `Observation.text`. Tool arguments are vote ids of the index and search text of 1-500
 characters; nothing else (no paths, no URLs) reaches the index or the engine. The passages every search finds go into
 a per-run pool that keeps their original text and deduplicates by (page_number, sha256(text)); only the pool is
-checked against the claim.
+checked against the claim. The pool stores `POOL_LIMIT` (twice the check size) passages per vote: the first
+`MAX_PASSAGES` of them go into the first check; `recheck_passages` puts the passages the first check has not seen
+first.
 """
 import copy
 import datetime
@@ -20,6 +22,7 @@ from src.agent.source_index import TOP_CHUNKS, VoteCandidate, VoteRef
 if TYPE_CHECKING:  # search_backend imports this module
     from src.agent.search_backend import SearchBackend
 
+POOL_LIMIT = 2 * settings.MAX_PASSAGES  # passages the pool stores per vote; `passages_for` hands out MAX_PASSAGES
 MAX_QUERY_CHARS = 500
 MAX_ID_CHARS = 64
 MAX_QUESTION_CHARS = 300
@@ -262,6 +265,15 @@ class AgentTools:
         """The vote's passages of all searches so far: original text, no duplicates, first found first, capped."""
         return [dict(p) for p in self._pool.get(vote_id, [])[:settings.MAX_PASSAGES]]
 
+    def recheck_passages(self, vote_id: str, checked: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """The passages of the second check: the pooled passages `checked` does not contain (by key) first, in order
+        of discovery, then `checked` itself; at most `MAX_PASSAGES`. Empty if the pool holds nothing new."""
+        known = {_passage_key(p) for p in checked}
+        fresh = [dict(p) for p in self._pool.get(vote_id, []) if _passage_key(p) not in known]
+        if not fresh:
+            return []
+        return (fresh + [dict(p) for p in checked])[:settings.MAX_PASSAGES]
+
     def run(self, tool: str, args: dict, *, claim: Optional[str] = None) -> Observation:
         """Runs a search tool. Rejected calls and exceptions of the index or engine come back as an observation
         with `error`; `data["error_kind"]` tells `ERROR_INVALID_ARGS` (the model's mistake) from a tool failure.
@@ -333,7 +345,7 @@ class AgentTools:
         keyed = [(_passage_key(p), dict(p)) for p in found]  # fails before anything enters the pool
         pool = self._pool.setdefault(vote.vote_id, [])
         seen = self._seen.setdefault(vote.vote_id, set())
-        limit = settings.MAX_PASSAGES
+        limit = POOL_LIMIT
         vote_pages = set(vote.pages)
         shown, new, dropped, outside = [], 0, 0, 0
         for passage_key, passage in keyed:
@@ -352,9 +364,9 @@ class AgentTools:
             head = f"Keine Passagen aus {vote.vote_id} gefunden ({label})."
         else:
             head = f"Passagen aus {vote.vote_id} ({label}): {len(keyed)} gefunden, {new} neu im Pool."
-        head += f" Pool dieser Vorlage: {len(pool)} von höchstens {limit} Passagen."
+        head += f" Pool dieser Vorlage: {len(pool)} Passagen; geprüft werden höchstens {settings.MAX_PASSAGES}."
         if dropped:
-            head += f" {dropped} neue Passagen passten nicht mehr hinein und werden nicht geprüft."
+            head += f" {dropped} neue Passagen passten nicht mehr in den Pool und werden nicht geprüft."
         if outside:
             head += f" {outside} Passagen von anderen Vorlagen wurden nicht aufgenommen."
         lines = [head]

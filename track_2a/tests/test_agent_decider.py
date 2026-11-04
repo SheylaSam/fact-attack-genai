@@ -397,6 +397,18 @@ class ScriptedDeciderTests(unittest.TestCase):
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, [passages_observation(V1, tool='suche_passagen_vektor')])
         self.assertEqual((action.tool, action.args), ('pruefen', {'vorlage_id': V1}))
 
+    def test_scripted_nachsuche_uses_the_vector_search(self):
+        history = [votes_observation(vote_candidate(V1, 0.9)), passages_observation(V2)]
+        specs = [spec for spec in TOOL_SPECS if spec['name'] == 'suche_passagen_vektor']
+        action = ScriptedDecider().decide(MESSAGES, specs, history)
+        self.assertEqual((action.tool, action.args), ('suche_passagen_vektor', {'vorlage_id': V2, 'anfrage': CLAIM}))
+        # a rejected step after the passage search does not hide the vote of the last passage search
+        rejected = Observation('pruefen', 'Fehler', {'error_kind': ERROR_INVALID_ARGS}, 'Keine Passagen')
+        action = ScriptedDecider().decide(MESSAGES, specs, history + [rejected])
+        self.assertEqual((action.tool, action.args['vorlage_id']), ('suche_passagen_vektor', V2))
+        # without a passage search there is no vote to search in: an invalid step, not a guess
+        self.assertIsNone(ScriptedDecider().decide(MESSAGES, specs, history[:1]).tool)
+
     def test_scripted_empty_pool_means_source_missing(self):
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, [passages_observation(V1, pool_size=0)])
         self.assertEqual(action.tool, 'quelle_fehlt')

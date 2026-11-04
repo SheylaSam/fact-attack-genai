@@ -32,7 +32,7 @@ WRAPPED = VoteRef('2025-09-28_de#1', '2025-09-28_de', '2025-09-28', 'de',
                   'Volksinitiativ e «Mehr bezahlbare Wohnungen»', (2,))
 WHOLE = VoteRef('2030-01-01_de#0', '2030-01-01_de', '2030-01-01', 'de', 'Gesamtes Büchlein', (1, 2))  # no contents
 WIDE = VoteRef('2024-11-24_de#9', '2024-11-24_de', '2024-11-24', 'de', 'Vorlage über viele Seiten',
-               tuple(range(1, 15)))  # for tests whose fake passages are spread over many pages
+               tuple(range(1, 31)))  # for tests whose fake passages are spread over many pages
 BAD_IDS = ('2024-11-24_de#7', '../../.env', 'https://x')
 CLAIM = 'Mieter brauchen für die Untermiete die schriftliche Zustimmung der Vermieterin.'
 
@@ -283,6 +283,43 @@ class PassagePoolTests(unittest.TestCase):
         self.assertEqual([p['page_number'] for p in pooled], list(range(1, 11)))  # first found first
         self.assertEqual(pooled[0]['text'], 'Originaltext von Seite 1.')  # the PDF text, untouched
 
+    def test_pool_stores_up_to_twice_the_check_size(self):
+        self.assertEqual(tools_module.POOL_LIMIT, 2 * settings.MAX_PASSAGES)
+        tools, _, _ = make_tools(engine=FakeEngine([passage(page) for page in range(1, 26)]))  # 25 passages
+        obs = tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        self.assertEqual((obs.data['found'], obs.data['new'], obs.data['dropped']), (25, 20, 5))
+        self.assertEqual(obs.data['pool_size'], tools_module.POOL_LIMIT)
+        self.assertEqual(len(tools._pool[WIDE.vote_id]), 20)
+        self.assertEqual([p['page_number'] for p in tools.passages_for(WIDE.vote_id)], list(range(1, 11)))
+
+    def test_recheck_puts_unchecked_passages_first(self):
+        tools, _, engine = make_tools(engine=FakeEngine([passage(page) for page in range(1, 11)]))
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        checked = tools.passages_for(WIDE.vote_id)  # the ten that went into the first check
+        engine.passages = [passage(page) for page in (21, 22, 23)]
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        again = tools.recheck_passages(WIDE.vote_id, checked)
+        self.assertEqual([p['page_number'] for p in again], [21, 22, 23] + list(range(1, 8)))  # new first, capped
+        self.assertEqual(len(again), settings.MAX_PASSAGES)
+        again[0]['text'] = 'verändert'
+        self.assertEqual(tools.recheck_passages(WIDE.vote_id, checked)[0]['text'], 'Originaltext von Seite 21.')
+
+    def test_recheck_orders_the_new_passages_by_discovery(self):
+        tools, _, engine = make_tools(engine=FakeEngine([passage(2), passage(3)]))
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        checked = tools.passages_for(WIDE.vote_id)
+        engine.passages = [passage(9), passage(5)]
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        self.assertEqual([p['page_number'] for p in tools.recheck_passages(WIDE.vote_id, checked)], [9, 5, 2, 3])
+
+    def test_recheck_without_unchecked_passages_is_empty(self):
+        tools, _, engine = make_tools(engine=FakeEngine([passage(2), passage(3)]))
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
+        checked = tools.passages_for(V1.vote_id)
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)  # the same passages again
+        self.assertEqual(tools.recheck_passages(V1.vote_id, checked), [])
+        self.assertEqual(tools.recheck_passages(V2.vote_id, []), [])  # nothing pooled for this vote
+
     def test_overlap_alone_adds_nothing(self):
         same = [passage(2), passage(3)]
         tools, _, _ = make_tools(index=FakeIndex(passages=same), engine=FakeEngine(same))
@@ -316,14 +353,18 @@ class PassagePoolTests(unittest.TestCase):
         self.assertEqual(tools.passages_for(V1.vote_id)[0]['text'], 'Originaltext von Seite 2.')
 
     def test_full_pool_says_so_and_drops_the_rest(self):
-        tools, _, engine = make_tools(engine=FakeEngine([passage(page) for page in range(1, 9)]))
+        limit = tools_module.POOL_LIMIT
+        tools, _, engine = make_tools(engine=FakeEngine([passage(page) for page in range(1, limit - 1)]))
         tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
-        engine.passages = [passage(page) for page in range(9, 15)]
+        engine.passages = [passage(page) for page in range(limit - 1, limit + 5)]
         obs = tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
         self.assertEqual((obs.data['found'], obs.data['new'], obs.data['dropped']), (6, 2, 4))
-        self.assertEqual(obs.data['pool_size'], settings.MAX_PASSAGES)
-        self.assertIn(f'{settings.MAX_PASSAGES} von höchstens {settings.MAX_PASSAGES}', obs.text)
-        self.assertEqual([p['page_number'] for p in tools.passages_for(WIDE.vote_id)], list(range(1, 11)))
+        self.assertEqual(obs.data['pool_size'], limit)
+        self.assertIn(f'Pool dieser Vorlage: {limit} Passagen; geprüft werden höchstens {settings.MAX_PASSAGES}.',
+                      obs.text)
+        self.assertEqual(len(tools._pool[WIDE.vote_id]), limit)
+        self.assertEqual([p['page_number'] for p in tools.passages_for(WIDE.vote_id)],
+                         list(range(1, settings.MAX_PASSAGES + 1)))
 
 
 class VoteIdTests(unittest.TestCase):

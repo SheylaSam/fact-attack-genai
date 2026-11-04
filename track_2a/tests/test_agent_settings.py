@@ -30,6 +30,11 @@ def settings_with_env(**env):
 
 
 class AgentSettingsTests(unittest.TestCase):
+    def test_check_limits(self):
+        with settings_with_env() as s:
+            self.assertEqual(s.MAX_CHECKS, 2)
+            self.assertEqual(s.MAX_RESEARCH_STEPS, 1)
+
     def test_defaults(self):
         with settings_with_env() as s:
             self.assertEqual(s.MAX_STEPS, 5)

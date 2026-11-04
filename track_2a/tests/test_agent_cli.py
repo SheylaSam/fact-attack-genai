@@ -95,6 +95,20 @@ class FormatStepsTests(unittest.TestCase):
         self.assertIn('✓', rows['suche_passagen'])
         self.assertEqual(cli_format.NODE_LABELS['ask'], 'Rückfrage')
 
+    def test_format_steps_names_the_nachsuche(self):
+        events = [
+            event(2, 'verify', 'pruefen', 'Label 1 (nicht_belegt), 0 Zitate'),
+            event(2, 'check_evidence', None, 'Nicht belegt: kein Zitat zu prüfen'),
+            event(2, 'nachsuche', None, 'Nachsuche: nicht belegt, ein weiterer Suchschritt'),
+            event(3, 'decide', 'suche_passagen_vektor', 'suche_passagen_vektor gewählt'),
+            event(3, 'act', 'suche_passagen_vektor', 'Passagen aus a (Vektorsuche): 3 gefunden'),
+            event(3, 'finish', None, 'Ergebnis: nicht_belegt'),
+        ]
+        rows = numbered(cli_format.format_steps(events))
+        self.assertIn('✓', rows['Nachsuche'])
+        self.assertIn('suche_passagen_vektor', rows)
+        self.assertEqual(cli_format.NODE_LABELS['nachsuche'], 'Nachsuche')
+
     def test_format_steps_numbers_each_step_once(self):
         events = [
             event(1, 'decide', 'suche_vorlagen', 'suche_vorlagen gewählt', duration_ms=1200.0, tokens_prompt=800,
