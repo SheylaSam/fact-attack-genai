@@ -449,6 +449,60 @@ class GraphTests(unittest.TestCase):
         self.assertNotIn('guard', acts[0].data)
         self.assertNotIn('guard', acts[2].data or {})
 
+    def test_guard_asks_when_the_claim_is_clear_but_the_action_names_another_vote(self):
+        decider = PresetDecider(search_votes(), search_passages(V2))
+        result, engine, index = check(decider, index=FakeIndex(CLEAR))  # V1 clearly ahead, the model acts on V2
+        self.assertEqual((result.outcome, result.asked_by), ('rueckfrage', 'guard'))
+        self.assertEqual([o.vote_id for o in result.options], [V1.vote_id, V2.vote_id])  # top, chosen
+        self.assertIn('Welche Vorlage ist gemeint', result.question)
+        self.assertEqual(engine.retrieve_calls, [])  # the tool did not run
+        self.assertEqual(len(decider.calls), 2)
+        [ask] = [e for e in result.events if e.node == 'ask']
+        self.assertEqual(ask.args, {'optionen': [V1.vote_id, V2.vote_id]})
+        self.assertEqual((ask.data['kind'], ask.data['top'], ask.data['chosen']), ('eindeutig', V1.vote_id, V2.vote_id))
+        [blocked] = [e for e in result.events if e.node == 'act' and e.tool == 'suche_passagen']
+        self.assertEqual(blocked.summary, f'Wächter: eindeutig {V1.vote_id}, Aktion nennt {V2.vote_id}; '
+                                          'suche_passagen nicht ausgeführt')
+        self.assertEqual(blocked.data['guard']['kind'], 'eindeutig')
+        self.assertNotIn('Mehrere Vorlagen', result.reasoning)  # the reason names the real conflict
+        self.assertIn(V2.title, result.reasoning)
+
+    def test_guard_checks_every_vote_bound_action_while_no_vote_is_fixed(self):
+        decider = PresetDecider(search_votes(), search_passages(V1), search_passages(V2))
+        result, engine, index = check(decider, index=FakeIndex(CLEAR))
+        self.assertEqual((result.outcome, result.asked_by), ('rueckfrage', 'guard'))
+        self.assertEqual(len(engine.retrieve_calls), 1)  # the first action on the top vote ran, the second did not
+        self.assertEqual(index.vote_calls, ['Untermiete', CLAIM])  # the assessment is cached: one guard search only
+        self.assertEqual([o.vote_id for o in result.options], [V1.vote_id, V2.vote_id])
+        decider = PresetDecider(search_votes(), search_passages(V1), act('pruefen', vorlage_id=V2.vote_id))
+        result, engine, _ = check(decider, index=FakeIndex(CLEAR))
+        self.assertEqual((result.outcome, result.asked_by), ('rueckfrage', 'guard'))
+        self.assertEqual(engine.verify_calls, [])
+
+    def test_guard_lets_close_and_top_votes_through_and_keine_unchanged(self):
+        close = [candidate(V1, 0.873), candidate(V2, 0.869)]
+        decider = PresetDecider(search_votes(), search_passages(V1), search_passages(V1))
+        result, engine, _ = check(decider, index=FakeIndex(close))
+        self.assertEqual(result.asked_by, 'guard')  # mehrdeutig keeps asking on the first action
+        decider = PresetDecider(search_votes(), search_passages(V2), act('pruefen', vorlage_id=V2.vote_id))
+        page_4 = 'Eigenbedarf\n' + QUOTE
+        engine = FakeEngine(prediction=make_prediction(0, [(4, QUOTE)]), pages={4: page_4})
+        engine.passages = [passage(4, page_4)]
+        result, engine, _ = check(decider, index=FakeIndex([]), engine=engine)  # keine: no vote is blocked
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertEqual(len(engine.retrieve_calls), 1)
+
+    def test_answer_to_the_mismatch_question_continues_with_the_chosen_vote(self):
+        first, _, _ = check(PresetDecider(search_votes(), search_passages(V2)), index=FakeIndex(CLEAR))
+        chosen = first.options[1]
+        self.assertEqual(chosen, V2)
+        page_4 = 'Eigenbedarf\n' + QUOTE
+        engine = FakeEngine(prediction=make_prediction(0, [(4, QUOTE)]), pages={4: page_4})
+        engine.passages = [passage(4, page_4)]
+        result, engine, _ = check(ScriptedDecider(fixed_vote_id=chosen.vote_id), index=FakeIndex(CLEAR), engine=engine,
+                                  fixed_vote_id=chosen.vote_id)
+        self.assertEqual(result.outcome, 'gestuetzt')
+
     def test_guard_is_skipped_with_a_fixed_vote(self):
         decider = PresetDecider(search_passages(V1), act('pruefen', vorlage_id=V1.vote_id))
         result, _, index = check(decider, index=FakeIndex(CLOSE), fixed_vote_id=V1.vote_id)

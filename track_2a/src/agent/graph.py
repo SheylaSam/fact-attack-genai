@@ -12,11 +12,13 @@
   its arguments and resolving every vote id with `AgentTools.check_vote_id`. An invalid action, invalid arguments or a
   rejected terminal action is fed back to the decider as an observation and is a search step. A failed tool ends the
   run as `technischer_fehler`.
-* The guard sits in `act`: without a fixed vote, before the first vote-bound action (`suche_passagen`,
-  `suche_passagen_vektor`, `pruefen`, with valid arguments and a known vote id) it assesses the vote ranking of the
-  claim's own wording (`AgentTools.claim_assessment`, never the model's query). If the claim fits several votes
-  ("mehrdeutig") the action is not run and the route goes to `ask` with the close votes; a failure of that search is a
-  technical error, never `nicht_belegt`.
+* The guard sits in `act`: without a fixed vote, before every vote-bound action (`suche_passagen`,
+  `suche_passagen_vektor`, `pruefen`, with valid arguments and a known vote id) it looks at the vote ranking of the
+  claim's own wording (`AgentTools.claim_assessment`, never the model's query; searched once, then cached). If the
+  claim fits several votes ("mehrdeutig") the action is not run and the route goes to `ask` with the close votes. If
+  it fits one vote clearly ("eindeutig") and the action names a vote that is neither that one nor a close one, the
+  action is not run either and `ask` gets [top vote, named vote]. A failure of the search is a technical error,
+  never `nicht_belegt`.
 * `ask` is the only node that sets the outcome `rueckfrage` (`asked_by` says whether the guard or the model asked).
   Stage 4 replaces the ending here with `interrupt` and continues the check with the chosen vote.
 * `quelle_fehlt` is accepted only after a search: without a fixed vote after a `suche_vorlagen` without error, with
@@ -66,6 +68,8 @@ Outcome = Literal["gestuetzt", "widersprochen", "nicht_belegt", "rueckfrage", "q
 LABEL_OUTCOMES: Dict[int, str] = {0: "gestuetzt", 1: "nicht_belegt", 2: "widersprochen"}
 DISCARDED_NOTE = "Urteil ohne prüfbaren Beleg verworfen"
 QUESTION_REASON = "Mehrere Vorlagen passen zur Behauptung, und sie lässt nicht erkennen, welche gemeint ist."
+MISMATCH_REASON = ("Die Behauptung passt am besten zur Vorlage «{top}», die Aktion des Modells nennt aber die "
+                   "Vorlage «{chosen}». Es ist nicht klar, welche gemeint ist.")
 DISCARDED_REASON = ("Die Prüfung ergab «{verdict}», aber kein Zitat steht so im PDF-Text der angegebenen Seite. "
                     "Ohne prüfbaren Beleg gilt die Behauptung als im Dokument nicht belegt.")
 TECHNICAL_REASON = "Die Prüfung wurde wegen eines technischen Fehlers abgebrochen; es gibt kein Urteil."
@@ -134,6 +138,7 @@ class _State(TypedDict, total=False):
     guard_done: bool  # the guard has assessed the claim and let the first vote-bound action through
     asked_by: str  # "guard" or "model"
     ask_data: dict  # what the ask event carries: the guard's assessment or the model's options
+    ask_reason: str  # the reasoning of the question when it is not QUESTION_REASON
     offered: List[str]  # tools offered for the latest decision
     action: AgentAction  # the latest decision
     route: str  # next node
@@ -243,22 +248,36 @@ class _Nodes:
         rejection = self._precheck(action, state.get("offered", []))
         guard_data: Optional[dict] = None
         guard_done = state.get("guard_done", False)
-        if rejection is None and not guard_done and self._guard_applies(action):
+        if rejection is None and self._guard_applies(action):  # every vote-bound action while no vote is fixed
             try:
-                assessment = self.tools.claim_assessment(state["claim"])  # the claim's wording, not the model's query
+                assessment = self.tools.claim_assessment(state["claim"])  # the claim's wording; cached, one search
             except Exception as exc:  # a guard that cannot look is a technical error, never "nicht belegt"
                 message = GUARD_ERROR.format(error=_exception(exc))
                 self.emit(step, "act", started, tool=tool, args=args, summary="Wächter: Vorlagensuche fehlgeschlagen",
                           error=message)
                 return {"error": message, "route": "finish"}
-            guard_data, guard_done = assessment.to_data(), True
+            if not guard_done:  # the first assessment goes into the trace once
+                guard_data = assessment.to_data()
+            guard_done = True
+            chosen = validate_args(tool, action.args)["vorlage_id"]
             if assessment.kind == "mehrdeutig":  # several votes fit: the action is not run
                 options = [self.tools.check_vote_id(vote_id) for vote_id in assessment.close]
-                self.emit(step, "act", started, tool=tool, args=args, data={"guard": guard_data},
+                self.emit(step, "act", started, tool=tool, args=args, data={"guard": assessment.to_data()},
                           summary=f"Wächter: mehrdeutig, {', '.join(assessment.close)} liegen gleichauf; "
                                   f"{tool} nicht ausgeführt")
                 return {"guard_done": True, "asked_by": "guard", "question": guard.question(options),
-                        "options": options, "ask_data": guard_data, "route": "ask"}
+                        "options": options, "ask_data": assessment.to_data(), "route": "ask"}
+            if assessment.kind == "eindeutig" and chosen != assessment.top and chosen not in assessment.close:
+                # the claim clearly fits one vote, the action names another: ask which one is meant
+                top, other = self.tools.check_vote_id(assessment.top), self.tools.check_vote_id(chosen)
+                options = [top, other]
+                data = {**assessment.to_data(), "chosen": chosen}
+                self.emit(step, "act", started, tool=tool, args=args, data={"guard": data},
+                          summary=f"Wächter: eindeutig {assessment.top}, Aktion nennt {chosen}; "
+                                  f"{tool} nicht ausgeführt")
+                return {"guard_done": True, "asked_by": "guard", "question": guard.question(options),
+                        "options": options, "ask_data": data,
+                        "ask_reason": MISMATCH_REASON.format(top=top.title, chosen=other.title), "route": "ask"}
         guard_event = {"guard": guard_data} if guard_data is not None else {}
         if rejection is None and tool in TERMINAL_TOOLS:
             try:
@@ -400,7 +419,7 @@ class _Nodes:
         self.emit(step, "ask", started, tool="rueckfrage", args={"optionen": ids}, data=state.get("ask_data"),
                   summary=f"Rückfrage ({'Wächter' if asked_by == 'guard' else 'Modell'}) mit {len(ids)} Optionen: "
                           f"{', '.join(ids)}")
-        return {"outcome": "rueckfrage", "reasoning": QUESTION_REASON, "route": "finish"}
+        return {"outcome": "rueckfrage", "reasoning": state.get("ask_reason", QUESTION_REASON), "route": "finish"}
 
     def verify(self, state: _State) -> dict:
         vote, passages, step = state["vote"], state["passages"], state["steps"]
