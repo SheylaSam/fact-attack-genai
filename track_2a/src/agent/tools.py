@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Callable, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError, field_validator
 
-from src.agent import settings
+from src.agent import guard, settings
 from src.agent.source_index import TOP_CHUNKS, VoteCandidate, VoteRef
 
 if TYPE_CHECKING:  # search_backend imports this module
@@ -31,7 +31,6 @@ SNIPPET_PREVIEW_CHARS = 120  # display only; the pool keeps the whole text
 PASSAGE_PREVIEW_CHARS = 200
 ERROR_CHARS = 300
 OUTSIDE_STATUS = "andere Vorlage, nicht aufgenommen"
-SCORE_HINT = "Die Scores liegen bei diesem Modell eng beieinander; die Trefferzahl trennt oft besser."
 
 ERROR_INVALID_ARGS = "invalid_args"  # `Observation.data["error_kind"]`: the model's mistake, fed back as a search step
 ERROR_TOOL_FAILURE = "tool_failure"  # the index or the engine failed: a technical error
@@ -216,6 +215,7 @@ class AgentTools:
         self.booklets_dir = Path(booklets_dir)
         self.fixed_vote_id = fixed_vote_id
         self._recent_ids: List[str] = []  # the votes of the latest suche_vorlagen
+        self._assessments: Dict[str, guard.Assessment] = {}  # claim_assessment cache, keyed by the search text
         self._pool: Dict[str, List[Dict[str, Any]]] = {}
         self._seen: Dict[str, Set[Tuple[int, str]]] = {}
         self._handlers: Dict[str, Callable[[dict, Optional[str]], Observation]] = {
@@ -234,6 +234,14 @@ class AgentTools:
         search = {spec["name"]: spec for spec in self.backend.tool_specs()}
         specs = [spec if spec["name"] in TERMINAL_TOOLS else search.get(spec["name"]) for spec in TOOL_SPECS]
         return [copy.deepcopy(spec) for spec in specs if spec is not None and spec["name"] not in hidden]
+
+    def claim_assessment(self, claim: str) -> guard.Assessment:
+        """The guard's assessment of the vote ranking for the claim's own wording. The search runs once per
+        instance and query; a failure of the backend is passed on and not cached."""
+        query = claim[:MAX_QUERY_CHARS].strip()
+        if query not in self._assessments:
+            self._assessments[query] = guard.assess(self.backend.search_votes(query, k=VOTE_CANDIDATES))
+        return self._assessments[query]
 
     def check_vote_id(self, vote_id: str) -> VoteRef:
         """The vote of this id; ValueError that names the valid ids otherwise."""
@@ -287,17 +295,20 @@ class AgentTools:
     def _search_votes(self, args: dict, claim: Optional[str]) -> Observation:
         candidates = self.backend.search_votes(args["anfrage"], k=VOTE_CANDIDATES)
         self._recent_ids = [c.vote.vote_id for c in candidates]
+        assessment = guard.assess(candidates)
         if not candidates:
             return Observation("suche_vorlagen", "Keine Vorlage gefunden. Formuliere die Anfrage anders.",
-                               {"candidates": []})
+                               {"candidates": [], "assessment": assessment.to_data()})
         lines = [f"Gefundene Vorlagen, beste zuerst. Score = ähnlichste Textstelle der Vorlage, Treffer = Textstellen "
-                 f"der Vorlage unter den {TOP_CHUNKS} ähnlichsten. {SCORE_HINT}"]
+                 f"der Vorlage unter den {TOP_CHUNKS} ähnlichsten."]
         for rank, found in enumerate(candidates, 1):
             lines.append(f"{rank}. {found.vote.vote_id} | {_display_date(found.vote.date)} | {found.vote.title} | "
                          f"Score {found.score:.3f} | Treffer {found.hits} | Seite {found.best_page} | "
                          f"«{_preview(found.snippet, SNIPPET_PREVIEW_CHARS)}»")
+        lines.append(guard.hint(assessment))
         return Observation("suche_vorlagen", "\n".join(lines),
-                           {"candidates": [self._candidate_data(c) for c in candidates]})
+                           {"candidates": [self._candidate_data(c) for c in candidates],
+                            "assessment": assessment.to_data()})
 
     @staticmethod
     def _candidate_data(found: VoteCandidate) -> dict:

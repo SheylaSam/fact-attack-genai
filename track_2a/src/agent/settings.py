@@ -1,6 +1,7 @@
 """Limits and locations of the agent layer."""
 import os
 from pathlib import Path
+from typing import Optional
 
 from src import config
 
@@ -22,3 +23,10 @@ if TOOL_MODE not in _TOOL_MODES:
 
 INDEX_DIR = Path(os.getenv("AGENT_INDEX_DIR") or config.REPO_ROOT / ".rag-index" / "agent-sources")
 TRACE_DIR = Path(os.getenv("AGENT_TRACE_DIR") or config.REPO_ROOT / ".agent-traces")
+
+# Guard thresholds for the vote candidates of a claim (guard.py): provisional until the calibration on dev (task 8 of
+# stage 3). A candidate is "close" when it trails rank 1 by less than GUARD_SCORE_MARGIN and has at least
+# GUARD_MIN_HITS_RATIO times its hits; "keine" below GUARD_NONE_BELOW (None: only without any candidate).
+GUARD_SCORE_MARGIN: float = 0.02
+GUARD_MIN_HITS_RATIO: float = 0.5
+GUARD_NONE_BELOW: Optional[float] = None

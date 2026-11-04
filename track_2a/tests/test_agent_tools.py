@@ -7,6 +7,7 @@ import sys
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.agent import settings
+from src.agent import tools as tools_module
 from src.agent.search_backend import LocalBackend
 from src.agent.source_index import VoteCandidate, VoteRef
 from src.agent.tools import (ERROR_INVALID_ARGS, ERROR_TOOL_FAILURE, TERMINAL_TOOLS, TOOL_SPECS, AgentTools,
@@ -114,6 +115,30 @@ class SearchToolTests(unittest.TestCase):
         self.assertEqual([c['vote_id'] for c in obs.data['candidates']], [V1.vote_id, V2.vote_id])
         self.assertEqual(obs.data['candidates'][0]['score'], 0.873)
         self.assertEqual(obs.data['candidates'][0]['hits'], 12)
+
+    def test_suche_vorlagen_states_the_assessment_instead_of_the_score_hint(self):
+        tools, _, _ = make_tools()  # default candidates: .873/12 and .861/7, close and enough hits
+        obs = tools.run('suche_vorlagen', {'anfrage': 'Untermiete'})
+        self.assertIn('mehrdeutig', obs.text)
+        self.assertNotIn('eng beieinander', obs.text)
+        self.assertTrue(obs.text.endswith('beende mit rueckfrage und diesen Optionen.'))
+        self.assertEqual(obs.data['assessment']['kind'], 'mehrdeutig')
+        self.assertFalse(hasattr(tools_module, 'SCORE_HINT'))
+
+    def test_claim_assessment_searches_with_the_claim_once(self):
+        tools, index, _ = make_tools()
+        first = tools.claim_assessment(CLAIM)
+        second = tools.claim_assessment(CLAIM)
+        self.assertIs(first, second)
+        self.assertEqual(first.kind, 'mehrdeutig')
+        self.assertEqual(index.vote_calls, [(CLAIM, 5)])
+
+    def test_claim_assessment_passes_exceptions_on_and_does_not_cache_them(self):
+        tools, index, _ = make_tools(FakeIndex(error=RuntimeError('down')))
+        with self.assertRaises(RuntimeError):
+            tools.claim_assessment(CLAIM)
+        index.error = None
+        self.assertEqual(tools.claim_assessment(CLAIM).kind, 'mehrdeutig')
 
     def test_suche_vorlagen_shows_catalog_titles_as_they_are(self):
         tools, _, _ = make_tools(FakeIndex(votes=(WRAPPED,), candidates=[candidate(WRAPPED)]))
