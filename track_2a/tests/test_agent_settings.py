@@ -49,13 +49,15 @@ class AgentSettingsTests(unittest.TestCase):
             self.assertEqual(s.INDEX_DIR, config.REPO_ROOT / ".rag-index" / "agent-sources")
             self.assertEqual(s.TRACE_DIR, config.REPO_ROOT / ".agent-traces")
 
-    def test_default_tool_mode_is_the_decision_of_the_recorded_smoke(self):
-        smoke = json.loads((Path(__file__).resolve().parents[1] / "results" / "genai" / "agent_tool_smoke.json")
-                           .read_text(encoding="utf-8"))
-        self.assertTrue(smoke["complete"])
-        self.assertLessEqual(smoke["requests_used"], 6)
-        with settings_with_env() as s:
-            self.assertEqual(s.TOOL_MODE, smoke["recommended_tool_mode"])
+    def test_default_tool_mode_is_the_decision_of_the_recorded_smokes(self):
+        results = Path(__file__).resolve().parents[1] / "results" / "genai"
+        for name, cap in (("agent_tool_smoke.json", 6), ("agent_native_smoke.json", 4)):
+            with self.subTest(smoke=name):
+                smoke = json.loads((results / name).read_text(encoding="utf-8"))
+                self.assertTrue(smoke["complete"])
+                self.assertLessEqual(smoke["requests_used"], cap)
+                with settings_with_env() as s:
+                    self.assertEqual(s.TOOL_MODE, smoke["recommended_tool_mode"])
 
     def test_directories_and_native_mode_from_environment(self):
         with settings_with_env(AGENT_TOOL_MODE="native", AGENT_INDEX_DIR="/tmp/idx", AGENT_TRACE_DIR="/tmp/trc") as s:
