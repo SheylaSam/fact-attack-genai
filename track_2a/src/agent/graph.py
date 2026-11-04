@@ -462,9 +462,12 @@ class _Nodes:
                   summary=f"Nachsuche: nicht belegt, ein weiterer Suchschritt in {vote.vote_id}")
         first = {"outcome": state["outcome"], "evidence": list(state.get("evidence", [])),
                  "reasoning": state.get("reasoning", ""), "note": state.get("note")}
-        prompt = {"role": "user", "content": NACHSUCHE_PROMPT.format(vote_id=vote.vote_id)}
+        # `state["action"]` is still the accepted `pruefen` decision (no decide ran since): record it and answer it with
+        # the prompt, so the decider's transcript keeps its roles (JSON: assistant, user; native: tool_calls, tool)
+        exchange = self.decider.observation_messages(
+            state["action"], Observation("pruefen", NACHSUCHE_PROMPT.format(vote_id=vote.vote_id)))
         return {"phase": "nachsuche", "checked": list(state["passages"]), "first": first,
-                "messages": list(state["messages"]) + [prompt], "route": "decide"}
+                "messages": list(state["messages"]) + exchange, "route": "decide"}
 
     def _page_texts(self, pdf, page: int) -> List[str]:
         return page_texts(self.engine, pdf, page)

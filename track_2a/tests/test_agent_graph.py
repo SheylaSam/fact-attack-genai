@@ -962,6 +962,51 @@ class NachsucheTests(unittest.TestCase):
             graph = build_graph(tools, PresetDecider(), FakeEngine(), Tracer(), max_steps=max_steps)
             self.assertEqual(graph.config['recursion_limit'], 2 * (max_steps + 2) + 9)
 
+    def research_messages(self, inner, with_call_ids):
+        """The messages the decider receives in the research phase, with `inner` writing the observation messages."""
+        def action(tool, **args):
+            result = act(tool, **args)
+            if with_call_ids:
+                result.call_id = f'call_{tool}_{len(args)}'
+            return result
+        decider = PresetDecider(action('suche_vorlagen', anfrage='Untermiete'), action('suche_passagen', vorlage_id=V1.vote_id),
+                                action('pruefen', vorlage_id=V1.vote_id),
+                                action('suche_passagen_vektor', vorlage_id=V1.vote_id, anfrage='Zustimmung schriftlich'))
+        decider.inner = inner
+        engine = FakeEngine(predictions=[NICHT_BELEGT, GESTUETZT])
+        result, _, _ = check(decider, engine=engine, index=FakeIndex(vector=[passage(3, NEW_TEXT)]))
+        self.assertEqual(result.outcome, 'gestuetzt')
+        return decider.calls[-1]['messages'], decider.calls
+
+    def assert_no_consecutive_user_messages(self, calls):
+        for call in calls:
+            roles = [m['role'] for m in call['messages']]
+            self.assertFalse(any(a == b == 'user' for a, b in zip(roles, roles[1:])), roles)
+
+    def test_json_nachsuche_transcript_records_the_pruefen_action_before_the_prompt(self):
+        from src.agent.decider import JsonActionDecider
+        from src.agent.graph import NACHSUCHE_PROMPT
+        messages, calls = self.research_messages(JsonActionDecider(None), False)
+        self.assertEqual([m['role'] for m in messages],
+                         ['system', 'user', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user'])
+        self.assertEqual(json.loads(messages[-2]['content']),
+                         {'tool': 'pruefen', 'args': {'vorlage_id': V1.vote_id}})
+        self.assertEqual(messages[-1]['content'],
+                         'Ergebnis von pruefen: ' + NACHSUCHE_PROMPT.format(vote_id=V1.vote_id))
+        self.assert_no_consecutive_user_messages(calls)
+
+    def test_native_nachsuche_transcript_answers_the_pruefen_tool_call(self):
+        from src.agent.decider import NativeToolDecider
+        from src.agent.graph import NACHSUCHE_PROMPT
+        messages, calls = self.research_messages(NativeToolDecider(None), True)
+        assistant, tool = messages[-2], messages[-1]
+        self.assertEqual((assistant['role'], tool['role']), ('assistant', 'tool'))
+        [call] = assistant['tool_calls']
+        self.assertEqual(call['function']['name'], 'pruefen')
+        self.assertEqual(tool['tool_call_id'], call['id'])
+        self.assertEqual(tool['content'], NACHSUCHE_PROMPT.format(vote_id=V1.vote_id))
+        self.assert_no_consecutive_user_messages(calls)
+
     def test_nachsuche_prompt_is_a_user_message_naming_the_vote(self):
         from src.agent.graph import NACHSUCHE_PROMPT
         self.assertEqual(NACHSUCHE_PROMPT.format(vote_id='V'), (
