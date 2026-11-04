@@ -3,3 +3,7 @@
 langgraph==1.2.11
 langchain-core==1.7.3
 langchain-openai==1.6.2
+
+# Stage 3: own MCP server (FastMCP, stdio) and its binding into the graph.
+mcp==1.30.0
+langchain-mcp-adapters==0.3.2
