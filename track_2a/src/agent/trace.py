@@ -8,7 +8,7 @@ from typing import Any, List, Optional
 @dataclass
 class TraceEvent:
     step: int  # the decision the event belongs to (0 before the first one)
-    node: str  # decide | act | verify | check_evidence | finish
+    node: str  # start | decide | act | verify | check_evidence | finish
     tool: Optional[str] = None
     args: dict = field(default_factory=dict)
     summary: str = ""  # short German description of what happened

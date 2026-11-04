@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src import config
 
 SETTINGS = "src.agent.settings"
-AGENT_ENV = ("AGENT_TOOL_MODE", "AGENT_INDEX_DIR", "AGENT_TRACE_DIR")
+AGENT_ENV = ("AGENT_TOOL_MODE", "AGENT_TOOL_TRANSPORT", "AGENT_INDEX_DIR", "AGENT_TRACE_DIR")
 
 
 @contextlib.contextmanager
@@ -69,6 +69,18 @@ class AgentSettingsTests(unittest.TestCase):
                 pass  # the reload inside the helper raises
         with settings_with_env() as s:  # the helper restored the environment: defaults are back for later tests
             self.assertEqual(s.TOOL_MODE, "json")
+
+    def test_tool_transport_default_and_validation(self):
+        with settings_with_env() as s:
+            self.assertEqual(s.TOOL_TRANSPORT, "lokal")
+            self.assertEqual((s.MCP_START_TIMEOUT_S, s.MCP_CALL_TIMEOUT_S), (120.0, 120.0))
+        with settings_with_env(AGENT_TOOL_TRANSPORT="mcp") as s:
+            self.assertEqual(s.TOOL_TRANSPORT, "mcp")
+        with self.assertRaises(ValueError):
+            with settings_with_env(AGENT_TOOL_TRANSPORT="xml"):
+                pass  # the reload inside the helper raises
+        with settings_with_env() as s:
+            self.assertEqual(s.TOOL_TRANSPORT, "lokal")
 
 
 if __name__ == "__main__":

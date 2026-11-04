@@ -404,6 +404,55 @@ class MainTests(unittest.TestCase):
         self.assertIn('S. 2', out)
         self.assertIn(QUOTE, out)
 
+    def mcp_main(self, command, *argv):
+        """Runs `--werkzeuge mcp` with the MCP server replaced by `command`; opening the local index is a failure."""
+        with mock.patch('src.agent.mcp_server.server_command', return_value=command), \
+                mock.patch.object(agent_cli, 'SourceIndex', side_effect=AssertionError('index opened')):
+            return self.run_main(CLAIM, '--mock', '--werkzeuge', 'mcp', '--trace-dir', str(self.trace_dir), *argv)
+
+    @unittest.skipUnless(installed('mcp', 'langchain_mcp_adapters'), 'Install requirements-agent.txt')
+    def test_mcp_start_failure_is_technical_error_without_fallback(self):
+        command = [sys.executable, '-c', "import sys; sys.stderr.write('kaputt'); sys.exit(3)"]
+        code, out, err = self.mcp_main(command, '--json')
+        self.assertEqual(code, 2, err)
+        data = json.loads(out)
+        self.assertEqual(data['outcome'], 'technischer_fehler')
+        self.assertIn('MCP-Server', data['error'])
+        self.assertIn('kaputt', data['error'])
+        self.assertEqual([(e['node'], e['summary']) for e in data['events']], [('start', 'Werkzeuge nicht verfügbar')])
+        self.assertEqual(FakeClient.instances[0].kwargs, {'mock': True})  # no request path was built or used
+        self.assertTrue(self.engines[0].closed)
+
+    @unittest.skipUnless(installed('mcp', 'langchain_mcp_adapters'), 'Install requirements-agent.txt')
+    def test_mcp_mock_run_uses_the_server_tools(self):
+        fixture = Path(__file__).resolve().parent / 'fixtures' / 'mcp_fake_server.py'
+        code, out, err = self.mcp_main([sys.executable, str(fixture), '--leer'])
+        self.assertEqual(code, 0, err)
+        self.assertIn('suche_vorlagen', out)
+        self.assertIn('quelle_fehlt', out)
+        self.assertIn('Keine Vorlage gefunden', out)  # the observation came from the server's empty result
+
+    @unittest.skipUnless(installed('mcp', 'langchain_mcp_adapters'), 'Install requirements-agent.txt')
+    def test_answer_commands_repeat_an_explicit_werkzeuge(self):
+        fixture = Path(__file__).resolve().parent / 'fixtures' / 'mcp_fake_server.py'
+        code, out, err = self.mcp_main([sys.executable, str(fixture)])  # two close votes: the guard asks back
+        self.assertEqual(code, 0, err)
+        self.assertIn('rueckfrage', out)
+        for vote in (V1, V2):
+            self.assertIn(f"{shlex.quote(CLAIM)} --quelle {vote.vote_id} --mock --werkzeuge mcp", out)
+
+    def test_default_werkzeuge_is_local_and_not_repeated_in_answers(self):
+        code, out, err = self.run_main(CLAIM, '--mock', '--trace-dir', str(self.trace_dir))
+        self.assertEqual(code, 0, err)
+        self.assertNotIn('--werkzeuge', out)
+
+    def test_werkzeuge_rejects_other_values(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as stop:
+            agent_cli.main([CLAIM, '--mock', '--werkzeuge', 'xml'])
+        self.assertEqual(stop.exception.code, 1)
+        self.assertIn('--werkzeuge', err.getvalue())
+
     def test_main_exit_code_is_two_for_technical_error(self):
         self.engine_options = {'verify_error': RuntimeError('Modell nicht erreichbar')}
         code, out, err = self.run_main(CLAIM, '--mock', '--quelle', V1.vote_id, '--trace-dir', str(self.trace_dir))

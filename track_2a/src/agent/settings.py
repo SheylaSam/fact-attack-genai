@@ -23,6 +23,15 @@ TOOL_MODE = os.getenv("AGENT_TOOL_MODE", "json")
 if TOOL_MODE not in _TOOL_MODES:
     raise ValueError(f"AGENT_TOOL_MODE must be one of {_TOOL_MODES}, got {TOOL_MODE!r}")
 
+# How the search tools run: "lokal" (index and engine in this process) or "mcp" (the own MCP server over stdio). The
+# timeouts bound the server start and every single tool call, so a dead or stuck server ends the check as an error.
+TOOL_TRANSPORTS = ("lokal", "mcp")
+TOOL_TRANSPORT = os.getenv("AGENT_TOOL_TRANSPORT", "lokal")
+if TOOL_TRANSPORT not in TOOL_TRANSPORTS:
+    raise ValueError(f"AGENT_TOOL_TRANSPORT must be one of {TOOL_TRANSPORTS}, got {TOOL_TRANSPORT!r}")
+MCP_START_TIMEOUT_S: float = 120.0  # model and index load in the server process
+MCP_CALL_TIMEOUT_S: float = 120.0
+
 INDEX_DIR = Path(os.getenv("AGENT_INDEX_DIR") or config.REPO_ROOT / ".rag-index" / "agent-sources")
 TRACE_DIR = Path(os.getenv("AGENT_TRACE_DIR") or config.REPO_ROOT / ".agent-traces")
 

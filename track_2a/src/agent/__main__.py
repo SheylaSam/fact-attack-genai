@@ -2,6 +2,9 @@
 
 Wiring only: arguments, the offline or the real run, output and exit code. The agent itself is graph.py.
 
+* `--werkzeuge lokal|mcp`: the search tools run in this process (`lokal`) or in the own MCP server over stdio (`mcp`;
+  the agent process then opens no local index). A server that does not start is a visible `technischer_fehler`
+  (exit 2), never a silent switch to `lokal`.
 * `--mock`: the scripted decider and `ApertusClient(mock=True)`; no request leaves the machine.
 * Without `--mock` the run is paid: it needs `FACT_ATTACK_ENV_FILE` and an API key, and `--max-requests` (at most 12)
   is a hard cap on the HTTP requests of the check, counted for the agent LLM and for the NLI client alike.
@@ -21,11 +24,11 @@ import sys
 from typing import Optional, Sequence
 
 from src import config
-from src.agent import settings
+from src.agent import mcp_server, settings
 from src.agent.budget import RequestBudget, install_on_apertus
 from src.agent.cli_format import format_result, format_steps, result_to_dict
 from src.agent.decider import MODES, make_decider
-from src.agent.search_backend import LocalBackend
+from src.agent.search_backend import LocalBackend, SearchBackend
 from src.agent.source_index import SourceIndex
 from src.agent.tools import AgentTools
 from src.agent.trace import Tracer
@@ -44,6 +47,28 @@ class _Parser(argparse.ArgumentParser):
     def error(self, message):  # argparse exits with 2 here; 2 means technischer_fehler in this CLI
         self.print_usage(sys.stderr)
         self.exit(EXIT_USAGE, f"{self.prog}: Fehler: {message}\n")
+
+
+class _StartFailed(Exception):
+    """The MCP server did not start; the message (German) is what `McpStartError` said."""
+
+
+def _open_mcp_backend(args: argparse.Namespace, cleanup: contextlib.ExitStack) -> SearchBackend:
+    """The started `McpBackend`. The agent process opens no local index: the local Qdrant index allows one process,
+    and the server holds it."""
+    try:
+        from src.agent.mcp_client import McpBackend, McpStartError
+    except ImportError as exc:  # mcp and langchain-mcp-adapters are optional
+        raise _Abort(f"Die MCP-Anbindung ist nicht installiert ({exc}). "
+                     "Bitte track_2a/requirements-agent.txt installieren.") from None
+    backend = McpBackend(mcp_server.server_command(args.index_dir.expanduser()), env=mcp_server.server_environment(),
+                         cwd=config.BASE_DIR)
+    cleanup.callback(backend.close)  # idempotent; also ends a server that did not become ready
+    try:
+        backend.start()
+    except McpStartError as exc:
+        raise _StartFailed(str(exc)) from None
+    return backend
 
 
 def _request_limit(text: str) -> int:
@@ -71,6 +96,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help=f"Entscheider: native, json oder scripted (Standard: {settings.TOOL_MODE}).")
     parser.add_argument("--mock", action="store_true",
                         help="Ohne Netz: skriptgesteuerter Entscheider und Mock-Client, keine Anfrage.")
+    parser.add_argument("--werkzeuge", choices=settings.TOOL_TRANSPORTS, default=None,
+                        help="Suchwerkzeuge lokal im Prozess oder über den eigenen MCP-Server "
+                             f"(Standard: {settings.TOOL_TRANSPORT}).")
     parser.add_argument("--max-requests", type=_request_limit, default=settings.MAX_REQUESTS, metavar="N",
                         help=f"Harte Obergrenze der HTTP-Anfragen dieser Prüfung, 1 bis {settings.MAX_REQUESTS} "
                              f"(Standard: {settings.MAX_REQUESTS}).")
@@ -105,32 +133,40 @@ def _run(args: argparse.Namespace) -> int:
     else:
         _require_real_run()
     try:
-        from src.agent.graph import run_check
+        from src.agent.graph import run_check, startup_failure
     except ImportError as exc:  # langgraph is optional
         raise _Abort(f"Die Agentenschicht ist nicht installiert ({exc}). "
                      "Bitte track_2a/requirements-agent.txt installieren.") from None
     trace_dir = args.trace_dir.expanduser()
     run_id = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S}-{os.getpid()}"
     budget: Optional[RequestBudget] = None
+    transport = args.werkzeuge or settings.TOOL_TRANSPORT
     try:
         with contextlib.ExitStack() as cleanup:  # closes the engine, then the index, even if a close fails
-            index = SourceIndex(load_catalog(config.DATA_DIR / "booklet_catalog.json"), config.BOOKLETS_DIR,
-                                index_dir=args.index_dir.expanduser())  # one process per local index
-            cleanup.callback(index.close)
+            index = None
+            if transport == "lokal":
+                index = SourceIndex(load_catalog(config.DATA_DIR / "booklet_catalog.json"), config.BOOKLETS_DIR,
+                                    index_dir=args.index_dir.expanduser())  # one process per local index
+                cleanup.callback(index.close)
             engine = ClaimVerificationEngine(apertus_client=ApertusClient(mock=args.mock))
             cleanup.callback(engine.close)
             journal = None if args.mock else trace_dir / f"{run_id}.requests.jsonl"
             budget = RequestBudget(limit=args.max_requests, journal_path=journal)  # one budget per check
             if not args.mock:
                 install_on_apertus(engine.client, budget)  # the NLI client; the agent LLM is counted in make_decider
+            tracer = Tracer(trace_dir / f"{run_id}.trace.jsonl")
             try:
-                backend = LocalBackend(index, engine, config.BOOKLETS_DIR)  # the CLI closes index and engine itself
+                # the CLI closes index and engine itself; the engine of verify and the evidence check stays here
+                backend = (LocalBackend(index, engine, config.BOOKLETS_DIR) if transport == "lokal"
+                           else _open_mcp_backend(args, cleanup))
                 tools = AgentTools(backend, config.BOOKLETS_DIR, fixed_vote_id=args.quelle)
+            except _StartFailed as failure:  # no fallback to local tools: the run ends visibly, exit 2
+                result = startup_failure(f"MCP-Server nicht gestartet: {failure}", tracer)
             except ValueError as exc:
                 raise _Abort(f"{exc}. Die Vorlagen-IDs stehen im Quellenindex (Form 2024-11-24_de#1).") from None
-            decider = make_decider(mode, budget, fixed_vote_id=args.quelle)
-            tracer = Tracer(trace_dir / f"{run_id}.trace.jsonl")
-            result = run_check(claim, tools=tools, decider=decider, engine=engine, tracer=tracer, budget=budget)
+            else:
+                decider = make_decider(mode, budget, fixed_vote_id=args.quelle)
+                result = run_check(claim, tools=tools, decider=decider, engine=engine, tracer=tracer, budget=budget)
         requests = (f"{budget.used} von {budget.limit} (Journal: {journal})" if journal
                     else "keine (Mock-Lauf ohne Netz)")
         footer = f"Anfragen: {requests}\nTrace: {tracer.jsonl_path}"
@@ -139,7 +175,8 @@ def _run(args: argparse.Namespace) -> int:
             print(footer, file=sys.stderr)
         else:
             label = "Mock (skriptgesteuert, ohne Netz)" if args.mock else f"echt, Entscheider {mode}"
-            answer_args = ["--mock"] if args.mock else []  # the run options an answer repeats
+            # the run options an answer repeats; the transport only if it was given on the command line
+            answer_args = (["--mock"] if args.mock else []) + (["--werkzeuge", args.werkzeuge] if args.werkzeuge else [])
             print(f"Behauptung: {' '.join(claim.split())}\nModus: {label}\n\nSchritte:\n"
                   f"{format_steps(result.events)}\n\n"
                   f"{format_result(result, claim=claim, answer_args=answer_args)}\n\n{footer}")

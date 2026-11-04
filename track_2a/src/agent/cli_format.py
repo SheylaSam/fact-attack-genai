@@ -20,7 +20,7 @@ OK, QUESTION, FAILED = "✓", "?", "✗"
 ARG_CHARS = 50  # one argument value in the step list; the trace file has it whole
 TOP_CANDIDATES = 3  # vote candidates of suche_vorlagen in the step list; the trace keeps all of them
 INDENT = " " * 6  # under the text that follows "NN. ✓ "
-NODE_LABELS = {"decide": "Entscheidung", "act": "Aktion", "ask": "Rückfrage", "verify": "Prüfung", "check_evidence": "Belegprüfung",
+NODE_LABELS = {"start": "Start", "decide": "Entscheidung", "act": "Aktion", "ask": "Rückfrage", "verify": "Prüfung", "check_evidence": "Belegprüfung",
                "nachsuche": "Nachsuche", "finish": "Abschluss"}
 OUTCOME_LABELS = {"gestuetzt": "Gestützt", "widersprochen": "Widersprochen", "nicht_belegt": "Nicht belegt",
                   "rueckfrage": "Rückfrage", "quelle_fehlt": "Quelle fehlt", "technischer_fehler": "Technischer Fehler"}

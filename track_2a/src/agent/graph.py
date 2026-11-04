@@ -600,3 +600,15 @@ def run_check(claim: str, *, tools: AgentTools, decider: Decider, engine, tracer
         events = tracer.events[first_event:]
         return AgentResult(outcome="technischer_fehler", reasoning=TECHNICAL_REASON, error=message, events=events,
                            steps=max((e.step for e in events), default=0))
+
+
+def startup_failure(message: str, tracer: Tracer) -> AgentResult:
+    """The result of a check that could not start because its tools are not available (an MCP server that did not
+    start): one visible step and `technischer_fehler`. Never a `nicht_belegt`, never a silent switch to local tools."""
+    first_event = len(tracer.events)
+    try:
+        tracer.emit(step=0, node="start", summary="Werkzeuge nicht verfügbar", error=message)
+    except Exception:  # a trace file that cannot be written must not hide the failure
+        pass
+    return AgentResult(outcome="technischer_fehler", reasoning=TECHNICAL_REASON, error=message,
+                       events=tracer.events[first_event:])
