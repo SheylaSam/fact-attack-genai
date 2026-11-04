@@ -13,8 +13,9 @@
   that answer does not end the search, the run ends as `technischer_fehler` ("Schrittgrenze").
 * `verify` checks the claim against the vote's pooled passages with the proven NLI path. `PredictionResult.error`
   is a technical error, whatever the label.
-* `check_evidence` keeps a quote only if `official_normalize(quote)` is part of the normalized PDF text of its page or
-  of one of that page's PDF text blocks (`engine.source_page`; the engine quotes whole pages and blocks). A verdict
+* `check_evidence` keeps a quote only if its page is one of `vote.pages` and `official_normalize(quote)` is part of the
+  normalized PDF text of that page or of one of its PDF text blocks (`engine.source_page`; the engine quotes whole
+  pages and blocks). A quote of a page outside the vote counts like a quote that is not found. A verdict
   without a valid quote becomes `nicht_belegt` with the note `DISCARDED_NOTE`. A cited page without readable PDF text
   cannot be checked: technical error, never `nicht_belegt`.
 * `run_check` refuses `EVIDENCE_POLICY=legacy` before any LLM call: its quotes are not original PDF text.
@@ -208,7 +209,7 @@ class _Nodes:
             observation = Observation(tool or "Werkzeugwahl", f"Fehler: {rejection}",
                                       {"error_kind": ERROR_INVALID_ARGS}, rejection)
         else:
-            observation = self.tools.run(tool, action.args)
+            observation = self.tools.run(tool, action.args, claim=state["claim"])
             if observation.error and observation.data.get("error_kind") != ERROR_INVALID_ARGS:  # a tool failure
                 message = f"Werkzeug {tool} fehlgeschlagen: {observation.error}"
                 self.emit(step, "act", started, tool=tool, args=args, summary=_short(observation.text),
@@ -304,7 +305,8 @@ class _Nodes:
 
     def _valid_evidence(self, vote: VoteRef, prediction: PredictionResult) -> Tuple[List[EvidenceItem], List[int]]:
         """The quotes found verbatim (after `official_normalize`) in the PDF text of their page or of one of its text
-        blocks, without duplicates; and the cited pages without readable PDF text, whose quotes cannot be checked."""
+        blocks, without duplicates, on a page of `vote.pages` only; and the cited pages without readable PDF text,
+        whose quotes cannot be checked."""
         pdf = self.booklet_pdf(vote)
         pages: Dict[int, List[str]] = {}
         seen, items, unreadable = set(), [], []
@@ -315,6 +317,8 @@ class _Nodes:
             quote = _PAGE_PREFIX.sub("", source.quote)
             normalized = official_normalize(quote)
             if not normalized or (page, normalized) in seen:
+                continue
+            if page not in vote.pages:  # a quote of another vote's page is no evidence for this vote
                 continue
             if page not in pages:
                 pages[page] = self._page_texts(pdf, page)

@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src import config
 from src.agent import settings
+from src.agent.search_backend import LocalBackend
 from src.agent.source_index import VoteCandidate, VoteRef
 from src.agent.tools import ERROR_INVALID_ARGS, ERROR_TOOL_FAILURE, TERMINAL_TOOLS, AgentTools
 from src.agent.trace import TraceEvent, Tracer
@@ -96,8 +97,10 @@ class FakeEngine:
         self.blocks = blocks or {}  # page number -> the page's text blocks
         self.verify_error = verify_error
         self.verify_calls = []
+        self.retrieve_calls = []
 
     def retrieve_passages(self, claim, booklet_pdf, vote=None, claim_language=None, booklet_language=None, top_k=8):
+        self.retrieve_calls.append({'claim': claim, 'booklet_pdf': booklet_pdf, 'vote': vote})
         return [dict(p) for p in self.passages]
 
     def verify_with_passages(self, claim, booklet_pdf, passages, vote=None, claim_language=None, case_id=None):
@@ -155,14 +158,14 @@ def search_votes(query='Untermiete'):
     return act('suche_vorlagen', anfrage=query)
 
 
-def search_passages(vote=V1, query='Zustimmung zur Untermiete'):
-    return act('suche_passagen', vorlage_id=vote.vote_id, anfrage=query)
+def search_passages(vote=V1):
+    return act('suche_passagen', vorlage_id=vote.vote_id)
 
 
 def check(decider, claim=CLAIM, index=None, engine=None, tracer=None, fixed_vote_id=None, **kwargs):
     index = index or FakeIndex()
     engine = engine or FakeEngine()
-    tools = AgentTools(index, engine, BOOKLETS, fixed_vote_id=fixed_vote_id)
+    tools = AgentTools(LocalBackend(index, engine, BOOKLETS), BOOKLETS, fixed_vote_id=fixed_vote_id)
     result = run_check(claim, tools=tools, decider=decider, engine=engine, tracer=tracer or Tracer(), **kwargs)
     return result, engine, index
 
@@ -231,6 +234,34 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(call['vote'], V1.title)
         self.assertEqual(call['claim_language'], 'de')
 
+    def test_act_passes_the_claim_to_the_proven_search(self):
+        decider = PresetDecider(search_votes('Untermiete schriftliche Zustimmung'), search_passages(),
+                                act('pruefen', vorlage_id=V1.vote_id))
+        _, engine, _ = check(decider)
+        [call] = engine.retrieve_calls
+        self.assertEqual(call['claim'], CLAIM)  # the model's own query goes only to suche_vorlagen
+        self.assertEqual(call['vote'], V1.title)
+
+    def test_quote_on_a_page_of_another_vote_is_no_evidence(self):
+        on_other_vote = 'Die Kündigung wegen Eigenbedarfs ist neu geregelt.'  # stands literally on page 4 (V2)
+        engine = FakeEngine(prediction=make_prediction(0, [(4, on_other_vote)]),
+                            pages={2: PAGE_2, 4: f'Kündigung\n{on_other_vote} Mehr.'})
+        decider = PresetDecider(search_votes(), search_passages(), act('pruefen', vorlage_id=V1.vote_id))
+        result, _, _ = check(decider, engine=engine)
+        self.assertEqual(result.outcome, 'nicht_belegt')
+        self.assertEqual(result.note, NOTE)
+        self.assertEqual(result.evidence, [])
+        self.assertIsNone(result.error)
+
+    def test_a_quote_on_a_page_of_the_vote_still_counts_next_to_one_outside(self):
+        on_other_vote = 'Die Kündigung wegen Eigenbedarfs ist neu geregelt.'
+        engine = FakeEngine(prediction=make_prediction(0, [(4, on_other_vote), (2, QUOTE)]),
+                            pages={2: PAGE_2, 4: f'Kündigung\n{on_other_vote} Mehr.'})
+        decider = PresetDecider(search_votes(), search_passages(), act('pruefen', vorlage_id=V1.vote_id))
+        result, _, _ = check(decider, engine=engine)
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertEqual(result.evidence, [EvidenceItem(page=2, quote=QUOTE)])
+
     def test_trace_records_steps_tools_and_tokens(self):
         decider = PresetDecider(search_votes(), search_passages(), act('pruefen', vorlage_id=V1.vote_id))
         result, _, _ = check(decider)
@@ -244,7 +275,7 @@ class GraphTests(unittest.TestCase):
         self.assertTrue(all(e.error is None for e in result.events))
 
     def test_act_events_carry_what_the_model_saw(self):
-        decider = PresetDecider(search_votes(), act('suche_passagen', vorlage_id='../../.env', anfrage='Miete'),
+        decider = PresetDecider(search_votes(), act('suche_passagen', vorlage_id='../../.env'),
                                 search_passages(), act('pruefen', vorlage_id=V1.vote_id))
         result, _, _ = check(decider)
         self.assertEqual(result.outcome, 'gestuetzt')
@@ -253,7 +284,8 @@ class GraphTests(unittest.TestCase):
             {'vote_id': V1.vote_id, 'title': V1.title, 'date': V1.date, 'score': 0.873, 'hits': 10, 'best_page': 2},
             {'vote_id': V2.vote_id, 'title': V2.title, 'date': V2.date, 'score': 0.801, 'hits': 10, 'best_page': 2}]})
         self.assertEqual(rejected.data, {'error_kind': ERROR_INVALID_ARGS})
-        self.assertEqual(passages.data, {'vote_id': V1.vote_id, 'found': 1, 'new': 1, 'dropped': 0, 'pool_size': 1,
+        self.assertEqual(passages.data, {'vote_id': V1.vote_id, 'found': 1, 'new': 1, 'dropped': 0, 'outside': 0,
+                                         'pool_size': 1,
                                          'passages': [{'page_number': 2, 'section': 'COM', 'status': 'neu'}]})
         self.assertEqual(accepted.data, {})
         self.assertIsNot(votes.data, decider.calls[1]['history'][0].data)  # a copy, not the observation's dict
@@ -300,7 +332,7 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(result.evidence, [])
 
     def test_last_decision_after_step_limit_must_end_the_search(self):
-        searches = [search_votes()] + [search_passages(query=f'Untermiete {i}') for i in range(settings.MAX_STEPS - 1)]
+        searches = [search_votes()] + [search_passages() for i in range(settings.MAX_STEPS - 1)]
         decider = PresetDecider(*searches, act('pruefen', vorlage_id=V1.vote_id))
         result, engine, _ = check(decider)
         self.assertEqual(result.outcome, 'gestuetzt')
@@ -313,7 +345,7 @@ class GraphTests(unittest.TestCase):
     def test_max_steps_is_a_parameter_of_the_graph(self):
         decider = PresetDecider(search_votes(), search_votes('Miete'))
         engine, index = FakeEngine(), FakeIndex()
-        tools = AgentTools(index, engine, BOOKLETS)
+        tools = AgentTools(LocalBackend(index, engine, BOOKLETS), BOOKLETS)
         tracer = Tracer()
         graph = build_graph(tools, decider, engine, tracer, max_steps=1)
         self.assertEqual(set(graph.get_graph().nodes) - {'__start__', '__end__'},
@@ -335,7 +367,7 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(rejected.data['error_kind'], ERROR_INVALID_ARGS)
 
     def test_invalid_tool_arguments_are_fed_back(self):
-        decider = PresetDecider(act('suche_passagen', vorlage_id='../../.env', anfrage='Miete'),
+        decider = PresetDecider(act('suche_passagen', vorlage_id='../../.env'),
                                 act('quelle_fehlt', begruendung='Keine Vorlage passt.'))
         result, engine, _ = check(decider)
         self.assertEqual(result.outcome, 'quelle_fehlt')
@@ -453,10 +485,10 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(result.note, NOTE)
 
     def test_cited_page_without_readable_text_is_technical_error(self):
-        cases = {'page the PDF source lacks': ({2: PAGE_2}, [(9, QUOTE)]),
+        cases = {'page the PDF source lacks': ({2: PAGE_2}, [(3, QUOTE)]),
                  'page without any text': ({2: ''}, [(2, QUOTE)]),
                  'page of blanks only': ({2: ' \n\t '}, [(2, QUOTE)]),
-                 'a valid quote and an unreadable page': ({2: PAGE_2}, [(2, QUOTE), (9, QUOTE)])}
+                 'a valid quote and an unreadable page': ({2: PAGE_2}, [(2, QUOTE), (3, QUOTE)])}
         for label in (0, 2):
             for name, (pages, quotes) in cases.items():
                 with self.subTest(label=label, case=name):
@@ -466,7 +498,7 @@ class GraphTests(unittest.TestCase):
                     self.assertEqual(result.outcome, 'technischer_fehler')  # never "nicht belegt"
                     self.assertIn('Belegprüfung', result.error)
                     self.assertIn('lesbaren PDF-Text', result.error)
-                    self.assertIn('Seite 9' if 9 in dict(quotes) else 'Seite 2', result.error)
+                    self.assertIn('Seite 3' if 3 in dict(quotes) else 'Seite 2', result.error)
                     self.assertEqual(result.evidence, [])
                     self.assertIsNone(result.note)
                     self.assertEqual(result.vote, V1)
@@ -630,6 +662,7 @@ EVICTION_VOTE = VoteRef('2024-11-24_de#3', '2024-11-24_de', '2024-11-24', 'de',
                         'Änderung des Obligationenrechts (Mietrecht: Kündigung wegen Eigenbedarfs)',
                         tuple(range(1, 73)))
 EVICTION_CLAIM = 'Die Mietrechtsvorlage stärkt die Vermieter.'
+CLAIM_ZD = 'Wer in den Zivildienst wechselt, muss künftig mindestens 150 Diensttage leisten.'  # run 2 of stage 1
 P41_BLOCK_START = 'Aus all diesen Gründen empfehlen'  # rejected in the first real run (AGENT_STUFE1.md, run 1)
 
 
@@ -665,10 +698,33 @@ class RealEngineTests(unittest.TestCase):
             votes = {vote.vote_id: vote}
 
         engine = engine or ClaimVerificationEngine(apertus_client=SupportingClient())
-        tools = AgentTools(OneVoteIndex(), engine, config.BOOKLETS_DIR, fixed_vote_id=vote.vote_id)
+        tools = AgentTools(LocalBackend(OneVoteIndex(), engine, config.BOOKLETS_DIR), config.BOOKLETS_DIR,
+                           fixed_vote_id=vote.vote_id)
         result = run_check(claim, tools=tools, decider=ScriptedDecider(fixed_vote_id=vote.vote_id),
                            engine=engine, tracer=Tracer())
         return result, engine
+
+    def test_proven_search_of_a_fixed_vote_is_b0_retrieval_on_the_vote_pages(self):
+        from src.agent.source_index import _booklet_votes
+        from src.apertus_client import ApertusClient
+        from src.inference import ClaimVerificationEngine
+
+        engine = ClaimVerificationEngine(apertus_client=ApertusClient(mock=True))
+        entry = json.loads((config.DATA_DIR / 'booklet_catalog.json').read_text(encoding='utf-8'))['sources'][
+            '2026-06-14_de.pdf']
+        paragraphs, parts = engine.booklet_layout(BOOKLET)
+        [vote] = [v for v in _booklet_votes('2026-06-14_de', entry, paragraphs, parts) if 'Zivildienst' in v.title]
+
+        class OneVoteIndex:
+            votes = {vote.vote_id: vote}
+
+        tools = AgentTools(LocalBackend(OneVoteIndex(), engine, config.BOOKLETS_DIR), config.BOOKLETS_DIR,
+                           fixed_vote_id=vote.vote_id)
+        expected = [p for p in engine.retrieve_passages(CLAIM_ZD, BOOKLET, vote=vote.title, booklet_language='de')
+                    if p['page_number'] in vote.pages][:settings.MAX_PASSAGES]
+        tools.run('suche_passagen', {'vorlage_id': vote.vote_id}, claim=CLAIM_ZD)
+        self.assertTrue(expected)
+        self.assertEqual(tools.passages_for(vote.vote_id), expected)
 
     def assert_every_engine_quote_is_kept(self, result):
         self.assertEqual(result.outcome, 'gestuetzt', result.error)

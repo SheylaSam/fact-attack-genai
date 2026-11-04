@@ -25,6 +25,7 @@ from src.agent import settings
 from src.agent.budget import RequestBudget, install_on_apertus
 from src.agent.cli_format import format_result, format_steps, result_to_dict
 from src.agent.decider import MODES, make_decider
+from src.agent.search_backend import LocalBackend
 from src.agent.source_index import SourceIndex
 from src.agent.tools import AgentTools
 from src.agent.trace import Tracer
@@ -123,7 +124,8 @@ def _run(args: argparse.Namespace) -> int:
             if not args.mock:
                 install_on_apertus(engine.client, budget)  # the NLI client; the agent LLM is counted in make_decider
             try:
-                tools = AgentTools(index, engine, config.BOOKLETS_DIR, fixed_vote_id=args.quelle)
+                backend = LocalBackend(index, engine, config.BOOKLETS_DIR)  # the CLI closes index and engine itself
+                tools = AgentTools(backend, config.BOOKLETS_DIR, fixed_vote_id=args.quelle)
             except ValueError as exc:
                 raise _Abort(f"{exc}. Die Vorlagen-IDs stehen im Quellenindex (Form 2024-11-24_de#1).") from None
             decider = make_decider(mode, budget, fixed_vote_id=args.quelle)

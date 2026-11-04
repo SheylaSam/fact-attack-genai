@@ -368,9 +368,17 @@ class ScriptedDeciderTests(unittest.TestCase):
         decider = ScriptedDecider()
         votes = [votes_observation(vote_candidate(V1, 0.90), vote_candidate(V2, 0.85))]
         search = decider.decide(MESSAGES, TOOL_SPECS, votes)
-        self.assertEqual((search.tool, search.args), ('suche_passagen', {'vorlage_id': V1, 'anfrage': CLAIM}))
+        self.assertEqual((search.tool, search.args), ('suche_passagen', {'vorlage_id': V1}))
         check = decider.decide(MESSAGES, TOOL_SPECS, votes + [passages_observation(V1)])
         self.assertEqual((check.tool, check.args), ('pruefen', {'vorlage_id': V1}))
+
+    def test_scripted_searches_passages_with_the_vote_only(self):
+        votes = [votes_observation(vote_candidate(V1, 0.90), vote_candidate(V2, 0.85))]
+        action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, votes)
+        self.assertEqual(action.args, {'vorlage_id': '2024-11-24_de#1'})  # the claim goes in through the graph
+        self.assertIsNone(action.error)
+        fixed = ScriptedDecider(fixed_vote_id=V2).decide(MESSAGES, fixed_vote_specs(), [])
+        self.assertEqual(fixed.args, {'vorlage_id': V2})
 
     def test_scripted_margin_is_a_strict_lower_bound(self):
         votes = [votes_observation(vote_candidate(V1, 0.75), vote_candidate(V2, 0.5))]
@@ -390,7 +398,7 @@ class ScriptedDeciderTests(unittest.TestCase):
         decider = ScriptedDecider(fixed_vote_id=V2)
         specs = fixed_vote_specs()
         search = decider.decide(MESSAGES, specs, [])
-        self.assertEqual((search.tool, search.args), ('suche_passagen', {'vorlage_id': V2, 'anfrage': CLAIM}))
+        self.assertEqual((search.tool, search.args), ('suche_passagen', {'vorlage_id': V2}))
         check = decider.decide(MESSAGES, specs, [passages_observation(V2)])
         self.assertEqual((check.tool, check.args), ('pruefen', {'vorlage_id': V2}))
 

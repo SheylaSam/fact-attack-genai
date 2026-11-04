@@ -245,7 +245,8 @@ class ScriptedDecider:
     """Deterministic policy, no network: find the vote, ask when the two best votes are too close to call, search the
     best vote's passages, check. Reads only the last observation (`history[-1].data`) and the claim.
 
-    With `fixed_vote_id` the vote is given: the policy goes straight to `suche_passagen(fixed vote, claim)`.
+    With `fixed_vote_id` the vote is given: the policy goes straight to `suche_passagen(fixed vote)`; the graph
+    searches with the claim.
     """
 
     def __init__(self, margin: float = DEFAULT_MARGIN, fixed_vote_id: Optional[str] = None):
@@ -260,18 +261,18 @@ class ScriptedDecider:
         offered = _offered(tools)
         if not history:
             if self.fixed_vote_id is not None:
-                return self._act("suche_passagen", {"vorlage_id": self.fixed_vote_id, "anfrage": query}, offered)
+                return self._act("suche_passagen", {"vorlage_id": self.fixed_vote_id}, offered)
             return self._act("suche_vorlagen", {"anfrage": query}, offered)
         last = history[-1]
         if last.error:
             return AgentAction(error=f"Das Werkzeug {last.tool} ist fehlgeschlagen: {last.error}")
         if last.tool == "suche_vorlagen":
-            return self._after_vote_search(last.data, query, offered)
+            return self._after_vote_search(last.data, offered)
         if last.tool in ("suche_passagen", "suche_passagen_vektor"):
             return self._after_passage_search(last.data, offered)
         return AgentAction(error=f"Keine Regel für das Ergebnis von {last.tool}.")
 
-    def _after_vote_search(self, data: dict, query: str, offered: List[str]) -> AgentAction:
+    def _after_vote_search(self, data: dict, offered: List[str]) -> AgentAction:
         candidates = data.get("candidates") or []
         if not candidates:
             return self._act("quelle_fehlt", {"begruendung": "Keine Vorlage der Büchlein passt zur Behauptung."},
@@ -283,7 +284,7 @@ class ScriptedDecider:
                         f"oder «{_short(second['title'])}» ({_german_date(second['date'])})?")
             return self._act("rueckfrage", {"frage": question, "optionen": [first["vote_id"], second["vote_id"]]},
                              offered)
-        return self._act("suche_passagen", {"vorlage_id": top["vote_id"], "anfrage": query}, offered)
+        return self._act("suche_passagen", {"vorlage_id": top["vote_id"]}, offered)
 
     def _after_passage_search(self, data: dict, offered: List[str]) -> AgentAction:
         if not data.get("pool_size"):
