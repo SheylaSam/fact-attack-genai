@@ -313,7 +313,13 @@ class AgentTools:
     def _search_votes(self, args: dict, claim: Optional[str], research: bool) -> Observation:
         candidates = self.backend.search_votes(args["anfrage"], k=VOTE_CANDIDATES)
         self._recent_ids = [c.vote.vote_id for c in candidates]
-        assessment = guard.assess(candidates)
+        # The guard acts on the claim's own wording, so the hint states that assessment, not the query's: otherwise the
+        # model asks back on a "mehrdeutig" that only its own query produced.
+        of_claim = isinstance(claim, str) and bool(claim.strip())
+        try:
+            assessment = self.claim_assessment(claim) if of_claim else guard.assess(candidates)
+        except Exception:  # the guard reports a failing claim search itself before the first vote-bound action
+            of_claim, assessment = False, guard.assess(candidates)
         if not candidates:
             return Observation("suche_vorlagen", "Keine Vorlage gefunden. Formuliere die Anfrage anders.",
                                {"candidates": [], "assessment": assessment.to_data()})
@@ -323,7 +329,7 @@ class AgentTools:
             lines.append(f"{rank}. {found.vote.vote_id} | {_display_date(found.vote.date)} | {found.vote.title} | "
                          f"Score {found.score:.3f} | Treffer {found.hits} | Seite {found.best_page} | "
                          f"«{_preview(found.snippet, SNIPPET_PREVIEW_CHARS)}»")
-        lines.append(guard.hint(assessment))
+        lines.append(guard.hint(assessment, of_claim))
         return Observation("suche_vorlagen", "\n".join(lines),
                            {"candidates": [self._candidate_data(c) for c in candidates],
                             "assessment": assessment.to_data()})

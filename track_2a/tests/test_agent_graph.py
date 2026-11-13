@@ -348,7 +348,7 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(result.outcome, 'technischer_fehler')
         self.assertIn('Schrittgrenze', result.error)
         self.assertEqual(engine.verify_calls, [])
-        self.assertEqual(len(index.vote_calls), settings.MAX_STEPS)
+        self.assertEqual(len([q for q in index.vote_calls if q != CLAIM]), settings.MAX_STEPS)  # the model's searches
         self.assertEqual(len(decider.calls), settings.MAX_STEPS + 1)
         self.assertEqual(result.steps, settings.MAX_STEPS + 1)
         self.assertEqual(result.evidence, [])
@@ -376,7 +376,7 @@ class GraphTests(unittest.TestCase):
                               'messages': [{'role': 'system', 'content': 'S'}, {'role': 'user', 'content': CLAIM}]})
         self.assertEqual(state['outcome'], 'technischer_fehler')
         self.assertIn('Schrittgrenze', state['error'])
-        self.assertEqual(len(index.vote_calls), 1)
+        self.assertEqual(len([q for q in index.vote_calls if q != CLAIM]), 1)
 
     def test_invalid_action_counts_and_is_fed_back(self):
         broken = AgentAction(raw='Ich denke nach.', error='Keine Werkzeugwahl: Die Antwort enthält kein JSON-Objekt.')
@@ -400,7 +400,7 @@ class GraphTests(unittest.TestCase):
         question = 'Welche Mietrechtsvorlage ist gemeint?'
         decider = PresetDecider(search_votes(),
                                 act('rueckfrage', frage=question, optionen=[V1.vote_id, V2.vote_id]))
-        result, engine, _ = check(decider)
+        result, engine, _ = check(decider, index=FakeIndex(CLOSE))
         self.assertEqual(result.outcome, 'rueckfrage')
         self.assertEqual(result.question, question)
         self.assertEqual(len(result.options), 2)
@@ -435,7 +435,7 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(result.asked_by, 'guard')
         self.assertIn(CLAIM, index.vote_calls)
         self.assertEqual(engine.retrieve_calls, [])
-        self.assertIn('klar am besten', contents(decider.calls[1]['messages']))  # the model's own search looked clear
+        self.assertIn('mehrdeutig', contents(decider.calls[1]['messages']))  # the hint states the claim's assessment
 
     def test_guard_lets_a_clear_claim_through(self):
         decider = PresetDecider(search_votes(), search_passages(V1), act('pruefen', vorlage_id=V1.vote_id))
@@ -514,7 +514,8 @@ class GraphTests(unittest.TestCase):
         decider = PresetDecider(act('suche_passagen', vorlage_id='2024-11-24_de#9'), search_votes(),
                                 act('quelle_fehlt', begruendung='Keine Vorlage passt.'))
         result, _, index = check(decider, index=FakeIndex(CLOSE))
-        self.assertEqual(index.vote_calls, ['Untermiete'])  # the unknown id was rejected as before, not guarded
+        # the unknown id was rejected as before, not guarded; the claim was searched once, for the hint
+        self.assertEqual(index.vote_calls, ['Untermiete', CLAIM])
         self.assertIn('Unbekannte Vorlagen-ID', contents(decider.calls[1]['messages']))
         self.assertEqual(result.outcome, 'quelle_fehlt')
 
@@ -530,13 +531,71 @@ class GraphTests(unittest.TestCase):
     def test_model_rueckfrage_goes_through_ask(self):
         decider = PresetDecider(search_votes(),
                                 act('rueckfrage', frage='Welche Mietrechtsvorlage?', optionen=[V1.vote_id, V2.vote_id]))
-        result, _, _ = check(decider)
+        result, _, _ = check(decider, index=FakeIndex(CLOSE))
         self.assertEqual(result.outcome, 'rueckfrage')
         self.assertEqual(result.asked_by, 'model')
         self.assertIn('ask', {e.node for e in result.events})
         [ask] = [e for e in result.events if e.node == 'ask']
         self.assertEqual(ask.args, {'optionen': [V1.vote_id, V2.vote_id]})
         self.assertEqual([e.node for e in result.events[-2:]], ['ask', 'finish'])
+
+    def test_guard_objects_once_to_a_model_question_when_the_claim_is_clear(self):
+        ask = act('rueckfrage', frage='Welche Mietrechtsvorlage?', optionen=[V1.vote_id, V2.vote_id])
+        decider = PresetDecider(search_votes(), ask, search_passages(V1), act('pruefen', vorlage_id=V1.vote_id))
+        result, engine, index = check(decider, index=FakeIndex(CLEAR))
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertIsNone(result.asked_by)
+        seen = contents(decider.calls[2]['messages'])
+        self.assertIn('Rückfrage nicht nötig', seen)
+        self.assertIn(V1.title, seen)
+        self.assertEqual(index.vote_calls, ['Untermiete', CLAIM])  # the claim is searched once, for the whole run
+        [objected] = [e for e in result.events if e.node == 'act' and e.tool == 'rueckfrage']
+        self.assertEqual(objected.data['guard']['kind'], 'eindeutig')
+        self.assertIsNotNone(objected.error)
+        self.assertNotIn('technischer', result.outcome)
+
+    def test_a_model_question_that_insists_after_the_objection_is_asked(self):
+        ask = act('rueckfrage', frage='Welche Mietrechtsvorlage?', optionen=[V1.vote_id, V2.vote_id])
+        decider = PresetDecider(search_votes(), ask, ask)
+        result, engine, _ = check(decider, index=FakeIndex(CLEAR))
+        self.assertEqual((result.outcome, result.asked_by), ('rueckfrage', 'model'))
+        self.assertEqual(result.steps, 3)
+        self.assertEqual(engine.verify_calls, [])
+
+    def test_guard_lets_a_model_question_through_when_the_claim_fits_several_votes(self):
+        ask = act('rueckfrage', frage='Welche Mietrechtsvorlage?', optionen=[V1.vote_id, V2.vote_id])
+        result, _, _ = check(PresetDecider(search_votes(), ask), index=FakeIndex(CLOSE))
+        self.assertEqual((result.outcome, result.asked_by, result.steps), ('rueckfrage', 'model', 2))
+
+    def test_guard_objects_to_a_model_question_when_no_vote_fits_the_claim(self):
+        ask = act('rueckfrage', frage='Welche Vorlage?', optionen=[V1.vote_id, V2.vote_id])
+        decider = PresetDecider(search_votes('Euro'), ask, act('quelle_fehlt', begruendung='Keine Vorlage passt.'))
+        result, _, _ = check(decider, claim='Die Schweiz führt den Euro ein.', index=FakeIndex([]))
+        self.assertEqual(result.outcome, 'quelle_fehlt')
+        self.assertIn('quelle_fehlt', contents(decider.calls[2]['messages'][-1:]))
+        self.assertIn('Rückfrage nicht nötig', contents(decider.calls[2]['messages'][-1:]))
+
+    def test_guard_does_not_object_to_a_model_question_on_the_last_step(self):
+        ask = act('rueckfrage', frage='Welche Mietrechtsvorlage?', optionen=[V1.vote_id, V2.vote_id])
+        searches = [search_votes()] + [search_passages() for i in range(settings.MAX_STEPS - 1)]
+        result, _, _ = check(PresetDecider(*searches, ask), index=FakeIndex(CLEAR))
+        self.assertEqual((result.outcome, result.asked_by), ('rueckfrage', 'model'))  # no technical step-limit error
+
+    def test_guard_failure_on_a_model_question_is_technical_error(self):
+        ask = act('rueckfrage', frage='Welche Mietrechtsvorlage?', optionen=[V1.vote_id, V2.vote_id])
+        index = FakeIndex(CLEAR, error_for=CLAIM)
+        result, _, _ = check(PresetDecider(search_votes(), ask), index=index)
+        self.assertEqual(result.outcome, 'technischer_fehler')
+        self.assertIn('Wächter: Vorlagensuche zur Behauptung fehlgeschlagen', result.error)
+
+    def test_guard_skips_a_model_question_with_unknown_options(self):
+        ask = act('rueckfrage', frage='Welche?', optionen=[V1.vote_id, '2024-11-24_de#7'])
+        decider = PresetDecider(search_votes(), ask, act('quelle_fehlt', begruendung='Keine Vorlage passt.'))
+        result, _, _ = check(decider, index=FakeIndex(CLEAR))
+        self.assertEqual(result.outcome, 'quelle_fehlt')
+        seen = contents(decider.calls[2]['messages'])
+        self.assertIn('Unbekannte Vorlagen-ID', seen)  # the option check speaks, not the guard
+        self.assertNotIn('Rückfrage nicht nötig', seen)
 
     def test_quelle_fehlt_before_any_search_is_rejected(self):
         reason = 'Keine Vorlage der Büchlein behandelt den Euro.'

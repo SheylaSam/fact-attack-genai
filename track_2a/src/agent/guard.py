@@ -76,11 +76,13 @@ def question(options: Sequence[VoteRef]) -> str:
     return f"Welche Vorlage ist gemeint: {listed}?"
 
 
-def hint(assessment: Assessment) -> str:
-    """The German line that ends the `suche_vorlagen` observation."""
+def hint(assessment: Assessment, of_claim: bool = False) -> str:
+    """The German line that ends the `suche_vorlagen` observation. `of_claim` marks an assessment made on the claim's
+    own wording (the one the guard acts on), not on the model's query."""
+    label = "Einschätzung zur Behauptung" if of_claim else "Einschätzung"
     if assessment.kind == "eindeutig":
-        return f"Einschätzung: {assessment.top} passt klar am besten."
+        return f"{label}: {assessment.top} passt klar am besten."
     if assessment.kind == "mehrdeutig":
-        return (f"Einschätzung: mehrdeutig, {', '.join(assessment.close)} liegen gleichauf. Lässt die Behauptung "
+        return (f"{label}: mehrdeutig, {', '.join(assessment.close)} liegen gleichauf. Lässt die Behauptung "
                 "nicht erkennen, welche gemeint ist, beende mit rueckfrage und diesen Optionen.")
-    return "Einschätzung: keine passende Vorlage. Beende mit quelle_fehlt."
+    return f"{label}: keine passende Vorlage. Beende mit quelle_fehlt."

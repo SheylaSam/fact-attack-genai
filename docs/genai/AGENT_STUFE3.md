@@ -53,6 +53,14 @@ Kandidat zählt als nah, wenn er weniger als `GUARD_SCORE_MARGIN` hinter Rang 1 
   nach `ask` mit den nahen Vorlagen (`asked_by == "guard"`).
 - Ist sie `eindeutig`, aber die Aktion nennt eine Vorlage, die weder die beste noch eine nahe ist, läuft die
   Aktion ebenfalls nicht; `ask` bekommt [beste Vorlage, genannte Vorlage].
+- Auch eine `rueckfrage` des Modells prüft er (ohne fest vorgegebene Vorlage, mit gültigen Optionen und solange
+  Suchschritte übrig sind). Ist die Behauptung `mehrdeutig`, geht die Frage durch (`asked_by == "model"`). Ist sie
+  `eindeutig` oder `keine`, lehnt der Wächter die Frage **einmal** ab und nennt die Vorlage bzw. `quelle_fehlt`;
+  fragt das Modell danach erneut, wird die Frage gestellt. Die Ablehnung steht als `act`-Schritt mit Wächterdaten
+  in der Spur.
+- Der Hinweis am Ende von `suche_vorlagen` zeigt die Einschätzung zur **Behauptung** („Einschätzung zur
+  Behauptung: …“), nicht die der Modellanfrage. Die Liste darüber bleibt die Suche des Modells. Die Suche mit der
+  Behauptung läuft dafür schon hier und wird für den Wächter wiederverwendet (einmal pro Lauf).
 - Mit `--quelle` bleibt der Wächter draußen: Die Person hat die Vorlage gewählt.
 - Die Frage nennt Titel und Datum der Optionen.
 
@@ -259,7 +267,10 @@ Einzelläufe, keine Messung. Sie zeigen, **wo der Aufbau etwas anderes tut als g
    "model"`). Der Wächter prüft nur Aktionen mit Vorlage; eine Modell-`rueckfrage` prüft er nicht. Der Hinweis
    wird außerdem aus der Anfrage des Modells berechnet, nicht aus der Behauptung. Das ist der beim Gesamtreview
    bewusst zurückgestellte Punkt (Minor 1). Folge: Lauf 1 erfüllt die Erwartung „vom Wächter“ nicht, obwohl die
-   Rückfrage inhaltlich richtig ist.
+   Rückfrage inhaltlich richtig ist. *Seither geändert* (Branch `genai/agent-waechter-rueckfrage`, nur offline
+   getestet, kein echter Lauf wiederholt): Der Hinweis zeigt die Einschätzung der Behauptung, und der Wächter prüft
+   die Modell-Rückfrage (siehe Wächter). Ob das Modell mit dem neuen Hinweis anders antwortet, zeigt erst ein
+   neuer echter Lauf.
 2. **Lauf 3: keine „keine“-Schwelle.** Mit `GUARD_NONE_BELOW = None` und Trefferverhältnis 0.0 zählen Kandidaten mit
    sehr wenigen Treffern (in Lauf 3: 1, 4 und 4 gegenüber 16 für Rang 1) innerhalb von 0.01 als nah. Eine Behauptung ohne Vorlage („Euro“) wird so als `mehrdeutig` mit vier
    Vorlagen gezeigt, statt zu `quelle_fehlt` zu führen. Erwartet: `quelle_fehlt`; bekommen: eine unnötige Frage.
@@ -273,8 +284,9 @@ Einzelläufe, keine Messung. Sie zeigen, **wo der Aufbau etwas anderes tut als g
    MCP mit echtem Apertus: Suche über den Server, Prüfung im Agentenprozess, kein Server-Prozess blieb zurück.
 
 **Offene Punkte für Stufe 4 und 5** (nicht behoben):
-- Der Wächter sollte auch eine Modell-`rueckfrage` prüfen, und/oder der Hinweis sollte die Bewertung der Behauptung
-  selbst zeigen statt die der Modellanfrage.
+- ~~Der Wächter sollte auch eine Modell-`rueckfrage` prüfen, und/oder der Hinweis sollte die Bewertung der
+  Behauptung zeigen.~~ Umgesetzt, offline getestet. Lauf 3 („Euro“) bleibt: Die Rangliste der Behauptung ist
+  `mehrdeutig`, der Wächter lässt die Frage deshalb durch. Das ändert nur eine „keine“-Schwelle.
 - Eine „keine“-Schwelle und das Trefferkriterium brauchen mehr Daten als die 37 Dev-Fälle; die Schwellen sind
   dünn belegt (siehe Wächter).
 - Behauptungen, die die Vorlage ausdrücklich nennen, verlieren gegen Embedding-Scores. Eine Namensübereinstimmung
