@@ -228,6 +228,25 @@ class TracerTests(unittest.TestCase):
         tracer.emit(step=0, node='finish', summary='ok')
         self.assertEqual([e.node for e in tracer.events], ['finish'])
 
+    def test_on_event_is_called_after_the_line_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'trace.jsonl'
+            seen = []
+
+            def on_event(event):
+                # the event is stored and its line is on disk by the time the callback runs
+                seen.append((event, list(tracer.events), path.read_text(encoding='utf-8').splitlines()))
+
+            tracer = Tracer(path, on_event=on_event)
+            first = tracer.emit(step=1, node='decide', summary='eins')
+            second = tracer.emit(step=1, node='act', summary='zwei')
+        self.assertEqual([event for event, _, _ in seen], [first, second])
+        self.assertEqual([len(events) for _, events, _ in seen], [1, 2])
+        self.assertEqual([len(lines) for _, _, lines in seen], [1, 2])
+
+    def test_on_event_is_optional(self):
+        self.assertIsNone(Tracer().on_event)
+
 
 @unittest.skipUnless(HAS_LANGGRAPH, 'Install requirements-agent.txt')
 class GraphTests(unittest.TestCase):
@@ -1270,6 +1289,34 @@ class InteractiveGraphTests(unittest.TestCase):
         self.assertIn('Antwort', result.error)
         self.assertIsNone(tools.fixed_vote_id)
         self.assertEqual(engine.verify_calls, [])
+
+    def test_resumed_result_carries_no_stale_question_or_options(self):
+        graph, cfg, _, _, tracer, _, _ = asked_run()
+        result = _result(graph.invoke(Command(resume=V2.vote_id), cfg), tracer.events)
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertIsNone(result.question)  # the question was answered: it is no part of the result
+        self.assertEqual(result.options, [])
+        self.assertIsNone(result.asked_by)
+
+    def test_quelle_fehlt_after_the_answer_needs_a_passage_search_in_the_chosen_vote(self):
+        # V1 is clearly ahead: its passage search runs; the model's question is objected to once, then asked
+        ask = act('rueckfrage', frage='Welche Mietrechtsvorlage?', optionen=[V1.vote_id, V2.vote_id])
+        missing = act('quelle_fehlt', begruendung='Nichts gefunden.')
+        decider = PresetDecider(search_votes(), search_passages(V1), ask, ask, missing, search_passages(V2), missing)
+        engine = FakeEngine()
+        tools = AgentTools(LocalBackend(FakeIndex(CLEAR), engine, BOOKLETS), BOOKLETS)
+        tracer = Tracer()
+        graph = build_graph(tools, decider, engine, tracer, checkpointer=make_checkpointer())
+        cfg = {'configurable': {'thread_id': 'run-1'}}
+        paused = graph.invoke(prepare(CLAIM, tools, tracer), cfg)
+        self.assertEqual(paused['__interrupt__'][0].value['asked_by'], 'model')
+        result = _result(graph.invoke(Command(resume=V2.vote_id), cfg), tracer.events)
+        self.assertEqual(result.outcome, 'quelle_fehlt')
+        # the first quelle_fehlt after the answer was rejected (the passage search of V1 does not count), the search
+        # in V2 ran, and the second one was accepted
+        self.assertEqual(len(decider.calls), 7)
+        self.assertIn('quelle_fehlt erst nach einer Suche', contents(decider.calls[5]['messages'][-1:]))
+        self.assertEqual([call['vote'] for call in engine.retrieve_calls], [V1.title, V2.title])
 
     def test_checkpointer_serializes_without_unregistered_type_warnings(self):
         from langgraph.checkpoint.serde import jsonplus

@@ -497,7 +497,9 @@ class _Nodes:
         exchange = self.decider.observation_messages(
             state["action"], Observation("rueckfrage", ANSWER_PROMPT.format(vote_id=vote.vote_id, title=vote.title)))
         messages = [{"role": "system", "content": system_prompt(vote)}] + list(state["messages"])[1:] + exchange
-        return {"messages": messages, "search_steps": 0, "route": "decide"}
+        # the search budget and the passage-search count start again: the fixed template needs a passage search in
+        # *its* pages before `quelle_fehlt`, whatever was searched in another template before the question
+        return {"messages": messages, "search_steps": 0, "passage_searches": 0, "route": "decide"}
 
     def verify(self, state: _State) -> dict:
         vote, passages, step = state["vote"], state["passages"], state["steps"]
@@ -628,7 +630,9 @@ def build_graph(tools: AgentTools, decider: Decider, engine, tracer: Tracer, max
     even when the refusal was swallowed on the way (the engine's query translation returns no translation).
 
     `checkpointer` (see `make_checkpointer`) switches on the interactive mode: `ask` pauses the run with `interrupt`
-    and the run is resumed per `thread_id` (see the module docstring). Without it the question ends the run.
+    and the run is resumed per `thread_id` (see the module docstring). Without it the question ends the run. A resume
+    must use the same `tools`, `engine` and `tracer` instances as the run it continues: the vote pool, the guard's
+    cache, the fixed vote and the template list are in `tools`, not in the checkpoint.
     """
     if max_steps < 1:
         raise ValueError(f"max_steps must be at least 1, got {max_steps!r}")
@@ -661,10 +665,12 @@ def _result(state: dict, events: List[TraceEvent]) -> AgentResult:
     if state.get("error") is not None or state.get("outcome") in (None, "technischer_fehler"):
         return AgentResult(outcome="technischer_fehler", reasoning=TECHNICAL_REASON,
                            error=state.get("error") or NO_RESULT, **common)
+    asked = state["outcome"] == "rueckfrage"  # an answered question is no part of the result: no stale leftovers
     return AgentResult(outcome=state["outcome"], evidence=list(state.get("evidence", [])),
-                       question=state.get("question"), options=list(state.get("options", [])),
+                       question=state.get("question") if asked else None,
+                       options=list(state.get("options", [])) if asked else [],
                        reasoning=state.get("reasoning", ""), note=state.get("note"),
-                       asked_by=state.get("asked_by") if state["outcome"] == "rueckfrage" else None, **common)
+                       asked_by=state.get("asked_by") if asked else None, **common)
 
 
 def _validate_claim(claim: Any) -> None:
@@ -723,14 +729,20 @@ def run_check(claim: str, *, tools: AgentTools, decider: Decider, engine, tracer
         graph = build_graph(tools, decider, engine, tracer, budget=budget, nachsuche=nachsuche)
         return _result(graph.invoke(start), tracer.events[first_event:])
     except Exception as exc:  # outside the nodes (graph runtime, trace file): still a result, never a raise
-        message = f"Ausnahme im Agentenlauf: {_exception(exc)}"
-        try:
-            tracer.emit(step=0, node="finish", summary="Ausnahme", error=message)
-        except Exception:
-            pass
-        events = tracer.events[first_event:]
-        return AgentResult(outcome="technischer_fehler", reasoning=TECHNICAL_REASON, error=message, events=events,
-                           steps=max((e.step for e in events), default=0))
+        return crash_result(exc, tracer, first_event)
+
+
+def crash_result(exc: BaseException, tracer: Tracer, first_event: int) -> AgentResult:
+    """The technical error of an exception outside the nodes (graph runtime, trace file): one last `finish` event if
+    the tracer still works, and a result with the events from `first_event` on."""
+    message = f"Ausnahme im Agentenlauf: {_exception(exc)}"
+    try:
+        tracer.emit(step=0, node="finish", summary="Ausnahme", error=message)
+    except Exception:
+        pass
+    events = tracer.events[first_event:]
+    return AgentResult(outcome="technischer_fehler", reasoning=TECHNICAL_REASON, error=message, events=events,
+                       steps=max((e.step for e in events), default=0))
 
 
 def startup_failure(message: str, tracer: Tracer) -> AgentResult:

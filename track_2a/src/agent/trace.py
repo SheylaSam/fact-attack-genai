@@ -2,7 +2,7 @@
 from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Callable, List, Optional
 
 
 @dataclass
@@ -27,10 +27,14 @@ def _json_safe(data: Any) -> dict:
 class Tracer:
     """Collects the events of a run. With `jsonl_path` every event is also appended to that file as one JSON line,
     before `emit` returns; a write error propagates (the graph reports it as a technical error). `data` is stored as a
-    JSON-safe copy (values JSON cannot hold become text)."""
+    JSON-safe copy (values JSON cannot hold become text).
 
-    def __init__(self, jsonl_path: Optional[Path] = None):
+    `on_event` (optional) is called with every event, exactly once, after the event is stored and its line is written
+    (a live view). Like a write error, an exception of the callback propagates out of `emit`."""
+
+    def __init__(self, jsonl_path: Optional[Path] = None, on_event: Optional[Callable[[TraceEvent], None]] = None):
         self.jsonl_path = Path(jsonl_path) if jsonl_path is not None else None
+        self.on_event = on_event
         self.events: List[TraceEvent] = []
 
     def emit(self, **fields) -> TraceEvent:
@@ -40,4 +44,6 @@ class Tracer:
             self.jsonl_path.parent.mkdir(parents=True, exist_ok=True)
             with self.jsonl_path.open("a", encoding="utf-8") as log:
                 log.write(json.dumps(asdict(event), ensure_ascii=False, default=str) + "\n")
+        if self.on_event is not None:
+            self.on_event(event)
         return event
