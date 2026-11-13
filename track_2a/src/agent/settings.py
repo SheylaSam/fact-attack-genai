@@ -38,9 +38,13 @@ MCP_CALL_TIMEOUT_S: float = 120.0
 INDEX_DIR = Path(os.getenv("AGENT_INDEX_DIR") or config.REPO_ROOT / ".rag-index" / "agent-sources")
 TRACE_DIR = Path(os.getenv("AGENT_TRACE_DIR") or config.REPO_ROOT / ".agent-traces")
 
-# Guard thresholds for the vote candidates of a claim (guard.py): provisional until the calibration on dev (task 8 of
-# stage 3). A candidate is "close" when it trails rank 1 by less than GUARD_SCORE_MARGIN and has at least
-# GUARD_MIN_HITS_RATIO times its hits; "keine" below GUARD_NONE_BELOW (None: only without any candidate).
-GUARD_SCORE_MARGIN: float = 0.02
-GUARD_MIN_HITS_RATIO: float = 0.5
+# Guard thresholds for the vote candidates of a claim (guard.py), calibrated on the dev split of the locked testset
+# (scripts/calibrate_guard.py, results/genai/agent_guard_calibration.json; fixed until the configuration freeze of
+# stage 5). A candidate is "close" when it trails rank 1 by less than GUARD_SCORE_MARGIN and has at least
+# GUARD_MIN_HITS_RATIO times its hits; "keine" below GUARD_NONE_BELOW (None: only without any candidate, not
+# calibrated: dev has one case without a vote). Dev result at 0.01 / 0.0: missed_ambiguous 1, false_confidence 0,
+# unnecessary_questions 5 (provisional 0.02 / 0.5: 1 / 1 / 6). missed_ambiguous 0 is unreachable on the grid: in
+# sdev-02 the second vote is not among the top-5 votes at all. The grid was not extended to force a result.
+GUARD_SCORE_MARGIN: float = 0.01
+GUARD_MIN_HITS_RATIO: float = 0.0
 GUARD_NONE_BELOW: Optional[float] = None

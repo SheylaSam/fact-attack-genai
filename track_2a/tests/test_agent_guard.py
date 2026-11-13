@@ -82,8 +82,8 @@ class GuardTests(unittest.TestCase):
 
     def test_guard_defaults(self):
         self.assertEqual((settings.GUARD_SCORE_MARGIN, settings.GUARD_MIN_HITS_RATIO, settings.GUARD_NONE_BELOW),
-                         (0.02, 0.5, None))
-        self.assertEqual(guard.current_thresholds(), Thresholds(0.02, 0.5, None))
+                         (0.01, 0.0, None))
+        self.assertEqual(guard.current_thresholds(), Thresholds(0.01, 0.0, None))
 
 
 if __name__ == '__main__':

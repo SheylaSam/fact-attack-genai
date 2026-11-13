@@ -28,7 +28,7 @@ V2 = VoteRef('2024-11-24_de#2', '2024-11-24_de', '2024-11-24', 'de',
              'Änderung des Obligationenrechts (Mietrecht: Kündigung wegen Eigenbedarfs)', (4, 5))
 CANDIDATES = [
     VoteCandidate(vote=V1, score=0.873, hits=12, best_page=2, snippet='Anfang der besten Textstelle zu V1'),
-    VoteCandidate(vote=V2, score=0.861, hits=7, best_page=4, snippet='Anfang der besten Textstelle zu V2'),
+    VoteCandidate(vote=V2, score=0.868, hits=7, best_page=4, snippet='Anfang der besten Textstelle zu V2'),
 ]
 
 

@@ -44,7 +44,7 @@ class AgentSettingsTests(unittest.TestCase):
             self.assertEqual(s.LLM_TIMEOUT_S, 180.0)
             self.assertEqual(s.LLM_MAX_TOKENS, 1024)
             self.assertEqual(s.LANGUAGES, ("de",))
-            self.assertEqual((s.GUARD_SCORE_MARGIN, s.GUARD_MIN_HITS_RATIO, s.GUARD_NONE_BELOW), (0.02, 0.5, None))
+            self.assertEqual((s.GUARD_SCORE_MARGIN, s.GUARD_MIN_HITS_RATIO, s.GUARD_NONE_BELOW), (0.01, 0.0, None))
             self.assertEqual(s.TOOL_MODE, "json")
             self.assertEqual(s.INDEX_DIR, config.REPO_ROOT / ".rag-index" / "agent-sources")
             self.assertEqual(s.TRACE_DIR, config.REPO_ROOT / ".agent-traces")

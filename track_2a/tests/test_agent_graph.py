@@ -301,13 +301,13 @@ class GraphTests(unittest.TestCase):
             {'vote_id': V1.vote_id, 'title': V1.title, 'date': V1.date, 'score': 0.873, 'hits': 10, 'best_page': 2},
             {'vote_id': V2.vote_id, 'title': V2.title, 'date': V2.date, 'score': 0.801, 'hits': 10, 'best_page': 2}],
             'assessment': {'kind': 'eindeutig', 'top': V1.vote_id, 'close': [V1.vote_id],
-                           'thresholds': {'score_margin': 0.02, 'min_hits_ratio': 0.5, 'none_below': None}}})
+                           'thresholds': {'score_margin': 0.01, 'min_hits_ratio': 0.0, 'none_below': None}}})
         self.assertEqual(rejected.data, {'error_kind': ERROR_INVALID_ARGS})
         self.assertEqual(passages.data, {'vote_id': V1.vote_id, 'found': 1, 'new': 1, 'dropped': 0, 'outside': 0,
                                          'pool_size': 1,
                                          'passages': [{'page_number': 2, 'section': 'COM', 'status': 'neu'}],
                                          'guard': {'kind': 'eindeutig', 'top': V1.vote_id, 'close': [V1.vote_id],
-                                                   'thresholds': {'score_margin': 0.02, 'min_hits_ratio': 0.5,
+                                                   'thresholds': {'score_margin': 0.01, 'min_hits_ratio': 0.0,
                                                                   'none_below': None}}})
         self.assertEqual(accepted.data, {})
         self.assertIsNot(votes.data, decider.calls[1]['history'][0].data)  # a copy, not the observation's dict

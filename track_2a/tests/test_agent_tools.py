@@ -53,7 +53,7 @@ def key(p):
 class FakeIndex:
     def __init__(self, votes=(V1, V2, V3, WIDE), candidates=None, passages=None, error=None):
         self.votes = {vote.vote_id: vote for vote in votes}
-        self.candidates = [candidate(V1), candidate(V2, 0.861, 7, 4)] if candidates is None else candidates
+        self.candidates = [candidate(V1), candidate(V2, 0.868, 7, 4)] if candidates is None else candidates
         self.passages = passages if passages is not None else []
         self.error = error
         self.vote_calls, self.passage_calls = [], []
@@ -109,7 +109,7 @@ class SearchToolTests(unittest.TestCase):
         obs = tools.run('suche_vorlagen', {'anfrage': 'Untermiete'})
         self.assertIn('Score 0.873', obs.text)
         self.assertIn('Treffer 12', obs.text)
-        self.assertIn('Score 0.861', obs.text)
+        self.assertIn('Score 0.868', obs.text)
         self.assertIn('Treffer 7', obs.text)
         self.assertLess(obs.text.index('2024-11-24_de#1'), obs.text.index('2024-11-24_de#2'))
         self.assertEqual([c['vote_id'] for c in obs.data['candidates']], [V1.vote_id, V2.vote_id])
@@ -117,7 +117,7 @@ class SearchToolTests(unittest.TestCase):
         self.assertEqual(obs.data['candidates'][0]['hits'], 12)
 
     def test_suche_vorlagen_states_the_assessment_instead_of_the_score_hint(self):
-        tools, _, _ = make_tools()  # default candidates: .873/12 and .861/7, close and enough hits
+        tools, _, _ = make_tools()  # default candidates: .873/12 and .868/7, close and enough hits
         obs = tools.run('suche_vorlagen', {'anfrage': 'Untermiete'})
         self.assertIn('mehrdeutig', obs.text)
         self.assertNotIn('eng beieinander', obs.text)

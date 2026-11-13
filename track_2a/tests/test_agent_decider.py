@@ -379,7 +379,7 @@ class ScriptedDeciderTests(unittest.TestCase):
 
     def test_scripted_takes_rank_one_and_leaves_the_question_to_the_guard(self):
         history = [votes_observation(vote_candidate(V1, 0.873, 'Untermiete', '2024-11-24'),
-                                     vote_candidate(V2, 0.861, 'Eigenbedarf', '2024-11-24'))]
+                                     vote_candidate(V2, 0.868, 'Eigenbedarf', '2024-11-24'))]
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, history)
         self.assertEqual((action.tool, action.args), ('suche_passagen', {'vorlage_id': V1}))
         self.assertFalse(hasattr(ScriptedDecider(), 'margin'))
