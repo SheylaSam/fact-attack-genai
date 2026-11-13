@@ -20,7 +20,11 @@
   action is not run either and `ask` gets [top vote, named vote]. A failure of the search is a technical error,
   never `nicht_belegt`.
 * `ask` is the only node that sets the outcome `rueckfrage` (`asked_by` says whether the guard or the model asked).
-  Stage 4 replaces the ending here with `interrupt` and continues the check with the chosen vote.
+  Without a checkpointer the run ends there. With one (`build_graph(checkpointer=...)`, interactive mode) `ask` calls
+  `interrupt` first and the run pauses at the question; `graph.invoke(Command(resume=<vote id>), config)` fixes that
+  vote (`AgentTools.fix_vote`), swaps the system message for the fixed-vote prompt, answers the intercepted action
+  with the choice, restores the search budget and continues at `decide`. Everything with side effects sits after the
+  `interrupt`: a node that interrupts runs again from its top on resume.
 * `quelle_fehlt` is accepted only after a search: without a fixed vote after a `suche_vorlagen` without error, with
   a fixed vote after a passage search. Otherwise it is rejected like any invalid action.
 * At most `max_steps` search steps. After them the decider is asked once more and offered only the terminal tools; if
@@ -49,9 +53,14 @@ Sync only (`invoke`): the request budget counts only synchronous requests.
 from dataclasses import dataclass, field
 import re
 import time
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, TypedDict
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, TypedDict, Union
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+from langgraph.errors import GraphBubbleUp
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import interrupt
 
 from src import config
 from src.agent import guard, settings
@@ -61,7 +70,7 @@ from src.agent.source_index import VoteRef
 from src.agent.tools import (ERROR_INVALID_ARGS, TERMINAL_TOOLS, AgentTools, Observation, engine_vote,
                              validate_args)
 from src.agent.trace import TraceEvent, Tracer
-from src.inference import PredictionResult
+from src.inference import EvidenceSource, PredictionResult
 from src.text_utils import guess_language, official_normalize
 
 Outcome = Literal["gestuetzt", "widersprochen", "nicht_belegt", "rueckfrage", "quelle_fehlt", "technischer_fehler"]
@@ -96,6 +105,9 @@ ASK_NOT_NEEDED = ("Rückfrage nicht nötig: Die Behauptung passt klar zu {top} (
                   "wiederhole rueckfrage.")
 ASK_NO_VOTE = ("Rückfrage nicht nötig: Zur Behauptung passt keine Vorlage. Beende mit quelle_fehlt. Lässt die "
                "Behauptung trotzdem offen, welche Vorlage gemeint ist, wiederhole rueckfrage.")
+ANSWER_PROMPT = ("Antwort der Person auf die Rückfrage: Gemeint ist die Vorlage {vote_id} «{title}». Die Vorlage steht "
+                 "fest. Suche nur in dieser Vorlage und beende mit pruefen oder quelle_fehlt.")
+ANSWER_NOT_AN_OPTION = "Die Antwort {answer} gehört nicht zu den angebotenen Vorlagen ({options})."
 VOTE_BOUND_TOOLS = frozenset({"suche_passagen", "suche_passagen_vektor", "pruefen"})  # the guard checks before these
 PASSAGE_SEARCH_TOOLS = frozenset({"suche_passagen", "suche_passagen_vektor"})
 RESEARCH_TOOL = "suche_passagen_vektor"  # the only tool of the Nachsuche
@@ -161,6 +173,14 @@ class _State(TypedDict, total=False):
     error: str
 
 
+def make_checkpointer() -> MemorySaver:
+    """The in-memory checkpointer of the interactive mode. Its serializer allows exactly the types the state carries
+    (the dataclasses and pydantic models below); any other type is blocked instead of deserialized on trust."""
+    types = (VoteRef, Observation, AgentAction, EvidenceItem, PredictionResult, EvidenceSource)
+    return MemorySaver(serde=JsonPlusSerializer(
+        allowed_msgpack_modules=[(cls.__module__, cls.__name__) for cls in types]))
+
+
 def _short(text: Any, limit: int = SUMMARY_CHARS) -> str:
     text = " ".join(str(text).split())
     return text if len(text) <= limit else text[:limit].rstrip() + "…"
@@ -182,7 +202,7 @@ def page_texts(engine, pdf, page: int) -> List[str]:
 
 class _Nodes:
     def __init__(self, tools: AgentTools, decider: Decider, engine, tracer: Tracer, max_steps: int, budget: Any,
-                 nachsuche: bool = True):
+                 nachsuche: bool = True, interactive: bool = False):
         self.tools = tools
         self.decider = decider
         self.engine = engine
@@ -190,6 +210,7 @@ class _Nodes:
         self.max_steps = max_steps
         self.budget = budget
         self.nachsuche_enabled = nachsuche
+        self.interactive = interactive  # a checkpointer is set: `ask` pauses and resumes with the answer
 
     # --- helpers -------------------------------------------------------------------------------------------------
 
@@ -202,6 +223,8 @@ class _Nodes:
             started = time.perf_counter()
             try:
                 return node(state)
+            except GraphBubbleUp:  # an interrupt is the graph's own control flow, not an error
+                raise
             except Exception as exc:
                 message = f"Ausnahme im Knoten {name}: {_exception(exc)}"
                 try:
@@ -451,15 +474,30 @@ class _Nodes:
                 f"Quelle fehlt: {_short(args['begruendung'])}")
 
     def ask(self, state: _State) -> dict:
-        """The only node that sets the outcome `rueckfrage`. Stage 4 replaces ending here with `interrupt`."""
+        """The only node that sets the outcome `rueckfrage`; in interactive mode it pauses for the answer and goes on
+        with the chosen vote instead."""
         options, step = state["options"], state["steps"]
         asked_by = state.get("asked_by", "model")
         started = time.perf_counter()
         ids = [option.vote_id for option in options]
-        self.emit(step, "ask", started, tool="rueckfrage", args={"optionen": ids}, data=state.get("ask_data"),
-                  summary=f"Rückfrage ({'Wächter' if asked_by == 'guard' else 'Modell'}) mit {len(ids)} Optionen: "
-                          f"{', '.join(ids)}")
-        return {"outcome": "rueckfrage", "reasoning": state.get("ask_reason", QUESTION_REASON), "route": "finish"}
+        if not self.interactive:
+            who = "Wächter" if asked_by == "guard" else "Modell"
+            self.emit(step, "ask", started, tool="rueckfrage", args={"optionen": ids}, data=state.get("ask_data"),
+                      summary=f"Rückfrage ({who}) mit {len(ids)} Optionen: {', '.join(ids)}")
+            return {"outcome": "rueckfrage", "reasoning": state.get("ask_reason", QUESTION_REASON), "route": "finish"}
+        # Resuming runs this node again from the top, so the interrupt comes first and the side effects after it.
+        answer = interrupt({"question": state["question"], "options": ids, "asked_by": asked_by})
+        if answer not in ids:
+            raise ValueError(ANSWER_NOT_AN_OPTION.format(answer=_short(repr(answer), 80), options=", ".join(ids)))
+        vote = self.tools.fix_vote(answer)
+        self.emit(step, "ask", started, tool="rueckfrage", args={"optionen": ids, "antwort": vote.vote_id},
+                  data=state.get("ask_data"), summary=f"Rückfrage beantwortet: {vote.vote_id} «{vote.title}»")
+        # `state["action"]` is the decision the question interrupted (never run): answer it with the choice, so the
+        # transcript keeps its roles, and from now on the prompt of a given vote applies
+        exchange = self.decider.observation_messages(
+            state["action"], Observation("rueckfrage", ANSWER_PROMPT.format(vote_id=vote.vote_id, title=vote.title)))
+        messages = [{"role": "system", "content": system_prompt(vote)}] + list(state["messages"])[1:] + exchange
+        return {"messages": messages, "search_steps": 0, "route": "decide"}
 
     def verify(self, state: _State) -> dict:
         vote, passages, step = state["vote"], state["passages"], state["steps"]
@@ -581,17 +619,21 @@ def _route(state: _State) -> str:
 
 
 def build_graph(tools: AgentTools, decider: Decider, engine, tracer: Tracer, max_steps: int = settings.MAX_STEPS,
-                *, budget: Any = None, nachsuche: bool = True):
+                *, budget: Any = None, nachsuche: bool = True, checkpointer: Optional[BaseCheckpointSaver] = None):
     """The compiled graph. Its input state needs `claim`, `language` and `messages`; see `run_check`.
 
     `nachsuche=False` switches the research loop off: the first `nicht_belegt` ends the run (evaluation arm B2).
 
     `budget` (a `RequestBudget`, optional): if a request was refused during the run, the result is a technical error
     even when the refusal was swallowed on the way (the engine's query translation returns no translation).
+
+    `checkpointer` (see `make_checkpointer`) switches on the interactive mode: `ask` pauses the run with `interrupt`
+    and the run is resumed per `thread_id` (see the module docstring). Without it the question ends the run.
     """
     if max_steps < 1:
         raise ValueError(f"max_steps must be at least 1, got {max_steps!r}")
-    nodes = _Nodes(tools, decider, engine, tracer, max_steps, budget, nachsuche)
+    interactive = checkpointer is not None
+    nodes = _Nodes(tools, decider, engine, tracer, max_steps, budget, nachsuche, interactive)
     graph = StateGraph(_State)
     for name in ("decide", "act", "ask", "verify", "check_evidence", "nachsuche", "finish"):
         graph.add_node(name, nodes.guarded(name, getattr(nodes, name)))
@@ -599,15 +641,18 @@ def build_graph(tools: AgentTools, decider: Decider, engine, tracer: Tracer, max
     graph.add_conditional_edges("decide", _route, {"act": "act", "finish": "finish"})
     graph.add_conditional_edges("act", _route, {"decide": "decide", "ask": "ask", "verify": "verify",
                                                 "finish": "finish"})
-    graph.add_edge("ask", "finish")
+    graph.add_conditional_edges("ask", _route, {"decide": "decide", "finish": "finish"})
     graph.add_conditional_edges("verify", _route, {"check_evidence": "check_evidence", "finish": "finish"})
     graph.add_conditional_edges("check_evidence", _route, {"nachsuche": "nachsuche", "finish": "finish"})
     graph.add_edge("nachsuche", "decide")
     graph.add_edge("finish", END)
     # decide + act for each of at most max_steps + 2 decisions (the last search decision and the Nachsuche), then
-    # verify, check_evidence, nachsuche, verify, check_evidence, finish, plus 3 spare
-    return graph.compile().with_config(
-        recursion_limit=2 * (max_steps + 1 + settings.MAX_RESEARCH_STEPS) + 9)
+    # verify, check_evidence, nachsuche, verify, check_evidence, finish, plus 3 spare; the interactive mode adds the
+    # second search run after the answer (the same decide + act pairs again, and the ask node)
+    limit = 2 * (max_steps + 1 + settings.MAX_RESEARCH_STEPS) + 9
+    if interactive:
+        limit += 2 * (max_steps + 1) + 1
+    return graph.compile(checkpointer=checkpointer).with_config(recursion_limit=limit)
 
 
 def _result(state: dict, events: List[TraceEvent]) -> AgentResult:
@@ -622,39 +667,61 @@ def _result(state: dict, events: List[TraceEvent]) -> AgentResult:
                        asked_by=state.get("asked_by") if state["outcome"] == "rueckfrage" else None, **common)
 
 
+def _validate_claim(claim: Any) -> None:
+    if not isinstance(claim, str) or not claim.strip() or len(claim) > settings.MAX_CLAIM_CHARS:
+        length = len(claim) if isinstance(claim, str) else type(claim).__name__
+        raise ValueError(f"Die Behauptung muss 1 bis {settings.MAX_CLAIM_CHARS} Zeichen lang sein "
+                         f"(erhalten: {length}).")
+
+
+def prepare(claim: str, tools: AgentTools, tracer: Tracer,
+            claim_language: Optional[str] = None) -> Union[AgentResult, dict]:
+    """The start of a check: the early result or the start state of the graph.
+
+    Raises ValueError for a claim outside 1-`settings.MAX_CLAIM_CHARS` characters. `EVIDENCE_POLICY=legacy` is a
+    technical error and a claim outside `settings.LANGUAGES` without a given vote is `quelle_fehlt`, both before any LLM
+    call (the result carries the events emitted here). Otherwise the state the graph starts with: `claim`, `language`,
+    `messages` (system prompt, claim), an empty `history` and no steps. `claim_language` defaults to
+    `guess_language(claim)`.
+    """
+    _validate_claim(claim)
+    first_event = len(tracer.events)
+    if config.EVIDENCE_POLICY == "legacy":  # its quotes are not original PDF text: the evidence check cannot work
+        tracer.emit(step=0, node="finish", summary="Ergebnis: technischer_fehler", error=LEGACY_POLICY_ERROR)
+        return AgentResult(outcome="technischer_fehler", reasoning=TECHNICAL_REASON, error=LEGACY_POLICY_ERROR,
+                           events=tracer.events[first_event:])
+    language = (claim_language or guess_language(claim)).strip().lower()
+    if tools.fixed_vote_id is None and language not in settings.LANGUAGES:
+        reasoning = LANGUAGE_REASON.format(language=language)
+        tracer.emit(step=0, node="finish", tool="quelle_fehlt", args={"sprache": language},
+                    summary=f"Ergebnis: quelle_fehlt, Sprache {language} ohne vorgegebene Quelle")
+        return AgentResult(outcome="quelle_fehlt", reasoning=reasoning, events=tracer.events[first_event:])
+    fixed_vote = tools.check_vote_id(tools.fixed_vote_id) if tools.fixed_vote_id is not None else None
+    messages = [{"role": "system", "content": system_prompt(fixed_vote)}, {"role": "user", "content": claim}]
+    return {"claim": claim, "language": language, "messages": messages, "history": [], "steps": 0,
+            "search_steps": 0}
+
+
 def run_check(claim: str, *, tools: AgentTools, decider: Decider, engine, tracer: Tracer,
               claim_language: Optional[str] = None, budget: Any = None, nachsuche: bool = True) -> AgentResult:
     """One check of `claim`. Raises ValueError only for a claim outside 1-1000 characters; every runtime failure is
     an `AgentResult` with `outcome="technischer_fehler"`.
 
     Without a given vote (`tools.fixed_vote_id`) only claims in `settings.LANGUAGES` are searched; others end as
-    `quelle_fehlt` before any LLM call. `claim_language` defaults to `guess_language(claim)`. With `budget` (the
-    check's `RequestBudget`) a refused request makes the result a technical error even if it was swallowed.
-    `EVIDENCE_POLICY=legacy` is refused as a technical error before any LLM call. With `nachsuche=False` a first
-    `nicht_belegt` is final (no research step, no second check).
+    `quelle_fehlt` before any LLM call (`prepare`). `claim_language` defaults to `guess_language(claim)`. With
+    `budget` (the check's `RequestBudget`) a refused request makes the result a technical error even if it was
+    swallowed. `EVIDENCE_POLICY=legacy` is refused as a technical error before any LLM call. With `nachsuche=False` a
+    first `nicht_belegt` is final (no research step, no second check). The run is never interactive: a question ends
+    it as `rueckfrage`.
     """
-    if not isinstance(claim, str) or not claim.strip() or len(claim) > settings.MAX_CLAIM_CHARS:
-        length = len(claim) if isinstance(claim, str) else type(claim).__name__
-        raise ValueError(f"Die Behauptung muss 1 bis {settings.MAX_CLAIM_CHARS} Zeichen lang sein "
-                         f"(erhalten: {length}).")
+    _validate_claim(claim)  # the caller's error: raised, unlike the failures inside the run
     first_event = len(tracer.events)
     try:
-        if config.EVIDENCE_POLICY == "legacy":  # its quotes are not original PDF text: the evidence check cannot work
-            tracer.emit(step=0, node="finish", summary="Ergebnis: technischer_fehler", error=LEGACY_POLICY_ERROR)
-            return AgentResult(outcome="technischer_fehler", reasoning=TECHNICAL_REASON, error=LEGACY_POLICY_ERROR,
-                               events=tracer.events[first_event:])
-        language = (claim_language or guess_language(claim)).strip().lower()
-        if tools.fixed_vote_id is None and language not in settings.LANGUAGES:
-            reasoning = LANGUAGE_REASON.format(language=language)
-            tracer.emit(step=0, node="finish", tool="quelle_fehlt", args={"sprache": language},
-                        summary=f"Ergebnis: quelle_fehlt, Sprache {language} ohne vorgegebene Quelle")
-            return AgentResult(outcome="quelle_fehlt", reasoning=reasoning, events=tracer.events[first_event:])
-        fixed_vote = tools.check_vote_id(tools.fixed_vote_id) if tools.fixed_vote_id is not None else None
-        messages = [{"role": "system", "content": system_prompt(fixed_vote)}, {"role": "user", "content": claim}]
+        start = prepare(claim, tools, tracer, claim_language)
+        if isinstance(start, AgentResult):
+            return start
         graph = build_graph(tools, decider, engine, tracer, budget=budget, nachsuche=nachsuche)
-        state = graph.invoke({"claim": claim, "language": language, "messages": messages, "history": [],
-                              "steps": 0, "search_steps": 0})
-        return _result(state, tracer.events[first_event:])
+        return _result(graph.invoke(start), tracer.events[first_event:])
     except Exception as exc:  # outside the nodes (graph runtime, trace file): still a result, never a raise
         message = f"Ausnahme im Agentenlauf: {_exception(exc)}"
         try:

@@ -262,6 +262,18 @@ class AgentTools:
             hint = "Rufe zuerst suche_vorlagen auf, um gültige IDs zu erhalten."
         raise ValueError(f"Unbekannte Vorlagen-ID {_shown(vote_id)}. {hint}")
 
+    def fix_vote(self, vote_id: str) -> VoteRef:
+        """Fixes the vote after the person answered the question: from now on `available_specs` and `check_vote_id`
+        behave as with a given vote, and the pool stays. ValueError (German) for an unknown id or when another vote
+        is already fixed; the same vote again changes nothing."""
+        if self.fixed_vote_id is not None and vote_id != self.fixed_vote_id:
+            raise ValueError(f"Die Vorlage {self.fixed_vote_id} steht bereits fest; eine zweite Vorlage "
+                             f"({_shown(vote_id)}) kann nicht gewählt werden.")
+        if not isinstance(vote_id, str) or vote_id not in self.votes:
+            raise ValueError(f"Unbekannte Vorlagen-ID {_shown(vote_id)}.")
+        self.fixed_vote_id = vote_id
+        return self.votes[vote_id]
+
     def passages_for(self, vote_id: str) -> List[Dict[str, Any]]:
         """The vote's passages of all searches so far: original text, no duplicates, first found first, capped."""
         return [dict(p) for p in self._pool.get(vote_id, [])[:settings.MAX_PASSAGES]]

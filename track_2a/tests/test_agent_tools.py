@@ -473,6 +473,33 @@ class VoteIdTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             make_tools(fixed_vote_id='2024-11-24_de#7')
 
+    def test_fix_vote_hides_the_vote_search_and_keeps_the_pool(self):
+        tools, _, _ = make_tools(engine=FakeEngine([passage(2)]))
+        self.assertIsNone(tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM).error)
+        self.assertIn('suche_vorlagen', [spec['name'] for spec in tools.available_specs()])
+        self.assertEqual(tools.fix_vote(V1.vote_id), V1)
+        self.assertEqual(tools.fixed_vote_id, V1.vote_id)
+        self.assertNotIn('suche_vorlagen', [spec['name'] for spec in tools.available_specs()])
+        self.assertNotIn('rueckfrage', [spec['name'] for spec in tools.available_specs()])
+        with self.assertRaises(ValueError):
+            tools.check_vote_id(V2.vote_id)
+        self.assertEqual(tools.check_vote_id(V1.vote_id), V1)
+        self.assertEqual([p['page_number'] for p in tools.passages_for(V1.vote_id)], [2])  # the pool stays
+
+    def test_fix_vote_rejects_unknown_ids_and_a_second_vote(self):
+        tools, _, _ = make_tools()
+        for bad in ('2024-11-24_de#7', None, 7):
+            with self.subTest(vote_id=bad), self.assertRaises(ValueError) as unknown:
+                tools.fix_vote(bad)
+            self.assertIn('Unbekannte Vorlagen-ID', str(unknown.exception))
+            self.assertIsNone(tools.fixed_vote_id)
+        tools.fix_vote(V1.vote_id)
+        with self.assertRaises(ValueError) as second:
+            tools.fix_vote(V2.vote_id)
+        self.assertIn('bereits fest', str(second.exception))
+        self.assertEqual(tools.fixed_vote_id, V1.vote_id)
+        self.assertEqual(tools.fix_vote(V1.vote_id), V1)  # the same vote again changes nothing
+
     def test_all_tools_are_available_without_a_fixed_vote(self):
         tools, _, _ = make_tools()
         self.assertEqual([spec['name'] for spec in tools.available_specs()], [spec['name'] for spec in TOOL_SPECS])
