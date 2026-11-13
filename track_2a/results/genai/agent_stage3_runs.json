@@ -1,0 +1,117 @@
+{
+  "kind": "agent_stage3_runs",
+  "approved": "Sheyla im Chat am 13.11.2026: \"Ja, starten\" (5 Läufe, je höchstens 12 Anfragen, zusammen höchstens 60)",
+  "rule": "Die Erwartung jedes Laufs steht vor dem Lauf fest. Kein Lauf wird wiederholt.",
+  "common_args": [
+    "--json",
+    "--max-requests",
+    "12"
+  ],
+  "runs": [
+    {
+      "nr": 1,
+      "name": "mietrecht_rueckfrage",
+      "claim": "Die Mietrechtsvorlage stärkt die Vermieter.",
+      "args": [],
+      "trace_dir": "results/genai/agent_stage3_traces/1_mietrecht_rueckfrage",
+      "expected": "rueckfrage, asked_by == \"guard\", ohne Prüfung",
+      "result": {
+        "outcome": "rueckfrage",
+        "asked_by": "model",
+        "checks": 0,
+        "vote_id": null,
+        "requests": 2,
+        "met_expectation": false,
+        "note": "Nicht wie erwartet: Die Rückfrage kam vom Modell, nicht vom Wächter. Nach suche_vorlagen stand der Hinweis „mehrdeutig“, das Modell fragte selbst zurück; der Wächter lief auf die Behauptung nie, weil er nur bei Aktionen mit Vorlage eingreift."
+      }
+    },
+    {
+      "nr": 2,
+      "name": "mietrecht_quelle",
+      "claim": "Die Mietrechtsvorlage stärkt die Vermieter.",
+      "args": [
+        "--quelle",
+        "2024-11-24_de#2"
+      ],
+      "trace_dir": "results/genai/agent_stage3_traces/2_mietrecht_quelle",
+      "expected": "ein Urteil zur Untermiete (2024-11-24_de#2)",
+      "result": {
+        "outcome": "gestuetzt",
+        "asked_by": null,
+        "checks": 2,
+        "vote_id": "2024-11-24_de#2",
+        "requests": 5,
+        "met_expectation": true,
+        "note": "Wie erwartet (Urteil zur Untermiete): Erste Prüfung nicht_belegt ohne Zitat, Nachsuche mit suche_passagen_vektor (7 neue Passagen), zweite Prüfung gestuetzt mit 5 von 5 gültigen Belegen. Zeigt den Nachsuche-Pfad."
+      }
+    },
+    {
+      "nr": 3,
+      "name": "euro",
+      "claim": "Die Schweiz führt den Euro ein.",
+      "args": [],
+      "trace_dir": "results/genai/agent_stage3_traces/3_euro",
+      "expected": "quelle_fehlt, mit suche_vorlagen davor",
+      "result": {
+        "outcome": "rueckfrage",
+        "asked_by": "model",
+        "checks": 0,
+        "vote_id": null,
+        "requests": 4,
+        "met_expectation": false,
+        "note": "Nicht wie erwartet: Erst eine ungültige Aktion (kein JSON), dann wurde quelle_fehlt vor jeder Suche abgelehnt (Regel wirkt), nach suche_vorlagen kam der Hinweis „mehrdeutig“ mit 4 nahen Vorlagen und das Modell fragte zurück statt quelle_fehlt. Unnötige Rückfrage: keine „keine“-Schwelle, Trefferverhältnis 0.0."
+      }
+    },
+    {
+      "nr": 4,
+      "name": "zivildienst_mcp",
+      "claim": "Wer in den Zivildienst wechselt, muss künftig mindestens 150 Diensttage leisten.",
+      "args": [
+        "--werkzeuge",
+        "mcp"
+      ],
+      "trace_dir": "results/genai/agent_stage3_traces/4_zivildienst_mcp",
+      "expected": "gestuetzt; Suchwerkzeuge über MCP, Prüfung mit echtem Apertus",
+      "result": {
+        "outcome": "gestuetzt",
+        "asked_by": null,
+        "checks": 1,
+        "vote_id": "2026-06-14_de#2",
+        "requests": 4,
+        "met_expectation": true,
+        "note": "Wie erwartet: gestuetzt mit 5 von 5 gültigen Belegen, eine Prüfung; die Suchwerkzeuge liefen über den MCP-Server, die Prüfung mit dem echten Apertus."
+      }
+    },
+    {
+      "nr": 5,
+      "name": "zivildienst_nachsuche",
+      "claim": "Mit der Änderung des Zivildienstgesetzes spart der Bund jedes Jahr rund 20 Millionen Franken.",
+      "args": [],
+      "trace_dir": "results/genai/agent_stage3_traces/5_zivildienst_nachsuche",
+      "expected": "nicht_belegt nach Nachsuche, checks == 2",
+      "chosen_offline": {
+        "vote_id": "2026-06-14_de#2",
+        "pages": "S. 6–7, 24–39 (scripts/check_testset.py --show 2026-06-14_de#2)",
+        "reason": "Die Seiten der Vorlage nennen keine Kosten oder Einsparungen in Franken; die einzige Zahl zu den Folgen ist die Erwartung des Komitees von 40 Prozent weniger Zulassungen (S. 30). Die Behauptung ist im Büchlein weder belegt noch widerlegt.",
+        "not_in_testset": "Keine Behauptung in data/genai/testset/cases.jsonl erwähnt den Zivildienst."
+      },
+      "result": {
+        "outcome": "rueckfrage",
+        "asked_by": "model",
+        "checks": 0,
+        "vote_id": null,
+        "requests": 2,
+        "met_expectation": false,
+        "note": "Nicht wie erwartet (nicht_belegt nach Nachsuche, checks 2): Nach suche_vorlagen stand „mehrdeutig“ (Service-citoyen 0.889 gegenüber Zivildienstgesetz 0.885, Abstand 0.004), das Modell fragte zurück. Die Nachsuche kam nicht zum Zug; unnötige Rückfrage, die Behauptung nennt das Zivildienstgesetz ausdrücklich."
+      }
+    }
+  ],
+  "totals": {
+    "requests": 17,
+    "limit_per_run": 12,
+    "limit_total": 60,
+    "met_expectation": 2,
+    "of": 5,
+    "note": "17 Anfragen von höchstens 60 (Journalzeilen)"
+  }
+}

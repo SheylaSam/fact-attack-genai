@@ -1,0 +1,229 @@
+{
+  "outcome": "rueckfrage",
+  "vote": null,
+  "evidence": [],
+  "question": "Welche Vorlage meinen Sie? Die Service-citoyen-Initiative vom 30.11.2025 oder die Änderung des Zivildienstgesetzes vom 14.06.2026?",
+  "options": [
+    {
+      "vote_id": "2025-11-30_de#1",
+      "source_id": "2025-11-30_de",
+      "date": "2025-11-30",
+      "language": "de",
+      "title": "Volksinitiative «Für eine engagierte Schweiz (Service-citoyen-Initiative)»",
+      "pages": [
+        4,
+        5,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ]
+    },
+    {
+      "vote_id": "2026-06-14_de#2",
+      "source_id": "2026-06-14_de",
+      "date": "2026-06-14",
+      "language": "de",
+      "title": "Änderung des Zivildienstgesetzes",
+      "pages": [
+        6,
+        7,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39
+      ]
+    }
+  ],
+  "reasoning": "Mehrere Vorlagen passen zur Behauptung, und sie lässt nicht erkennen, welche gemeint ist.",
+  "note": null,
+  "error": null,
+  "prediction": null,
+  "events": [
+    {
+      "step": 1,
+      "node": "decide",
+      "tool": "suche_vorlagen",
+      "args": {
+        "anfrage": "Zivildienstgesetz Änderung, 20 Millionen Franken Einsparung pro Jahr"
+      },
+      "summary": "suche_vorlagen gewählt",
+      "duration_ms": 738.902875003987,
+      "tokens_prompt": 1337,
+      "tokens_completion": 37,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 1,
+      "node": "act",
+      "tool": "suche_vorlagen",
+      "args": {
+        "anfrage": "Zivildienstgesetz Änderung, 20 Millionen Franken Einsparung pro Jahr"
+      },
+      "summary": "Gefundene Vorlagen, beste zuerst. Score = ähnlichste Textstelle der Vorlage, Treffer = Textstellen der Vorlage unter den 50 ähnlichsten.",
+      "duration_ms": 26.213666998955887,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "error": null,
+      "data": {
+        "candidates": [
+          {
+            "vote_id": "2025-11-30_de#1",
+            "title": "Volksinitiative «Für eine engagierte Schweiz (Service-citoyen-Initiative)»",
+            "date": "2025-11-30",
+            "score": 0.8890353954289896,
+            "hits": 9,
+            "best_page": 10
+          },
+          {
+            "vote_id": "2026-06-14_de#2",
+            "title": "Änderung des Zivildienstgesetzes",
+            "date": "2026-06-14",
+            "score": 0.8850059512311264,
+            "hits": 16,
+            "best_page": 34
+          },
+          {
+            "vote_id": "2021-06-13_de#3",
+            "title": "Covid-19-Gesetz",
+            "date": "2021-06-13",
+            "score": 0.8752841152132484,
+            "hits": 5,
+            "best_page": 39
+          },
+          {
+            "vote_id": "2022-05-15_de#1",
+            "title": "Änderung des Filmgesetzes",
+            "date": "2022-05-15",
+            "score": 0.8742509645067489,
+            "hits": 1,
+            "best_page": 18
+          },
+          {
+            "vote_id": "2025-09-28_de#1",
+            "title": "Bundesbeschluss über die kantonalen Liegenschaftssteuern auf Zweitliegenschaften",
+            "date": "2025-09-28",
+            "score": 0.8700021677477414,
+            "hits": 3,
+            "best_page": 11
+          }
+        ],
+        "assessment": {
+          "kind": "mehrdeutig",
+          "top": "2025-11-30_de#1",
+          "close": [
+            "2025-11-30_de#1",
+            "2026-06-14_de#2"
+          ],
+          "thresholds": {
+            "score_margin": 0.01,
+            "min_hits_ratio": 0.0,
+            "none_below": null
+          }
+        }
+      }
+    },
+    {
+      "step": 2,
+      "node": "decide",
+      "tool": "rueckfrage",
+      "args": {
+        "frage": "Welche Vorlage meinen Sie? Die Service-citoyen-Initiative vom 30.11.2025 oder die Änderung des Zivildienstgesetzes vom 14.06.2026?",
+        "optionen": [
+          "2025-11-30_de#1",
+          "2026-06-14_de#2"
+        ]
+      },
+      "summary": "rueckfrage gewählt",
+      "duration_ms": 1618.4764999998151,
+      "tokens_prompt": 1959,
+      "tokens_completion": 102,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 2,
+      "node": "act",
+      "tool": "rueckfrage",
+      "args": {
+        "frage": "Welche Vorlage meinen Sie? Die Service-citoyen-Initiative vom 30.11.2025 oder die Änderung des Zivildienstgesetzes vom 14.06.2026?",
+        "optionen": [
+          "2025-11-30_de#1",
+          "2026-06-14_de#2"
+        ]
+      },
+      "summary": "Rückfrage mit 2 Optionen: 2025-11-30_de#1, 2026-06-14_de#2",
+      "duration_ms": 0.03195799945387989,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 2,
+      "node": "ask",
+      "tool": "rueckfrage",
+      "args": {
+        "optionen": [
+          "2025-11-30_de#1",
+          "2026-06-14_de#2"
+        ]
+      },
+      "summary": "Rückfrage (Modell) mit 2 Optionen: 2025-11-30_de#1, 2026-06-14_de#2",
+      "duration_ms": 0.0020419975044205785,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "error": null,
+      "data": {
+        "options": [
+          {
+            "vote_id": "2025-11-30_de#1",
+            "title": "Volksinitiative «Für eine engagierte Schweiz (Service-citoyen-Initiative)»",
+            "date": "2025-11-30"
+          },
+          {
+            "vote_id": "2026-06-14_de#2",
+            "title": "Änderung des Zivildienstgesetzes",
+            "date": "2026-06-14"
+          }
+        ]
+      }
+    },
+    {
+      "step": 2,
+      "node": "finish",
+      "tool": null,
+      "args": {},
+      "summary": "Ergebnis: rueckfrage, 2 Optionen",
+      "duration_ms": 0.00033299875212833285,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "error": null,
+      "data": {}
+    }
+  ],
+  "steps": 2,
+  "asked_by": "model",
+  "checks": 0
+}

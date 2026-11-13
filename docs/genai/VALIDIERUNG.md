@@ -150,3 +150,17 @@ Vollständige Suite auf dem Stand von Stufe 3 (Tasks 1–7 mit den Korrekturen d
 bestanden**, 158 Subtests, dieselben 8 Warnungen.
 
 Details und Grenzen: [TESTSET.md](TESTSET.md), Abschnitt „Gesperrt“.
+
+## Agentenschicht Stufe 3
+
+13.11.2026: Wächter mit kalibrierten Schwellen (Dev-Teil des gesperrten Testsets), Nachsuche mit Budget 5 / 1 / 2 / 12,
+eigener MCP-Server und fünf gedeckelte echte Läufe.
+- Vollständige Suite: **850 Tests bestanden**, 158 Subtests, dieselben 8 Warnungen. Kein MCP-Server-Prozess blieb
+  zurück.
+- Echte Läufe: 5 Läufe, 17 Anfragen von höchstens 60 (Journalzeilen 2 / 5 / 4 / 4 / 2). 2 von 5 wie erwartet
+  (Nachsuche mit zweiter Prüfung, MCP mit echtem Apertus); in den anderen 3 fragte das Modell selbst zurück, bevor
+  der Wächter eingriff, zweimal unnötig.
+- Nativer Tool-Calling-Smoke (04.11.): `tool_choice="required"` HTTP 400 in 3 von 3, `json` bleibt Standard.
+
+Ohne Qualitätsaussage: Einzelläufe sind keine Messung; der Testteil des Testsets ist weiter gesperrt. Details,
+Befunde und offene Punkte: [AGENT_STUFE3.md](AGENT_STUFE3.md).

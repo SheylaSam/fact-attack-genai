@@ -1,0 +1,4 @@
+W1113 14:32:34.070000 83428 torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 11894.75it/s]
+Anfragen: 2 von 12 (Journal: results/genai/agent_stage3_traces/5_zivildienst_nachsuche/20261113T133230-83428.requests.jsonl)
+Trace: results/genai/agent_stage3_traces/5_zivildienst_nachsuche/20261113T133230-83428.trace.jsonl
