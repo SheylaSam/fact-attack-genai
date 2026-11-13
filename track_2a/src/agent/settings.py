@@ -44,7 +44,10 @@ TRACE_DIR = Path(os.getenv("AGENT_TRACE_DIR") or config.REPO_ROOT / ".agent-trac
 # GUARD_MIN_HITS_RATIO times its hits; "keine" below GUARD_NONE_BELOW (None: only without any candidate, not
 # calibrated: dev has one case without a vote). Dev result at 0.01 / 0.0: missed_ambiguous 1, false_confidence 0,
 # unnecessary_questions 5 (provisional 0.02 / 0.5: 1 / 1 / 6). missed_ambiguous 0 is unreachable on the grid: in
-# sdev-02 the second vote is not among the top-5 votes at all. The grid was not extended to force a result.
+# sdev-02 the second vote is not among the top-5 votes at all (it is assessed mehrdeutig, but with #1 and #3). The
+# grid was not extended to force a result. The evidence is thin: the margin step 0.005 -> 0.01 rests on one ambiguous
+# case (sdev-01, gap 0.007), and the hits criterion is inactive on dev (0.0 and 0.25 give the same counts; the tie
+# rule takes the smaller value), so a 1-hit candidate within the margin counts as close.
 GUARD_SCORE_MARGIN: float = 0.01
 GUARD_MIN_HITS_RATIO: float = 0.0
 GUARD_NONE_BELOW: Optional[float] = None
