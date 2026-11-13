@@ -229,6 +229,29 @@ _ROWS += """
 Eigenes PDF|PDF personnel|PDF personale
 Aktive Quelle: eigenes PDF. Das Abstimmungsdatum ist unbekannt; die offizielle Datumsauswahl ist deaktiviert.|Source active : PDF personnel. La date de votation est inconnue ; la sélection de date officielle est désactivée.|Fonte attiva: PDF personale. La data di votazione è sconosciuta; la selezione della data ufficiale è disattivata.
 """
+_ROWS += """
+Rückfrage|Question|Domanda
+Entscheidung|Décision|Decisione
+Nächster Schritt läuft …|L’étape suivante est en cours …|Il passaggio successivo è in corso …
+Vorlagen suchen|Rechercher des objets|Cercare gli oggetti
+Passagen suchen|Rechercher des passages|Cercare i passaggi
+Passagen suchen (Vektor)|Rechercher des passages (vecteurs)|Cercare i passaggi (vettori)
+Prüfung starten|Lancer la vérification|Avviare la verifica
+Quelle fehlt|Source manquante|Fonte mancante
+Start|Début|Inizio
+Urteil von Apertus|Verdict d’Apertus|Giudizio di Apertus
+Belege prüfen|Vérifier les passages|Verificare i passaggi
+Nachsuche|Recherche complémentaire|Ricerca supplementare
+Abbruch|Interruption|Interruzione
+Welche Vorlage ist gemeint?|Quel objet est visé ?|Quale oggetto si intende?
+Mehrere Vorlagen passen zur Behauptung. Wähle die Vorlage, die du meinst; danach geht die Prüfung weiter.|Plusieurs objets correspondent à l’affirmation. Choisissez celui que vous visez ; la vérification se poursuit ensuite.|Più oggetti corrispondono all’affermazione. Scegli quello che intendi; poi la verifica prosegue.
+Quelle selbst wählen|Choisir la source soi-même|Scegliere la fonte da soli
+Die Suche über alle Vorlagen gibt es bisher nur für deutsche Behauptungen. Wähle die Quelle selbst; mit gewählter Quelle wird die Behauptung in jeder Sprache geprüft.|La recherche dans tous les objets n’existe pour l’instant que pour les affirmations en allemand. Choisissez la source vous-même ; avec une source choisie, l’affirmation est vérifiée dans toutes les langues.|La ricerca in tutti gli oggetti esiste finora solo per affermazioni in tedesco. Scegli tu la fonte; con una fonte scelta l’affermazione viene verificata in ogni lingua.
+Keine passende Vorlage gefunden|Aucun objet correspondant trouvé|Nessun oggetto corrispondente trovato
+Zur Behauptung passt keine Vorlage. Wähle die Quelle selbst oder formuliere die Behauptung um.|Aucun objet ne correspond à l’affirmation. Choisissez la source vous-même ou reformulez l’affirmation.|Nessun oggetto corrisponde all’affermazione. Scegli tu la fonte o riformula l’affermazione.
+Die Prüfung konnte nicht abgeschlossen werden|La vérification n’a pas pu être terminée|Non è stato possibile completare la verifica
+Die Prüfung wurde wegen eines technischen Fehlers abgebrochen; es gibt kein Urteil.|La vérification a été interrompue par une erreur technique ; il n’y a pas de verdict.|La verifica è stata interrotta da un errore tecnico; non c’è alcun giudizio.
+"""
 TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
 
 
