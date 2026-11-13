@@ -76,7 +76,7 @@
 
 **Files:**
 - Create: `track_2a/src/agent/session.py`
-- Modify: `track_2a/src/agent/trace.py` (`on_event`)
+- Modify: `track_2a/src/agent/trace.py` (`on_event`), `track_2a/src/agent/graph.py` (kleine Nachbesserung aus dem Review von Task 1, siehe Step 3)
 - Test: `track_2a/tests/test_agent_session.py`, `track_2a/tests/test_agent_graph.py` (Tracer)
 
 **Interfaces:**
@@ -89,6 +89,7 @@
 - [ ] **Step 1: Failing tests** (`test_agent_session.py`, Fakes aus `test_agent_graph.py`): `test_start_returns_pending_for_a_close_claim_and_a_result_for_a_clear_one`; `test_answer_continues_the_same_check_and_returns_the_result` (gleiche `tools`, gleiches Budget-Objekt, `result.vote == V2`, `result.events` enthält Ereignisse vor und nach der Antwort); `test_second_answer_after_the_result_is_refused_without_new_requests` (`ValueError`, `engine.verify_calls` unverändert); `test_answer_with_a_vote_outside_the_options_is_refused_and_the_question_stays_open` (`pending` bleibt); `test_answer_without_a_question_is_refused`; `test_budget_refusal_after_the_answer_is_a_technical_error` (`RequestBudget` mit Limit, das nach der Antwort erschöpft ist → `technischer_fehler`, kein Urteil); `test_start_twice_discards_the_open_question` (neuer Thread, alte Frage gilt nicht mehr); `test_on_event_sees_every_event_once_in_order`; `test_early_results_come_back_as_results` (Fremdsprache → `quelle_fehlt`). (`Tracer`): `test_on_event_is_called_after_the_line_is_written`.
 - [ ] **Step 2: Run, expect FAIL.**
 - [ ] **Step 3: Implement.** `start` ruft `prepare`; ist das Ergebnis ein `AgentResult`, wird es zurückgegeben. Sonst neuer `thread_id` (uuid), `graph.invoke(state, cfg)`; enthält das Ergebnis `__interrupt__`, wird `Pending` aus dem Payload gebaut (Optionen als `VoteRef` über `tools.check_vote_id`), sonst `_result(...)` (die Ereignisse des Laufs ab `first_event`). `answer` prüft `pending` und die Options-IDs, ruft `invoke(Command(resume=vote_id), cfg)` und löscht `pending` bevor es zurückgibt (zweiter Aufruf: `ValueError`). Ausnahmen außerhalb der Knoten werden wie in `run_check` zu `technischer_fehler`.
+- [ ] **Step 3b: Nachbesserung `graph.py` (Review Task 1).** `_result` füllt `question` und `options` nur bei `outcome == "rueckfrage"` (wie `asked_by`); der interaktive `ask` setzt `passage_searches = 0` zurück (die feste Vorlage braucht vor `quelle_fehlt` eine Passagensuche in **ihr**). Die Docstrings von `build_graph` und `AgentSession` sagen, dass `tools`, `engine` und `tracer` über Pause und Resume dieselben Instanzen bleiben müssen (Pool, Guard-Cache und Vorlagenliste liegen nicht im Checkpoint). Tests: `test_resumed_result_carries_no_stale_question_or_options`, `test_quelle_fehlt_after_the_answer_needs_a_passage_search_in_the_chosen_vote`.
 - [ ] **Step 4: Run, expect PASS**, ganze Suite.
 - [ ] **Step 5: Commit** `feat(agent): AgentSession keeps one check across question and answer`.
 
