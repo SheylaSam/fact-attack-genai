@@ -137,7 +137,7 @@
 
 **Files:**
 - Create: `track_2a/src/agent/uploads.py`
-- Modify: `track_2a/src/agent/search_backend.py` (`LocalBackend.add_vote`), `track_2a/app.py` (Upload-Pfad; `make_agent_session` bekommt `upload: Optional[VoteRef] = None`, registriert sie über `add_vote` und setzt sie als feste Vorlage)
+- Modify: `track_2a/src/agent/search_backend.py` (`LocalBackend.add_vote`), `track_2a/app.py` (Upload-Pfad: heute nimmt ein hochgeladenes PDF den alten Ablauf, siehe die Beschriftung bei `agent_mode`; künftig den Agenten) und `track_2a/src/agent_app.py` (hier lebt `make_agent_session` seit Task 4; sie bekommt `upload: Optional[VoteRef] = None`, registriert sie über `add_vote` und setzt sie als feste Vorlage; die Tests patchen `src.agent_app.*`, siehe `tests/test_ui_agent_streamlit.py`)
 - Test: `track_2a/tests/test_agent_uploads.py`
 
 **Interfaces:**
