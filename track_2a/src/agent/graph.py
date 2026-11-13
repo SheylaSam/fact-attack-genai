@@ -91,6 +91,11 @@ NO_SEARCH_YET = "quelle_fehlt erst nach einer Suche: Rufe zuerst suche_vorlagen 
 NO_PASSAGE_SEARCH_YET = ("quelle_fehlt erst nach einer Suche: Suche zuerst mit suche_passagen oder "
                          "suche_passagen_vektor.")
 GUARD_ERROR = "Wächter: Vorlagensuche zur Behauptung fehlgeschlagen: {error}"
+ASK_NOT_NEEDED = ("Rückfrage nicht nötig: Die Behauptung passt klar zu {top} («{title}»). Prüfe diese Vorlage mit "
+                  "suche_passagen und pruefen. Lässt die Behauptung trotzdem offen, welche Vorlage gemeint ist, "
+                  "wiederhole rueckfrage.")
+ASK_NO_VOTE = ("Rückfrage nicht nötig: Zur Behauptung passt keine Vorlage. Beende mit quelle_fehlt. Lässt die "
+               "Behauptung trotzdem offen, welche Vorlage gemeint ist, wiederhole rueckfrage.")
 VOTE_BOUND_TOOLS = frozenset({"suche_passagen", "suche_passagen_vektor", "pruefen"})  # the guard checks before these
 PASSAGE_SEARCH_TOOLS = frozenset({"suche_passagen", "suche_passagen_vektor"})
 RESEARCH_TOOL = "suche_passagen_vektor"  # the only tool of the Nachsuche
@@ -137,6 +142,7 @@ class _State(TypedDict, total=False):
     checked: List[Dict[str, Any]]  # the passages of the first check
     first: dict  # the first check's outcome, reasoning, note and evidence, kept for a Nachsuche without new passages
     guard_done: bool  # the guard has assessed the claim and let the first vote-bound action through
+    ask_objected: bool  # the guard has objected once to a model `rueckfrage`; the next one is asked
     asked_by: str  # "guard" or "model"
     ask_data: dict  # what the ask event carries: the guard's assessment or the model's options
     ask_reason: str  # the reasoning of the question when it is not QUESTION_REASON
@@ -257,7 +263,11 @@ class _Nodes:
         rejection = self._precheck(action, state.get("offered", []))
         guard_data: Optional[dict] = None
         guard_done = state.get("guard_done", False)
-        if rejection is None and self._guard_applies(action):  # every vote-bound action while no vote is fixed
+        ask_objected = state.get("ask_objected", False)
+        guards_vote = rejection is None and self._guard_applies(action)  # every vote-bound action, no vote fixed
+        # a model question is checked against the claim's assessment once; asking again is accepted
+        guards_ask = rejection is None and not ask_objected and self._ask_checked(action, state)
+        if guards_vote or guards_ask:
             try:
                 assessment = self.tools.claim_assessment(state["claim"])  # the claim's wording; cached, one search
             except Exception as exc:  # a guard that cannot look is a technical error, never "nicht belegt"
@@ -268,6 +278,7 @@ class _Nodes:
             if not guard_done:  # the first assessment goes into the trace once
                 guard_data = assessment.to_data()
             guard_done = True
+        if guards_vote:
             chosen = validate_args(tool, action.args)["vorlage_id"]
             if assessment.kind == "mehrdeutig":  # several votes fit: the action is not run
                 options = [self.tools.check_vote_id(vote_id) for vote_id in assessment.close]
@@ -287,6 +298,13 @@ class _Nodes:
                 return {"guard_done": True, "asked_by": "guard", "question": guard.question(options),
                         "options": options, "ask_data": data,
                         "ask_reason": MISMATCH_REASON.format(top=top.title, chosen=other.title), "route": "ask"}
+        if guards_ask:
+            if assessment.kind == "eindeutig":
+                top = self.tools.check_vote_id(assessment.top)
+                rejection = ASK_NOT_NEEDED.format(top=assessment.top, title=top.title)
+            elif assessment.kind == "keine":
+                rejection = ASK_NO_VOTE
+            ask_objected = rejection is not None
         guard_event = {"guard": guard_data} if guard_data is not None else {}
         if rejection is None and tool in TERMINAL_TOOLS:
             try:
@@ -329,7 +347,7 @@ class _Nodes:
                   summary=_short(observation.text.splitlines()[0] if observation.text else ""),
                   error=observation.error, data={**observation.data, **guard_event})  # what the model saw
         return {"messages": messages, "history": history + [observation], "search_steps": search_steps,
-                "guard_done": guard_done, "route": "decide", **searches}
+                "guard_done": guard_done, "ask_objected": ask_objected, "route": "decide", **searches}
 
     def _act_nachsuche(self, state: _State, started: float) -> dict:
         """The single research step: a valid `suche_passagen_vektor` in the checked vote, else a technical error."""
@@ -382,6 +400,19 @@ class _Nodes:
             return False
         try:
             self.tools.check_vote_id(validate_args(action.tool, action.args)["vorlage_id"])
+        except ValueError:
+            return False
+        return True
+
+    def _ask_checked(self, action: AgentAction, state: _State) -> bool:
+        """True if the guard checks this model `rueckfrage`: no fixed vote, valid arguments with known vote ids, and
+        search steps left (past the limit an objection could only end in a technical error)."""
+        if (self.tools.fixed_vote_id is not None or action.tool != "rueckfrage"
+                or state.get("search_steps", 0) >= self.max_steps):
+            return False
+        try:
+            for vote_id in validate_args("rueckfrage", action.args)["optionen"]:
+                self.tools.check_vote_id(vote_id)
         except ValueError:
             return False
         return True

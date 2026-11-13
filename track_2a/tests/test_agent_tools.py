@@ -125,6 +125,22 @@ class SearchToolTests(unittest.TestCase):
         self.assertEqual(obs.data['assessment']['kind'], 'mehrdeutig')
         self.assertFalse(hasattr(tools_module, 'SCORE_HINT'))
 
+    def test_suche_vorlagen_with_the_claim_states_the_assessment_of_the_claim(self):
+        claim_ranking = [candidate(V3, 0.9, 12), candidate(V1, 0.7, 12)]
+        index = FakeIndex()
+        index.search_votes = lambda query, k=5: ([candidate(V1), candidate(V2, 0.868, 7, 4)] if query == 'Untermiete'
+                                                  else claim_ranking)
+        tools, _, _ = make_tools(index)
+        obs = tools.run('suche_vorlagen', {'anfrage': 'Untermiete'}, claim=CLAIM)
+        self.assertTrue(obs.text.endswith(f'Einschätzung zur Behauptung: {V3.vote_id} passt klar am besten.'))
+        self.assertEqual(obs.data['assessment']['top'], V3.vote_id)
+        self.assertEqual(obs.data['candidates'][0]['vote_id'], V1.vote_id)  # the list is the model's own search
+
+    def test_suche_vorlagen_without_a_claim_keeps_the_assessment_of_the_query(self):
+        tools, _, _ = make_tools()
+        obs = tools.run('suche_vorlagen', {'anfrage': 'Untermiete'})
+        self.assertIn('Einschätzung: mehrdeutig', obs.text)
+
     def test_claim_assessment_searches_with_the_claim_once(self):
         tools, index, _ = make_tools()
         first = tools.claim_assessment(CLAIM)
