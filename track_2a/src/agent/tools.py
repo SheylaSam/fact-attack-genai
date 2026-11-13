@@ -24,7 +24,7 @@ if TYPE_CHECKING:  # search_backend imports this module
 
 POOL_LIMIT = 2 * settings.MAX_PASSAGES  # passages the pool stores per vote; `passages_for` hands out MAX_PASSAGES
 MAX_QUERY_CHARS = 500
-MAX_ID_CHARS = 64
+MAX_ID_CHARS = 80  # an upload's id is "custom_" + 64 hex digits + "#0" = 73 characters
 MAX_QUESTION_CHARS = 300
 MAX_REASON_CHARS = 500
 OPTION_RANGE = (2, 4)

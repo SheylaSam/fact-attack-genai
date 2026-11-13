@@ -33,7 +33,7 @@ def system_prompt(fixed_vote: Optional[VoteRef] = None, max_steps: int = setting
     """The system message: the rules, plus one line naming the vote when the source is given."""
     prompt = SYSTEM_PROMPT.format(max_steps=max_steps)
     if fixed_vote is not None:
-        prompt += (f"\n\nVorgegebene Quelle: Vorlage {fixed_vote.vote_id} «{fixed_vote.title}» (Abstimmung vom "
-                   f"{_display_date(fixed_vote.date)}); suche nur in dieser Vorlage, "
-                   f"{' und '.join(sorted(FIXED_VOTE_HIDDEN_TOOLS))} entfallen.")
+        dated = f" (Abstimmung vom {_display_date(fixed_vote.date)})" if fixed_vote.date else ""  # an upload has none
+        prompt += (f"\n\nVorgegebene Quelle: Vorlage {fixed_vote.vote_id} «{fixed_vote.title}»{dated}; "
+                   f"suche nur in dieser Vorlage, {' und '.join(sorted(FIXED_VOTE_HIDDEN_TOOLS))} entfallen.")
     return prompt

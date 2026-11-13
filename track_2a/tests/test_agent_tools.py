@@ -10,8 +10,8 @@ from src.agent import settings
 from src.agent import tools as tools_module
 from src.agent.search_backend import LocalBackend
 from src.agent.source_index import VoteCandidate, VoteRef
-from src.agent.tools import (ERROR_INVALID_ARGS, ERROR_TOOL_FAILURE, TERMINAL_TOOLS, TOOL_SPECS, AgentTools,
-                             Observation, validate_args)
+from src.agent.tools import (ERROR_INVALID_ARGS, ERROR_TOOL_FAILURE, MAX_ID_CHARS, TERMINAL_TOOLS, TOOL_SPECS,
+                             AgentTools, Observation, validate_args)
 
 
 def installed(*packages):
@@ -550,7 +550,7 @@ class ArgumentValidationTests(unittest.TestCase):
                          {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'})
 
     def test_vote_id_must_be_non_empty_short_text(self):
-        for bad in ('', '   ', 'x' * 65, None, 3):
+        for bad in ('', '   ', 'x' * (MAX_ID_CHARS + 1), None, 3):
             with self.subTest(vote_id=bad), self.assertRaises(ValueError):
                 validate_args('pruefen', {'vorlage_id': bad})
 

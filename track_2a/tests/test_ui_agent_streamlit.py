@@ -44,13 +44,19 @@ class Fakes:
         self.engine = engine or FakeEngine()
         self.sessions = []  # (fixed_vote_id, session)
         self.answers = []  # every vote id given to a session's `answer`
+        self.uploads = []  # every upload vote given to `make`
 
-    def make(self, fixed_vote_id, on_event):
+    def make(self, fixed_vote_id, on_event, upload=None):
         from src.agent.search_backend import LocalBackend
         from src.agent.session import AgentSession
         from src.agent.tools import AgentTools
         from src.agent.trace import Tracer
-        tools = AgentTools(LocalBackend(self.index, self.engine, BOOKLETS), BOOKLETS, fixed_vote_id=fixed_vote_id)
+        backend = LocalBackend(self.index, self.engine, BOOKLETS)
+        if upload is not None:  # like make_agent_session: the upload is registered and fixed
+            self.uploads.append(upload)
+            backend.add_vote(upload)
+            fixed_vote_id = upload.vote_id
+        tools = AgentTools(backend, BOOKLETS, fixed_vote_id=fixed_vote_id)
         session = AgentSession(tools, PresetDecider(*self.actions), self.engine, Tracer(on_event=on_event),
                                nachsuche=False)
         answer = session.answer
@@ -345,3 +351,79 @@ def test_unknown_source_selection_shows_a_translated_message():
         assert any('L’agent ne peut pas vérifier la source choisie' in item.value for item in app.error)
         assert not any('#0' in item.value for item in app.error)
         assert not fakes.sessions
+
+
+@contextmanager
+def uploaded_pdf(contents):
+    """The file uploader holds `contents` as the user's PDF. The real `store_uploaded_source` writes it to the booklets
+    directory (custom_*.pdf is git-ignored); it is removed afterwards."""
+    import hashlib
+    from types import SimpleNamespace
+    from streamlit.runtime.state.session_state_proxy import SessionStateProxy
+    from src import config
+    upload = SimpleNamespace(name='mein-dokument.pdf', getbuffer=lambda: memoryview(contents))
+    stored = config.BOOKLETS_DIR / f'custom_{hashlib.sha256(contents).hexdigest()}.pdf'
+    original_get = SessionStateProxy.get
+
+    def session_get(self, key, default=None):
+        return upload if key == 'uploaded_pdf' else original_get(self, key, default)
+
+    try:
+        with patch.object(SessionStateProxy, 'get', session_get):
+            yield stored
+    finally:
+        stored.unlink(missing_ok=True)
+
+
+def tiny_pdf(pages=3):
+    import fitz
+    with fitz.open() as document:
+        for number in range(1, pages + 1):
+            document.new_page().insert_text((72, 72), f'Eigenes Dokument {pages}-{number}')
+        return document.tobytes()
+
+
+def test_uploaded_pdf_check_has_the_same_steps_and_card(isolated_history):
+    from src.check_history import load_checks
+    import hashlib
+    contents = tiny_pdf()
+    upload_id = f'custom_{hashlib.sha256(contents).hexdigest()}#0'  # the vote the app derives from the stored file
+    fakes = Fakes([act('suche_passagen', vorlage_id=upload_id), act('pruefen', vorlage_id=upload_id)],
+                  index=FakeIndex(CLOSE))
+    booklet = {'pages': [{'page_number': number, 'text': f'Seite {number}'} for number in (1, 2, 3)],
+               'paragraphs': [], 'full_text': ''}
+    with uploaded_pdf(contents) as stored, \
+         patch('src.inference.ClaimVerificationEngine._get_booklet_data', return_value=booklet), \
+         patch('src.inference.ClaimVerificationEngine.verify_claim', side_effect=AssertionError('old flow')), \
+         agent_app(fakes) as app:
+        assert not any('ohne Agenten' in item.value for item in app.caption)
+        assert not any(item.key == 'agent_own_source' for item in app.checkbox)  # the upload is the source
+        app.radio(key='booklet_lang').set_value('FR').run()
+        check(app)
+        [upload] = fakes.uploads
+        assert upload.vote_id == f'{stored.stem}#0' and (upload.title, upload.language) == ('Eigenes PDF', 'fr')
+        assert upload.pages == (1, 2, 3)
+        assert fakes.sessions[0][0] == upload.vote_id
+        assert fakes.index.vote_calls == []
+        steps = '\n'.join(step_texts(app))
+        for title in ('Passagen suchen', 'Prüfung starten', 'Belege prüfen'):
+            assert title in steps
+        assert 'Rückfrage' not in steps and not options(app)
+        assert has_verdict(app)
+        assert any('Eigenes PDF' in item.value for item in app.caption)
+        last = app.session_state['last_check']
+        assert last['source'][0] == stored and last['source'][1] is None and last['source'][2] == 'fr'
+        assert [(row['date'], row['language']) for row in load_checks(isolated_history)] == [(None, 'fr')]
+        assert not any(item.value.startswith('Die Prüfung konnte nicht') for item in app.error)
+
+
+def test_unreadable_upload_shows_a_translated_message_and_starts_no_check():
+    fakes = clear_fakes()
+    with uploaded_pdf(b'This is not a PDF.') as stored, agent_app(fakes) as app:
+        app.selectbox(key='ui_language').set_value('fr').run()
+        app.text_area(key='claim_input').set_value(CLAIM).run()
+        next(button for button in app.button if button.label == 'Vérifier l’affirmation').click().run()
+        assert not app.exception
+        assert any('Ce PDF ne peut pas être lu' in item.value for item in app.error)
+        assert not any('custom_' in item.value or 'Traceback' in item.value for item in app.error)
+        assert not fakes.sessions and not has_verdict(app)

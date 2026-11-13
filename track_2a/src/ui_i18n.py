@@ -260,7 +260,9 @@ Diese Quelle für die Prüfung vorgeben|Imposer cette source pour la vérificati
 Ohne Häkchen sucht der Agent die passende Vorlage selbst.|Sans coche, l’agent cherche lui-même l’objet correspondant.|Senza spunta, l’agente cerca da solo l’oggetto corrispondente.
 Der Agent kann die gewählte Quelle nicht prüfen. Wähle eine andere Quelle oder lass den Agenten die Vorlage suchen.|L’agent ne peut pas vérifier la source choisie. Choisissez une autre source ou laissez l’agent chercher l’objet.|L’agente non può verificare la fonte scelta. Scegli un’altra fonte o lascia che l’agente cerchi l’oggetto.
 Die Agentenschicht ist nicht verfügbar; die Prüfung läuft wie bisher ohne Agenten.|La couche agent n’est pas disponible ; la vérification se fait comme avant, sans agent.|Il livello agente non è disponibile; la verifica si svolge come prima, senza agente.
-Eigene PDFs werden ohne Agenten geprüft.|Les PDF personnels sont vérifiés sans agent.|I PDF personali vengono verificati senza agente.
+Das eigene PDF ist die Quelle der Prüfung; der Agent sucht nur darin.|Le PDF personnel est la source de la vérification ; l’agent ne cherche que dedans.|Il PDF personale è la fonte della verifica; l’agente cerca solo al suo interno.
+Dieses PDF kann nicht gelesen werden. Lade eine andere Datei hoch oder entferne sie.|Ce PDF ne peut pas être lu. Chargez un autre fichier ou retirez-le.|Questo PDF non può essere letto. Carica un altro file o rimuovilo.
+Eigenes PDF|PDF personnel|PDF personale
 Geprüfte Vorlage: {title}|Objet vérifié : {title}|Oggetto verificato: {title}
 """
 TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
