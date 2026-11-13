@@ -266,6 +266,12 @@ Dieses PDF kann nicht gelesen werden. Lade eine andere Datei hoch oder entferne 
 Eigenes PDF|PDF personnel|PDF personale
 Geprüfte Vorlage: {title}|Objet vérifié : {title}|Oggetto verificato: {title}
 """
+_ROWS += """
+Gesamtes Büchlein|Brochure entière|Opuscolo intero
+Wähle die Vorlage, die du meinst; danach geht die Prüfung weiter.|Choisissez l’objet que vous visez ; la vérification se poursuit ensuite.|Scegli l’oggetto che intendi; poi la verifica prosegue.
+Testmodus, kein Apertus-Urteil|Mode test, pas de verdict d’Apertus|Modalità di test, nessun giudizio di Apertus
+Für die Mehrfachprüfung die Quelle unter «Quelle selbst wählen» vorgeben oder ein eigenes PDF laden.|Pour la vérification multiple, imposez la source sous « Choisir la source soi-même » ou chargez un PDF personnel.|Per la verifica multipla, imponi la fonte in «Scegliere la fonte da soli» o carica un PDF personale.
+"""
 TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
 
 

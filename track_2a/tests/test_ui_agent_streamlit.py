@@ -4,7 +4,11 @@ The sessions run over the fakes of test_agent_graph.py (index, engine, preset de
 `agent_votes` and `agent_available` of src.agent_app are patched: no index is loaded and no request leaves the machine.
 """
 from contextlib import contextmanager
+import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import threading
 from unittest.mock import patch
 
@@ -12,6 +16,7 @@ import pytest
 pytest.importorskip('streamlit')
 from streamlit.testing.v1 import AppTest
 
+from src import agent_ui
 from src.agent.source_index import VoteRef
 from src.config import BOOKLETS_DIR
 from tests.test_agent_graph import (BOOKLETS, CLAIM, CLEAR, CLOSE, FRENCH_CLAIM, HAS_LANGGRAPH, NOT_FOUND, V1, V2,
@@ -48,14 +53,18 @@ class Fakes:
         self.sessions = []  # (fixed_vote_id, session)
         self.deciders = []  # the decider of every session
         self.answers = []  # every vote id given to a session's `answer`
+        self.starts = []  # every claim given to a session's `start`
+        self.budgets = []  # the request budget of every session
         self.session_votes = []  # every session vote (an upload) given to `make`
 
     def make(self, fixed_vote_id, on_event, session_vote=None):
+        from src.agent.budget import RequestBudget
         from src.agent.search_backend import LocalBackend
         from src.agent.session import AgentSession
         from src.agent.tools import AgentTools
         from src.agent.trace import Tracer
-        backend = LocalBackend(self.index, self.engine, BOOKLETS)
+        from src.agent_app import catalog_sources
+        backend = LocalBackend(self.index, self.engine, BOOKLETS, catalog=catalog_sources())  # like the app
         if session_vote is not None:  # like make_agent_session: the vote is registered and fixed
             self.session_votes.append(session_vote)
             backend.add_vote(session_vote)
@@ -63,14 +72,21 @@ class Fakes:
         tools = AgentTools(backend, BOOKLETS, fixed_vote_id=fixed_vote_id)
         decider = PresetDecider(*self.actions)
         self.deciders.append(decider)
-        session = AgentSession(tools, decider, self.engine, Tracer(on_event=on_event), nachsuche=False)
-        answer = session.answer
+        budget = RequestBudget()  # like make_agent_session; the fakes send nothing, so nothing is counted
+        self.budgets.append(budget)
+        session = AgentSession(tools, decider, self.engine, Tracer(on_event=on_event), budget=budget,
+                               nachsuche=False)
+        answer, start = session.answer, session.start
 
         def counted_answer(vote_id):
             self.answers.append(vote_id)
             return answer(vote_id)
 
-        session.answer = counted_answer
+        def counted_start(claim, *args, **kwargs):
+            self.starts.append(claim)
+            return start(claim, *args, **kwargs)
+
+        session.answer, session.start = counted_answer, counted_start
         self.sessions.append((fixed_vote_id, session))
         return session
 
@@ -345,6 +361,7 @@ def test_multi_check_and_history_tabs_work_as_before(isolated_history):
     with patch('src.config.LLM_API_KEY', 'ui-test-placeholder'), patch('src.config.MOCK_APERTUS', False), \
          patch('src.inference.ClaimVerificationEngine.verify_claim', side_effect=prediction) as verify, \
          agent_app(fakes) as app:
+        app.checkbox(key='agent_own_source').check().run()  # in agent mode the multi-check needs a given source
         app.text_area(key='batch_text').set_value('Die Vorlage verändert das Rentenalter. La proposition change les impôts.').run()
         app.multiselect(key='batch_selected').set_value(app.multiselect(key='batch_selected').options).run()
         app.button(key='run_batch').click().run()
@@ -423,7 +440,9 @@ def test_a_discarded_verdict_card_has_no_probability_bars():
 def test_unknown_source_selection_shows_a_translated_message():
     fakes = clear_fakes()
     with agent_app(fakes) as app:
-        app.checkbox(key='agent_own_source').check().run()  # the default source 2026-06-14_de is not in VOTES
+        # a vote of the booklet that the index (VOTES) does not hold: every catalog booklet is checkable as a whole,
+        # but a chosen title that names none of the index's votes of an indexed booklet stays unknown
+        pick_source(app, 'Bundesbeschluss über den Ausbauschritt 2023 für die Nationalstrassen')
         app.selectbox(key='ui_language').set_value('fr').run()
         app.text_area(key='claim_input').set_value(CLAIM).run()
         next(button for button in app.button if button.label == 'Vérifier l’affirmation').click().run()
@@ -600,3 +619,288 @@ def test_an_unknown_last_vote_in_the_session_is_dropped_without_an_error():
         app.session_state['last_vote_id'] = 'upload-0#0'  # not in the index (e.g. an own upload of an earlier check)
         check(app)
         assert len(options(app)) == 2 and not last_buttons(app)
+
+
+# --- final fix wave of stage 4 ------------------------------------------------------------------------------------
+DEMO_CASES = json.loads((APP.parent / 'data' / 'demo_cases.json').read_text(encoding='utf-8'))['cases']
+JUNE_VOTES = (  # the real index's votes of the 2026-06-14 booklet: German only, like every vote of the index
+    VoteRef('2026-06-14_de#1', '2026-06-14_de', '2026-06-14', 'de',
+            'Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)»', (4, 5, *range(8, 24))),
+    VoteRef('2026-06-14_de#2', '2026-06-14_de', '2026-06-14', 'de', 'Änderung des Zivildienstgesetzes',
+            (6, 7, *range(24, 40))))
+FR_RENT_PDF = BOOKLETS_DIR / '2024-11-24_fr.pdf'
+FR_SUBLET = 'Modification du code des obligations (droit du bail : sous-location)'
+MOCK_NOTICE = 'Testmodus, kein Apertus-Urteil'
+BATCH_HINT = 'Für die Mehrfachprüfung'
+BATCH_TEXT = 'Die Vorlage verändert das Rentenalter. La proposition change les impôts.'
+
+
+def verify(app):
+    next(button for button in app.button if button.label == VERIFY).click().run()
+    assert not app.exception
+    return app
+
+
+@pytest.mark.parametrize('case', DEMO_CASES,
+                         ids=[f"{case['id']}-{case['claim_language']}-{case['booklet_language']}" for case in DEMO_CASES])
+def test_every_demo_case_is_checked_against_its_own_booklet(case, tmp_path):
+    """C1: an example's booklet is the given source in every claim/booklet language; FR and IT booklets, which the
+    German-only index does not know, are checked as a whole. No dead end, no other booklet, no request."""
+    source_id = f"{case['booklet_date']}_{case['booklet_language']}"
+    if not (BOOKLETS_DIR / f'{source_id}.pdf').exists():
+        pytest.skip(f'Needs {source_id}.pdf')
+    index = FakeIndex([], votes=JUNE_VOTES)
+    with mock_mode_app(index, tmp_path) as app:
+        app.button(key=f"story_{case['id']}").click().run()
+        assert app.checkbox(key='agent_own_source').value  # set by the example, not by hand
+        verify(app)
+        assert not [item.value for item in app.error]  # never "Der Agent kann die gewählte Quelle nicht prüfen"
+        assert not any('Quelle selbst wählen' in item.value for item in app.warning)
+        assert has_verdict(app)
+        turn = app.session_state['agent_turn']
+        assert turn.vote.source_id == source_id
+        if case['booklet_language'] == 'de':
+            assert turn.vote.title == case['vote']  # the index's own vote
+        else:
+            assert turn.vote.vote_id == f'{source_id}#0'
+        assert index.vote_calls == []
+
+
+@pytest.mark.skipif(not FR_RENT_PDF.exists(), reason=f'Needs {FR_RENT_PDF}')
+def test_a_french_booklet_chosen_by_hand_is_checked_as_a_whole_with_a_translated_title(tmp_path):
+    """C1 and I5: a French booklet with one of its votes, chosen by hand, runs as the whole booklet; the card names
+    it «Gesamtes Büchlein» in the UI language."""
+    import fitz
+    from src.agent.source_index import WHOLE_BOOKLET_TITLE
+    with fitz.open(FR_RENT_PDF) as document:
+        pages = tuple(range(1, document.page_count + 1))
+    index = rent_index()
+    with mock_mode_app(index, tmp_path) as app:
+        app.selectbox(key='ballot').set_value('24. November 2024').run()
+        app.radio(key='booklet_lang').set_value('FR').run()
+        app.selectbox(key='vote').set_value(FR_SUBLET).run()
+        app.checkbox(key='agent_own_source').check().run()
+        check(app)
+        assert not [item.value for item in app.error]
+        assert has_verdict(app)
+        turn = app.session_state['agent_turn']
+        assert turn.vote == VoteRef('2024-11-24_fr#0', '2024-11-24_fr', '2024-11-24', 'fr', WHOLE_BOOKLET_TITLE, pages)
+        assert '2024-11-24_fr#0' not in index.votes and index.vote_calls == []
+        assert any(f'Geprüfte Vorlage: {WHOLE_BOOKLET_TITLE}' in item.value for item in app.caption)
+        app.selectbox(key='ui_language').set_value('fr').run()
+        assert not app.exception and has_verdict(app)
+        assert any('Objet vérifié : Brochure entière' in item.value for item in app.caption)
+
+
+def test_agent_available_needs_an_api_key_unless_mock_mode(tmp_path, monkeypatch):
+    """C1: without a key the tab keeps the old flow and its saved demo results; mock mode needs no key."""
+    from src import agent_app as module
+    monkeypatch.delenv('FACT_ATTACK_AGENT_MOCK', raising=False)
+    with patch('src.agent.settings.INDEX_DIR', tmp_path):
+        with patch('src.config.LLM_API_KEY', None):
+            assert module.agent_available() is False
+            with patch.dict('os.environ', {'FACT_ATTACK_AGENT_MOCK': '1'}):
+                assert module.agent_available() is True
+        with patch('src.config.LLM_API_KEY', ''):
+            assert module.agent_available() is False
+        with patch('src.config.LLM_API_KEY', 'ui-test-placeholder'):
+            assert module.agent_available() is True
+
+
+def slow_answer_fakes():
+    """A question between V1 and V2 whose answer blocks in the engine until `gate` is set."""
+    entered, gate = threading.Event(), threading.Event()
+    engine = v2_engine()
+    verify_with_passages = engine.verify_with_passages
+
+    def slow_verify(*args, **kwargs):
+        entered.set()
+        gate.wait(10)
+        return verify_with_passages(*args, **kwargs)
+
+    engine.verify_with_passages = slow_verify
+    return close_fakes(engine=engine), entered, gate
+
+
+def test_a_second_click_on_verify_while_the_check_runs_adopts_it():
+    """I1: the first click's worker still runs (its script run was stopped by the second click); the second click
+    with the same input waits for it instead of starting a second check."""
+    fakes, entered, gate = slow_answer_fakes()
+    with agent_app(fakes) as app:
+        check(app)
+        running = app.session_state['agent_session']
+        first = threading.Thread(target=lambda: list(running.run(lambda session: session.answer(V2.vote_id))))
+        first.start()
+        assert entered.wait(10)
+        threading.Timer(0.3, gate.set).start()
+        verify(app)
+        first.join(10)
+        assert fakes.starts == [CLAIM] and len(fakes.sessions) == 1
+        assert app.session_state['agent_session'] is running
+        assert not fakes.budgets[0].exceeded
+        assert has_verdict(app)
+
+
+def test_changing_the_claim_while_a_check_runs_cancels_the_dropped_checks_budget():
+    """I1: the dropped check's worker keeps running, but its next request is refused."""
+    from src.agent.budget import BudgetExceeded
+    fakes, entered, gate = slow_answer_fakes()
+    with agent_app(fakes) as app:
+        check(app)
+        running = app.session_state['agent_session']
+        worker = threading.Thread(target=lambda: list(running.run(lambda session: session.answer(V2.vote_id))))
+        worker.start()
+        assert entered.wait(10)
+        try:
+            app.text_area(key='claim_input').set_value(CLAIM + ' Und mehr.').run()
+            assert not app.exception
+            assert 'agent_session' not in app.session_state
+            with pytest.raises(BudgetExceeded):
+                fakes.budgets[0].reserve(b'')
+        finally:
+            gate.set()
+            worker.join(10)
+        assert len(fakes.sessions) == 1
+
+
+@needs_rent_booklet
+def test_mock_mode_marks_the_verdict_as_test_mode_and_saves_nothing(tmp_path, isolated_history):
+    """I2: a mock verdict carries the test-mode notice, is not saved and its report is not «live»."""
+    from src import check_report
+    from src.check_history import load_checks
+    records = []
+    render = check_report.render_check_report
+
+    def recording(given, *args, **kwargs):
+        records.extend(given)
+        return render(given, *args, **kwargs)
+
+    with patch('src.check_report.render_check_report', side_effect=recording), \
+         mock_mode_app(rent_index(), tmp_path) as app:
+        pick_source(app, 'Automatisch erkennen')
+        check(app)
+        assert has_verdict(app)
+        last = app.session_state['last_check']
+        assert last['notice'] == MOCK_NOTICE
+        assert any('notice-box' in value and MOCK_NOTICE in value for value in markdown(app))
+        assert not load_checks(isolated_history)
+        report = [record for record in records if record.get('source_file') == '2024-11-24_de.pdf']
+        assert report and {record['origin'] for record in report} == {'mock'}
+        app.selectbox(key='ui_language').set_value('fr').run()
+        assert any('Mode test, pas de verdict d’Apertus' in value for value in markdown(app))
+
+
+def test_multi_check_in_agent_mode_needs_a_given_source():
+    """I3: without a given source the multi-check button is off and says why; the old flow is unchanged."""
+    with agent_app(clear_fakes()) as app:
+        app.text_area(key='batch_text').set_value(BATCH_TEXT).run()
+        app.multiselect(key='batch_selected').set_value(app.multiselect(key='batch_selected').options).run()
+        assert app.button(key='run_batch').disabled
+        assert any(BATCH_HINT in item.value for item in app.caption)
+        app.checkbox(key='agent_own_source').check().run()
+        assert not app.button(key='run_batch').disabled
+        assert not any(BATCH_HINT in item.value for item in app.caption)
+
+
+def test_the_request_to_pick_the_source_ticks_the_box_so_a_chosen_booklet_runs():
+    """I4: after «Quelle selbst wählen» the box is already ticked; picking a booklet and clicking runs the check."""
+    fakes = Fakes([search_passages(V1), act('pruefen', vorlage_id=V1.vote_id)], index=FakeIndex(CLOSE))
+    with agent_app(fakes) as app:
+        check(app, FRENCH_CLAIM)
+        assert any('nur für deutsche Behauptungen' in item.value for item in app.warning)
+        assert app.checkbox(key='agent_own_source').value
+        source_box = next(expander for expander in app.expander if expander.label == 'Quelle selbst wählen')
+        assert source_box.proto.expanded
+        app.selectbox(key='ballot').set_value('24. November 2024').run()
+        app.radio(key='booklet_lang').set_value('DE').run()
+        app.selectbox(key='vote').set_value(V1.title).run()
+        verify(app)
+        assert fakes.sessions[-1][0] == V1.vote_id and len(fakes.sessions) == 2
+        assert not any('nur für deutsche Behauptungen' in item.value for item in app.warning)
+        assert has_verdict(app)
+
+
+def test_run_texts_in_error_boxes_are_not_rendered_as_markdown():
+    """M1: an exception text with Markdown is shown as text."""
+    raw = '**fett** [Link](https://example.com) `code` $x$'
+    fakes = clear_fakes(engine=FakeEngine(verify_error=RuntimeError(raw)))
+    with agent_app(fakes) as app:
+        check(app)
+        errors = [item.value for item in app.error]
+        assert any(r'\*\*fett\*\*' in value for value in errors)
+        for value in errors:
+            assert '**fett**' not in value and '](https' not in value and '$x$' not in value
+
+
+def test_the_mismatch_question_does_not_say_that_several_votes_fit():
+    """M4: the claim clearly fits V1, the action names V2: the question is neutral."""
+    fakes = Fakes([search_votes(), search_passages(V2)], index=FakeIndex(CLEAR))
+    with agent_app(fakes) as app:
+        check(app)
+        assert [button.label.split(' · ')[0] for button in options(app)] == [V1.title, V2.title]
+        assert not any('Mehrere Vorlagen passen' in value for value in markdown(app))
+        assert any('Welche Vorlage ist gemeint?' in value and agent_ui.TEXT_QUESTION_CHOOSE in value
+                   for value in markdown(app))
+
+
+def batch_prediction(**kwargs):
+    from src.inference import PredictionResult
+    return PredictionResult(claim=kwargs['claim'], label=1, label_name='Neutral', reasoning='Injected UI test',
+                            evidence=[], strategy=kwargs['strategy'], booklet_path=str(kwargs['booklet_pdf']),
+                            tokens_prompt=0, tokens_completion=0, tokens_total=0, latency_ms=0)
+
+
+def test_a_multi_check_drops_the_agent_check_above_it():
+    """M7: the steps of an earlier agent check do not stay above the multi-check's results."""
+    import streamlit as st
+    st.cache_resource.clear()
+    fakes = Fakes([search_passages(V1), act('pruefen', vorlage_id=V1.vote_id)], index=FakeIndex(CLOSE))
+    with patch('src.config.LLM_API_KEY', 'ui-test-placeholder'), patch('src.config.MOCK_APERTUS', False), \
+         patch('src.inference.ClaimVerificationEngine.verify_claim', side_effect=batch_prediction), \
+         agent_app(fakes) as app:
+        pick_source(app)
+        check(app)
+        assert step_texts(app) and has_verdict(app)
+        app.text_area(key='batch_text').set_value(BATCH_TEXT).run()
+        app.multiselect(key='batch_selected').set_value(app.multiselect(key='batch_selected').options).run()
+        app.button(key='run_batch').click().run()
+        assert not app.exception
+        assert 'agent_session' not in app.session_state
+        assert not step_texts(app)
+        assert any('Ergebnisse der Mehrfachprüfung' in value for value in markdown(app))
+    st.cache_resource.clear()
+
+
+BLOCK_AGENT_DEPENDENCIES = '''
+import sys
+class Blocked:
+    def find_spec(self, name, path=None, target=None):
+        if name.split(".")[0] in ("langgraph", "httpx"):
+            raise ImportError(f"blocked for this test: {name}")
+        return None
+sys.meta_path.insert(0, Blocked())
+'''
+
+
+def test_the_app_and_its_agent_modules_load_without_langgraph_and_httpx(tmp_path):
+    """M9 (Ruling A): with langgraph and httpx unimportable the app keeps the old flow; nothing is patched in the
+    app's modules, the import itself is blocked in a fresh interpreter."""
+    script = BLOCK_AGENT_DEPENDENCIES + '''
+from pathlib import Path
+from src import agent_app, agent_ui
+from src.agent import settings
+settings.INDEX_DIR = Path(sys.argv[2])  # an index directory exists: only the missing packages turn the agent off
+assert agent_app.agent_available() is False
+from streamlit.testing.v1 import AppTest
+app = AppTest.from_file(sys.argv[1], default_timeout=50).run()
+assert not app.exception, [item.value for item in app.exception]
+assert any("Agentenschicht ist nicht verfügbar" in item.value for item in app.caption)
+assert not any(name.split(".")[0] in ("langgraph", "httpx") for name in sys.modules)
+print("loaded without the agent layer")
+'''
+    environment = {key: value for key, value in os.environ.items() if key != 'FACT_ATTACK_AGENT'}
+    environment['FACT_ATTACK_AGENT_MOCK'] = '1'  # past the key check: the imports are what is tested
+    result = subprocess.run([sys.executable, '-c', script, str(APP), str(tmp_path)], cwd=APP.parent, env=environment,
+                            capture_output=True, text=True, timeout=600)
+    assert result.returncode == 0, result.stderr[-3000:]
+    assert 'loaded without the agent layer' in result.stdout

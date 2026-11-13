@@ -6,7 +6,9 @@ is registered in the session's backend (`LocalBackend.add_vote`) and is always t
 
 A catalog booklet chosen in the app without a vote ("Automatisch erkennen") gets the same kind of vote when the index
 has none for it (it has a "#0" only for booklets without a readable contents page): `whole_booklet_vote`, registered
-the same way. Its `engine_vote` is None, so the engine detects the vote inside the booklet as in the old flow.
+the same way. So does a French or Italian booklet, which the German-only index does not know at all, with or without
+one of its votes chosen. Its `engine_vote` is None, so the engine detects the vote inside the booklet as in the old
+flow.
 """
 import re
 from pathlib import Path
@@ -64,8 +66,9 @@ def upload_vote(path: Path, language: str) -> VoteRef:
 
 
 def whole_booklet_vote(booklets_dir: Path, known: VoteRef) -> VoteRef:
-    """The whole-booklet vote ("#0") of the catalog booklet that `known`, a vote of the index, belongs to: its date
-    and language, the title `WHOLE_BOOKLET_TITLE` and all pages of `booklets_dir / f"{source_id}.pdf"`. The file
-    name comes from the index, never from free input. ValueError (German) if that PDF cannot be read."""
+    """The whole-booklet vote ("#0") of the catalog booklet that `known`, a vote of the index or a ref built from the
+    booklet's catalog entry, belongs to: its date and language, the title `WHOLE_BOOKLET_TITLE` and all pages of
+    `booklets_dir / f"{source_id}.pdf"`. The file name comes from the index or the catalog, never from free input.
+    ValueError (German) if that PDF cannot be read."""
     pages = _all_pages(Path(booklets_dir) / f"{known.source_id}.pdf", "Das Büchlein")
     return VoteRef(f"{known.source_id}#0", known.source_id, known.date, known.language, WHOLE_BOOKLET_TITLE, pages)

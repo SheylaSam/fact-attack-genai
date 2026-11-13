@@ -1364,7 +1364,8 @@ def _apply_case(case: dict, set_active: bool = True) -> None:
     st.session_state["claim_input"] = case["claim"]
     st.session_state["claim_lang"] = case["claim_language"].upper()
     st.session_state["active_case"] = case["id"] if set_active else None
-    st.session_state.pop("uploaded_pdf", None)  # examples always use their official source
+    st.session_state.pop("uploaded_pdf", None)  # an example's source is its official booklet, never an upload
+    st.session_state["agent_own_source"] = True  # and in agent mode that booklet is the given source
     _reset_source_filters()
 
 
@@ -1383,11 +1384,30 @@ AGENT_MARKS = {"done": "✓", "ask": "?", "error": "✕", "running": "…"}
 AGENT_BAD_UPLOAD = "Dieses PDF kann nicht gelesen werden. Lade eine andere Datei hoch oder entferne sie."
 AGENT_UNKNOWN_SOURCE = ("Der Agent kann die gewählte Quelle nicht prüfen. "
                         "Wähle eine andere Quelle oder lass den Agenten die Vorlage suchen.")
+AGENT_MOCK_NOTICE = "Testmodus, kein Apertus-Urteil"
+AGENT_BATCH_NEEDS_SOURCE = ("Für die Mehrfachprüfung die Quelle unter «Quelle selbst wählen» vorgeben "
+                            "oder ein eigenes PDF laden.")
 
 
 def _drop_agent_check() -> None:
+    """Forgets the tab's agent check; a worker it still runs gets no further request (its budget is cancelled)."""
+    check = st.session_state.get("agent_session")
+    if check is not None:
+        check.cancel()
     for key in AGENT_KEYS:
         st.session_state.pop(key, None)
+
+
+def _vote_title(title: str) -> str:
+    """A vote title as shown: the app's placeholders for a whole booklet and an own PDF are translated, an official
+    title stays in its original language."""
+    return t(title) if title in (agent_ui.TITLE_WHOLE_BOOKLET, agent_ui.TITLE_UPLOAD) else title
+
+
+def _md(text) -> str:
+    """Run-derived text (exception messages, model output) for st.error/st.warning, which render Markdown: every
+    Markdown and LaTeX character is escaped, so the text is shown as written."""
+    return re.sub(r"([\\`*_{}\[\]()#+\-.!|<>~$])", r"\\\1", str(text))
 
 
 def _last_vote():
@@ -1403,9 +1423,9 @@ def _vote_date(iso_date: str) -> str:
 
 def _new_agent_check(own_source: bool, pdf_path: Path, vote: Optional[str], upload_language: Optional[str] = None):
     """A new AgentCheck for the tab's selection, or None after a shown message. With `own_source` the chosen
-    booklet (and vote) is the fixed vote; a booklet chosen without a vote is checked as a whole when the index has
-    no whole-booklet vote for it (the session registers that vote itself); a selection the agent's index does not
-    hold is a translated message. With `upload_language` the stored upload at `pdf_path` is the fixed vote, also
+    booklet (and vote) is the fixed vote; a booklet chosen without a vote, or a French or Italian booklet the
+    German-only index does not know, is checked as a whole when the index has no whole-booklet vote for it (the
+    session registers that vote itself); a selection that is none of these is a translated message. With `upload_language` the stored upload at `pdf_path` is the fixed vote, also
     registered by the session; an unreadable file is a translated message, never the library's text."""
     try:
         with st.spinner(t("Der Agent wird vorbereitet …")):
@@ -1420,7 +1440,8 @@ def _new_agent_check(own_source: bool, pdf_path: Path, vote: Optional[str], uplo
             elif own_source:
                 votes = agent_app.agent_votes()
                 try:
-                    chosen = agent_ui.vote_for_selection(votes, pdf_path.stem, vote, booklets_dir=config.BOOKLETS_DIR)
+                    chosen = agent_ui.vote_for_selection(votes, pdf_path.stem, vote, booklets_dir=config.BOOKLETS_DIR,
+                                                         catalog=AVAILABLE_SOURCES)
                 except ValueError:
                     st.error(t(AGENT_UNKNOWN_SOURCE))
                     return None
@@ -1433,8 +1454,8 @@ def _new_agent_check(own_source: bool, pdf_path: Path, vote: Optional[str], uplo
                     lambda fixed, on_event: agent_app.make_agent_session(fixed, on_event, session_vote=session_vote),
                     session_vote.vote_id)
             return agent_app.AgentCheck(agent_app.make_agent_session, fixed_vote_id)
-    except Exception as exc:  # no API key, no index: the check cannot start
-        st.error(t('Die Prüfung konnte nicht abgeschlossen werden ({v0}).').format(v0=exc))
+    except Exception as exc:  # no index, a client that cannot start: the check cannot start
+        st.error(t('Die Prüfung konnte nicht abgeschlossen werden ({v0}).').format(v0=_md(exc)))
         return None
 
 
@@ -1454,12 +1475,12 @@ def _draw_agent_steps(placeholder, check, events, *, question=None) -> Optional[
         st.markdown("#### " + t("Schritte der Prüfung"))
         for index, row in enumerate(rows):
             if row.mark == "error":
-                st.error(f"{_step_line(row)}\n\n{row.error}")
+                st.error(f"{_md(_step_line(row))}\n\n{_md(row.error)}")
             else:
                 st.markdown(f'<div class="agent-step agent-step-{row.mark}">{html.escape(_step_line(row))}</div>',
                             unsafe_allow_html=True)
             if question is not None and index == question_at:
-                st.markdown(f"**{t(agent_ui.TITLE_QUESTION)}** {t(agent_ui.TEXT_QUESTION)}")
+                st.markdown(f"**{t(agent_ui.TITLE_QUESTION)}** {t(agent_ui.question_text(events))}")
                 for option in agent_ui.options_with_last(question.options, question.last_vote):
                     label = t(agent_ui.TEXT_LAST_VOTE).format(v0=option.label) if option.is_last else option.label
                     if st.button(f"{label} · {_vote_date(option.vote.date)}", width="stretch",
@@ -1497,6 +1518,8 @@ def _adopt_agent_turn(check, save_history: bool) -> None:
     st.session_state["agent_events"] = list(check.session.events)
     st.session_state["agent_turn"] = turn  # an exception of start/answer is shown as an error
     if kind == "turn" and getattr(turn, "outcome", None) == "quelle_fehlt":
+        if agent_ui.asks_to_pick_source(turn):  # tick «Diese Quelle vorgeben» with the expander (before its widget)
+            st.session_state["agent_pick_source"] = True
         st.rerun()  # the source expander was drawn before this turn existed; it opens for "pick the source" now
     if kind != "turn" or agent_app.is_question(turn) or turn.prediction is None:
         return
@@ -1505,10 +1528,13 @@ def _adopt_agent_turn(check, save_history: bool) -> None:
     vote = turn.vote
     source = (config.BOOKLETS_DIR / f"{vote.source_id}.pdf", vote.date or None, vote.language, vote.title)  # an upload: no date
     prediction = agent_ui.prediction_for_card(turn)
+    mock = agent_app.mock_mode()  # the mock client's verdict is no Apertus verdict: marked, never saved
     st.session_state["last_check"] = {"signature": st.session_state["agent_signature"], "result": prediction,
-                                      "notice": None, "created_at": datetime.now(timezone.utc).isoformat(),
+                                      "notice": AGENT_MOCK_NOTICE if mock else None,
+                                      "origin": "mock" if mock else "live",
+                                      "created_at": datetime.now(timezone.utc).isoformat(),
                                       "source": source, "discarded": agent_app.is_discarded(turn)}
-    if save_history:
+    if save_history and not mock:
         try:
             save_check(HISTORY_PATH, result=prediction.model_dump(mode="json"), source_path=source[0],
                        date=source[1], language=vote.language, vote=vote.title)
@@ -1521,14 +1547,15 @@ def _show_agent_outcome(turn) -> None:
     if turn is None:
         return
     if isinstance(turn, Exception):
-        st.error(t('Die Prüfung konnte nicht abgeschlossen werden ({v0}).').format(v0=turn))
+        st.error(t('Die Prüfung konnte nicht abgeschlossen werden ({v0}).').format(v0=_md(turn)))
         return
     if agent_app.is_question(turn):
         return
     view = agent_ui.outcome_view(turn)
     if view.kind != "verdict":
         show = {"ok": st.success, "warn": st.warning, "error": st.error, "info": st.info}[view.tone]
-        show(f"**{t(view.title)}** · {t(view.text)}")
+        text = t(view.text) if view.text in agent_ui.TEXT_KEYS else _md(view.text)  # else the run's own error
+        show(f"**{t(view.title)}** · {text}")
 
 
 def run_agent_check(steps, verify_clicked: bool, claim: str, claim_lang: str, signature: tuple,
@@ -1536,8 +1563,11 @@ def run_agent_check(steps, verify_clicked: bool, claim: str, claim_lang: str, si
                     upload_language: Optional[str] = None) -> None:
     """The fact-check tab on the agent: starts a check on «Behauptung prüfen», shows its steps live in `steps`, the
     question inside its step and continues the same check with the clicked option. Draws into the current column.
-    With `upload_language` the PDF at `pdf_path` is an own upload in that language and the fixed source."""
-    if verify_clicked and claim.strip():
+    With `upload_language` the PDF at `pdf_path` is an own upload in that language and the fixed source. A click
+    while a check with the same input still runs (a double click) adopts that check instead of starting another."""
+    current = st.session_state.get("agent_session")
+    adopt = current is not None and current.running and st.session_state.get("agent_signature") == signature
+    if verify_clicked and claim.strip() and not adopt:
         st.session_state.pop("batch_check", None)
         st.session_state.pop("last_check", None)
         _drop_agent_check()
@@ -1631,6 +1661,10 @@ with tab_factcheck:
     agent_on = agent_app.agent_available()
     uploaded_file = st.session_state.get("uploaded_pdf")
     agent_mode = agent_on
+    # «Quelle selbst wählen» after a claim in another language ticks the box too (set before its widget exists)
+    picked_source = bool(st.session_state.pop("agent_pick_source", False)) and agent_mode
+    if picked_source:
+        st.session_state["agent_own_source"] = True
     own_upload = agent_mode and uploaded_file is not None  # an own PDF is always the check's fixed source
     own_source = own_upload or (agent_mode and bool(st.session_state.get("agent_own_source")))
     col_in, col_out = st.columns([1, 1.12], gap="large")
@@ -1757,8 +1791,12 @@ with tab_factcheck:
                 st.session_state["batch_selected"] = [value for value in st.session_state["batch_selected"] if value in candidates]
             selected_claims = st.multiselect(t("Aussagen auswählen"), candidates, key="batch_selected", max_selections=MAX_CHECKS)
             st.caption(t("{n} Einzelprüfungen ausgewählt (maximal 5). Jede kann mehrere API-Anfragen auslösen. Alle verwenden die oben gewählte Quelle und Vorlage.").format(n=len(selected_claims)))
+            batch_needs_source = agent_mode and not own_source  # the agent's own search does not run here
+            if batch_needs_source:
+                st.caption(t(AGENT_BATCH_NEEDS_SOURCE))
             batch_clicked = st.button(t("Ausgewählte Aussagen prüfen"), key="run_batch",
-                                      disabled=not selected_claims or (no_source_matches and uploaded_file is None))
+                                      disabled=not selected_claims or batch_needs_source
+                                      or (no_source_matches and uploaded_file is None))
         batch_signature = (tuple(selected_claims), str(pdf_path),
                            hashlib.sha256(pdf_path.read_bytes()).hexdigest() if pdf_path.exists() else None,
                            vote, strat, claim_lang_choice)
@@ -1768,9 +1806,11 @@ with tab_factcheck:
         retry_clicked = False
         if retry_count:
             st.caption(t("Nur {n} fehlgeschlagene Aussagen werden erneut geprüft; erfolgreiche Antworten bleiben erhalten.").format(n=retry_count))
-            retry_clicked = st.button(t("Nur fehlgeschlagene Aussagen erneut prüfen"), key="retry_batch")
+            retry_clicked = st.button(t("Nur fehlgeschlagene Aussagen erneut prüfen"), key="retry_batch",
+                                      disabled=batch_needs_source)
 
     if batch_clicked or retry_clicked:
+        _drop_agent_check()  # an earlier agent check's steps must not stay above the multi-check's results
         with col_out:
             if not pdf_path.exists():
                 st.error(t("Die gewählte PDF-Datei ist nicht verfügbar."))
@@ -1805,6 +1845,8 @@ with tab_factcheck:
     # ── Verification ─────────────────────────────────────────────────────────
     if agent_mode:  # the agent finds the vote itself unless the source is given: the selection counts only then
         signature = ("agent", claim.strip(), (pdf_path.name, vote, lang_code) if own_source else None, claim_lang)
+        if picked_source and st.session_state.get("agent_session") is not None:
+            st.session_state["agent_signature"] = signature  # the app ticked the box: the request to pick stays shown
         if st.session_state.get("agent_signature") != signature:  # changed input: an open question is dropped
             _drop_agent_check()
         with col_out:
@@ -1920,7 +1962,7 @@ with tab_factcheck:
             card_pdf, card_date, card_lang, card_vote = last_check.get("source") or (pdf_path, source_date, lang_code, vote)
             discarded = last_check.get("discarded", False)  # its probabilities and number check belong to a dropped label
             if "source" in last_check:
-                st.caption(t("Geprüfte Vorlage: {title}").format(title=t(card_vote)))  # an upload's title is a text
+                st.caption(t("Geprüfte Vorlage: {title}").format(title=_vote_title(card_vote)))
 
             b_data = engine._get_booklet_data(card_pdf)
             total_pages = len(b_data["pages"])
@@ -1946,7 +1988,8 @@ with tab_factcheck:
                              "source_sha256": hashlib.sha256(card_pdf.read_bytes()).hexdigest(),
                              "date": card_date, "language": card_lang, "vote": card_vote,
                              "created_at": last_check.get("created_at"),
-                             "origin": "saved_demo" if last_check.get("notice") else "live"}
+                             "origin": last_check.get("origin")  # an agent check's: "live" or "mock"
+                             or ("saved_demo" if last_check.get("notice") else "live")}
             st.download_button(t("Prüfbericht herunterladen (HTML)"),
                                data=render_check_report([_report_source(report_record)], UI_LANGUAGE),
                                file_name="faktencheck.html", mime="text/html", key="single_report")
@@ -2134,7 +2177,7 @@ with tab_history:
         else:
             st.caption(t("Gespeicherte Liveantwort · Keine erneute API-Anfrage beim Öffnen"))
         if record.get("vote"):
-            st.text(t("Vorlage") + ": " + record["vote"])
+            st.text(t("Vorlage") + ": " + _vote_title(record["vote"]))
         source_path = matching_source(config.BOOKLETS_DIR, record)
         if source_path is None:
             st.warning(t("Die ursprüngliche PDF-Datei fehlt oder hat sich verändert. Die gespeicherten Zitate bleiben lesbar; eine Originalvorschau wird nicht angezeigt."))

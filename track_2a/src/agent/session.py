@@ -52,6 +52,7 @@ class AgentSession:
                  nachsuche: bool = True, max_steps: int = settings.MAX_STEPS):
         self._tools = tools
         self._tracer = tracer
+        self.budget = budget  # the check's RequestBudget, if any: the app cancels it when it drops the check
         self._graph = build_graph(tools, decider, engine, tracer, max_steps, budget=budget, nachsuche=nachsuche,
                                   checkpointer=make_checkpointer())
         self._config: Optional[dict] = None  # the thread of the current check

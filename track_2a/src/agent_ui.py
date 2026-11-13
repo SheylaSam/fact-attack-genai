@@ -50,6 +50,9 @@ TITLE_CONTRADICTED = "Widerspricht dem Abstimmungsbüchlein"
 TEXT_CONTRADICTED = "Das Büchlein enthält Aussagen, die dieser Behauptung widersprechen."
 TITLE_QUESTION = "Welche Vorlage ist gemeint?"
 TEXT_QUESTION = "Mehrere Vorlagen passen zur Behauptung. Wähle die Vorlage, die du meinst; danach geht die Prüfung weiter."
+TEXT_QUESTION_CHOOSE = "Wähle die Vorlage, die du meinst; danach geht die Prüfung weiter."  # the guard's mismatch
+TITLE_WHOLE_BOOKLET = "Gesamtes Büchlein"  # = source_index.WHOLE_BOOKLET_TITLE, the title of a "#0" vote
+TITLE_UPLOAD = "Eigenes PDF"  # = uploads.UPLOAD_TITLE, the title of an own PDF's vote
 TITLE_PICK_SOURCE = "Quelle selbst wählen"
 TEXT_PICK_SOURCE = ("Die Suche über alle Vorlagen gibt es bisher nur für deutsche Behauptungen. Wähle die Quelle selbst; "
                     "mit gewählter Quelle wird die Behauptung in jeder Sprache geprüft.")
@@ -62,7 +65,7 @@ TEXT_TECHNICAL = "Die Prüfung wurde wegen eines technischen Fehlers abgebrochen
 TEXT_KEYS: Tuple[str, ...] = tuple(dict.fromkeys((
     TITLE_ASK, TITLE_DECIDE, TITLE_RUNNING, *TOOL_TITLES.values(), *NODE_TITLES.values(),
     TITLE_SUPPORTED, TEXT_SUPPORTED, TITLE_NOT_PROVEN, TEXT_NOT_PROVEN, TITLE_CONTRADICTED, TEXT_CONTRADICTED,
-    TITLE_QUESTION, TEXT_QUESTION, TITLE_PICK_SOURCE, TEXT_PICK_SOURCE, TITLE_NO_SOURCE, TEXT_NO_SOURCE,
+    TITLE_QUESTION, TEXT_QUESTION, TEXT_QUESTION_CHOOSE, TITLE_WHOLE_BOOKLET, TITLE_UPLOAD, TITLE_PICK_SOURCE, TEXT_PICK_SOURCE, TITLE_NO_SOURCE, TEXT_NO_SOURCE,
     TEXT_LAST_VOTE, TITLE_TECHNICAL, TEXT_TECHNICAL)))
 
 # outcome -> NLI label (the card's label); the same mapping as the agent graph's, without importing langgraph
@@ -165,10 +168,24 @@ class OutcomeView:
     tone: Literal["ok", "warn", "error", "info"]
 
 
-def _language_stop(result: "AgentResult") -> bool:
+def asks_to_pick_source(result: Any) -> bool:
     """`quelle_fehlt` before any search because the claim's language needs a chosen source (the graph's `prepare`)."""
-    return any(item.node == "finish" and item.tool == "quelle_fehlt" and "sprache" in item.args
-               for item in result.events)
+    return getattr(result, "outcome", None) == "quelle_fehlt" and any(
+        item.node == "finish" and item.tool == "quelle_fehlt" and "sprache" in item.args for item in result.events)
+
+
+def question_text(events: Sequence[TraceEvent]) -> str:
+    """The text under the open question: "several votes fit" unless the latest question is the guard's mismatch
+    (the claim clearly fits one vote, the action named another), which gets a neutral text. The guard's assessment
+    sits in the stopped action's `guard` data while the question is open, and in the `ask` event's data after it."""
+    for item in reversed(events):
+        data = item.data or {}
+        if item.node == "act" and "guard" in data:
+            data = data["guard"] or {}
+        elif item.node != "ask":
+            continue
+        return TEXT_QUESTION_CHOOSE if "chosen" in data else TEXT_QUESTION
+    return TEXT_QUESTION
 
 
 def outcome_view(result: "AgentResult") -> OutcomeView:
@@ -183,7 +200,7 @@ def outcome_view(result: "AgentResult") -> OutcomeView:
     if outcome == "rueckfrage":
         return OutcomeView("state", TITLE_QUESTION, TEXT_QUESTION, "info")
     if outcome == "quelle_fehlt":
-        if _language_stop(result):
+        if asks_to_pick_source(result):
             return OutcomeView("state", TITLE_PICK_SOURCE, TEXT_PICK_SOURCE, "warn")
         return OutcomeView("state", TITLE_NO_SOURCE, TEXT_NO_SOURCE, "warn")
     return OutcomeView("state", TITLE_TECHNICAL, _flat(result.error) if result.error else TEXT_TECHNICAL, "error")
@@ -209,13 +226,18 @@ def prediction_for_card(result: "AgentResult") -> PredictionResult:
 
 
 def vote_for_selection(votes: Mapping[str, "VoteRef"], source_id: str, title: Optional[str], *,
-                       booklets_dir: Path) -> "VoteRef":
+                       booklets_dir: Path, catalog: Optional[Mapping[str, Mapping[str, Any]]] = None) -> "VoteRef":
     """The vote that the app's source selection (a booklet and optionally one vote title) means: the booklet's vote
     with that title, otherwise its whole-booklet vote (`#0`) from `votes`. Without a title ("Automatisch erkennen")
     and without a `#0` in `votes` it is a new whole-booklet vote of that booklet (`uploads.whole_booklet_vote`, all
     pages of its PDF in `booklets_dir`), which the check's backend has to register (`LocalBackend.add_vote`); the
-    only function of this module that reads a file. ValueError if the booklet is not in `votes`, a title names none
-    of its votes or its PDF cannot be read."""
+    only function of this module that reads a file.
+
+    A booklet of `catalog` (file name -> catalog entry, as `available_sources` returns it) that `votes` does not
+    know at all, a French or Italian booklet of the German-only index, is that whole-booklet vote too, with the
+    entry's date and language, also with a title that is one of the entry's votes (the engine then finds the vote
+    inside the booklet). ValueError if the booklet is in neither, a title names none of its votes or its PDF cannot
+    be read."""
     if title is not None:
         for vote in votes.values():
             if vote.source_id == source_id and vote.title == title:
@@ -224,10 +246,19 @@ def vote_for_selection(votes: Mapping[str, "VoteRef"], source_id: str, title: Op
     if whole is not None:
         return whole
     known = next((vote for vote in votes.values() if vote.source_id == source_id), None)
-    if title is not None or known is None:
+    entry = (catalog or {}).get(f"{source_id}.pdf") if known is None else None
+    if entry is not None and (title is None or title in entry.get("votes", ())):
+        known = _catalog_ref(source_id, entry)
+    elif title is not None or known is None:
         raise ValueError(f"Für die Quelle {source_id} gibt es keine passende Vorlage.")
     from src.agent.uploads import whole_booklet_vote  # reads the PDF (PyMuPDF), only when it is needed
     return whole_booklet_vote(booklets_dir, known)
+
+
+def _catalog_ref(source_id: str, entry: Mapping[str, Any]) -> "VoteRef":
+    """A stand-in for an index vote of a catalog booklet: what `whole_booklet_vote` needs (source, date, language)."""
+    from src.agent.source_index import VoteRef
+    return VoteRef(f"{source_id}#0", source_id, entry["date"], entry["language"], TITLE_WHOLE_BOOKLET, ())
 
 
 # --- answer buttons ------------------------------------------------------------------------------------------------

@@ -144,6 +144,44 @@ class AddVoteTests(unittest.TestCase):
                     self.backend.add_vote(vote)
         self.assertEqual(self.backend.votes, before)
 
+    def test_add_vote_accepts_a_catalog_booklet_the_index_does_not_know(self):
+        """French and Italian booklets are in the catalog but not in the German-only index: with the catalog
+        allowlist their whole booklet is accepted; parts, paths, other ids and index votes stay refused."""
+        french = VoteRef('2024-11-24_fr#0', '2024-11-24_fr', '2024-11-24', 'fr', WHOLE_BOOKLET_TITLE, (1, 2, 3))
+        with self.assertRaises(ValueError):  # without the allowlist only the index makes a source known
+            self.backend.add_vote(french)
+        index_whole = VoteRef('2025-09-28_de#0', '2025-09-28_de', '2025-09-28', 'de', WHOLE_BOOKLET_TITLE, (1, 2))
+        index = FakeIndex(votes=(V1, index_whole))
+        catalog = ('2024-11-24_fr.pdf', '2024-11-24_de.pdf', '2025-09-28_de.pdf', '../evil.pdf')
+        backend = LocalBackend(index, FakeEngine(), self.dir, catalog=catalog)
+        backend.add_vote(french)
+        self.assertEqual(backend.votes[french.vote_id], french)
+        self.assertNotIn(french.vote_id, index.votes)  # the shared index is never touched
+        self.assertNotIn(french.vote_id, LocalBackend(index, FakeEngine(), self.dir, catalog=catalog).votes)
+
+        def like_french(vote_id, source_id, pages=french.pages):
+            return VoteRef(vote_id, source_id, '2024-11-24', 'fr', WHOLE_BOOKLET_TITLE, pages)
+        refused = {
+            'not in the catalog': like_french('2024-11-24_it#0', '2024-11-24_it'),
+            'part of a catalog booklet': like_french('2024-11-24_fr#1', '2024-11-24_fr'),
+            'no pages': like_french('2024-11-24_fr#0', '2024-11-24_fr', ()),
+            'id and source differ': like_french('2024-11-24_it#0', '2024-11-24_fr'),
+            'file name as source': like_french('2024-11-24_fr.pdf#0', '2024-11-24_fr.pdf'),
+            'path before a catalog source': like_french('../2024-11-24_fr#0', '../2024-11-24_fr'),
+            'folder before a catalog source': like_french('x/2024-11-24_fr#0', 'x/2024-11-24_fr'),
+            'path in the allowlist': like_french('../evil#0', '../evil'),
+            'shadows an index vote': VoteRef(index_whole.vote_id, index_whole.source_id, index_whole.date, 'de',
+                                             WHOLE_BOOKLET_TITLE, (1, 2, 3)),
+            'catalog vote': V1,
+        }
+        for name, vote in refused.items():
+            with self.subTest(name):
+                fresh = LocalBackend(index, FakeEngine(), self.dir, catalog=catalog)
+                with self.assertRaises(ValueError):
+                    fresh.add_vote(vote)
+                self.assertEqual(fresh.votes, index.votes)
+        self.assertIs(backend.votes[index_whole.vote_id], index_whole)
+
     def test_a_catalog_vote_is_never_shadowed_by_the_whole_booklet_vote(self):
         from src import agent_ui
         catalog = VoteRef('2024-11-24_de#0', '2024-11-24_de', '2024-11-24', 'de', WHOLE_BOOKLET_TITLE, (2, 3, 4, 5))

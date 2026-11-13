@@ -274,6 +274,59 @@ class VoteForSelectionTests(unittest.TestCase):
             self.select(votes, '2025-09-28_de', None)
 
 
+    def test_a_catalog_booklet_the_index_does_not_know_is_checked_as_a_whole(self):
+        from src.agent.source_index import WHOLE_BOOKLET_TITLE
+        catalog = {'2024-11-24_fr.pdf': {'date': '2024-11-24', 'language': 'fr',
+                                         'votes': ['Sous-location', 'Besoin propre']}}
+        write_pdf(self.dir / '2024-11-24_fr.pdf', 4)
+
+        def select(source_id, title):
+            return agent_ui.vote_for_selection(self.votes, source_id, title, booklets_dir=self.dir, catalog=catalog)
+        whole = VoteRef('2024-11-24_fr#0', '2024-11-24_fr', '2024-11-24', 'fr', WHOLE_BOOKLET_TITLE, (1, 2, 3, 4))
+        self.assertEqual(select('2024-11-24_fr', None), whole)
+        self.assertEqual(select('2024-11-24_fr', 'Besoin propre'), whole)  # a vote of that booklet: checked whole
+        self.assertNotIn(whole.vote_id, self.votes)
+        with self.assertRaises(ValueError):  # a title that names none of the booklet's votes stays an error
+            select('2024-11-24_fr', 'Mietrecht: Untermiete')
+        with self.assertRaises(ValueError):  # not in the catalog: unknown, even with a PDF
+            write_pdf(self.dir / '2024-11-24_it.pdf', 2)
+            select('2024-11-24_it', None)
+        with self.assertRaises(ValueError):  # without the catalog the index alone makes a booklet known
+            self.select(self.votes, '2024-11-24_fr', None)
+        (self.dir / '2024-11-24_fr.pdf').unlink()
+        with self.assertRaises(ValueError):  # the booklet's PDF is missing
+            select('2024-11-24_fr', None)
+        self.assertIs(select('2024-11-24_de', 'Mietrecht: Untermiete'), V1)  # indexed booklets are unchanged
+
+
+class WholeBookletTitleTests(unittest.TestCase):
+    def test_the_placeholder_titles_are_translated_texts_of_this_module(self):
+        from src.agent.source_index import WHOLE_BOOKLET_TITLE
+        from src.agent.uploads import UPLOAD_TITLE
+        self.assertEqual(agent_ui.TITLE_WHOLE_BOOKLET, WHOLE_BOOKLET_TITLE)
+        self.assertEqual(agent_ui.TITLE_UPLOAD, UPLOAD_TITLE)
+        self.assertIn(agent_ui.TITLE_WHOLE_BOOKLET, agent_ui.TEXT_KEYS)
+        self.assertIn(agent_ui.TITLE_UPLOAD, agent_ui.TEXT_KEYS)
+
+
+class QuestionTextTests(unittest.TestCase):
+    def test_the_mismatch_question_does_not_claim_that_several_votes_fit(self):
+        ambiguous = [event(2, 'ask', 'rueckfrage', 'Rückfrage', data={'kind': 'mehrdeutig'})]
+        mismatch = [event(2, 'ask', 'rueckfrage', 'Rückfrage',
+                          data={'kind': 'eindeutig', 'top': V1.vote_id, 'chosen': V2.vote_id})]
+        model = [event(2, 'ask', 'rueckfrage', 'Rückfrage', data={'options': []})]
+        stopped = [event(2, 'act', 'suche_passagen', 'Wächter: …',  # the open question: no ask event yet
+                         data={'guard': {'kind': 'eindeutig', 'top': V1.vote_id, 'chosen': V2.vote_id}}),
+                   event(3, 'decide', 'pruefen', 'pruefen gewählt')]
+        self.assertEqual(agent_ui.question_text(stopped), agent_ui.TEXT_QUESTION_CHOOSE)
+        self.assertEqual(agent_ui.question_text([]), agent_ui.TEXT_QUESTION)
+        self.assertEqual(agent_ui.question_text(ambiguous), agent_ui.TEXT_QUESTION)
+        self.assertEqual(agent_ui.question_text(model), agent_ui.TEXT_QUESTION)
+        self.assertEqual(agent_ui.question_text(mismatch), agent_ui.TEXT_QUESTION_CHOOSE)
+        self.assertNotIn('Mehrere Vorlagen', agent_ui.TEXT_QUESTION_CHOOSE)
+        self.assertEqual(agent_ui.question_text(mismatch + ambiguous), agent_ui.TEXT_QUESTION)  # the latest counts
+
+
 class OptionsWithLastTests(unittest.TestCase):
     def test_options_with_last_adds_one_extra_button_or_marks_the_existing_one(self):
         # a last vote outside the options: one more button, after the options

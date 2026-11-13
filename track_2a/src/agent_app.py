@@ -25,9 +25,19 @@ AGENT_SWITCH = "FACT_ATTACK_AGENT"  # "0" keeps the old flow
 AGENT_MOCK = "FACT_ATTACK_AGENT_MOCK"  # "1": scripted decider and mock Apertus client, no request leaves the machine
 
 
+def mock_mode() -> bool:
+    """`FACT_ATTACK_AGENT_MOCK=1`: the scripted decider and the mock Apertus client; its verdicts are no Apertus
+    verdicts."""
+    return os.environ.get(AGENT_MOCK) == "1"
+
+
 def agent_available() -> bool:
-    """The tab runs through the agent: not switched off, the source index exists and langgraph and httpx import."""
+    """The tab runs through the agent: not switched off, the source index exists, an API key is configured (like the
+    CLI's real run; not needed in mock mode) and langgraph and httpx import. Without a key the old flow keeps its
+    saved demo results. The key's value is only tested for presence, never shown."""
     if os.environ.get(AGENT_SWITCH) == "0" or not settings.INDEX_DIR.is_dir():
+        return False
+    if not mock_mode() and not config.LLM_API_KEY:
         return False
     try:
         for name in ("langgraph", "httpx"):
@@ -49,6 +59,13 @@ def get_agent_index():
 def agent_votes() -> Mapping[str, Any]:
     """vote_id -> VoteRef of the agent's source index."""
     return get_agent_index().votes
+
+
+def catalog_sources() -> Mapping[str, Any]:
+    """File name -> catalog entry of the booklets installed locally (the app's `AVAILABLE_SOURCES`): the allowlist
+    of the booklets a check may read as a whole, also those the German-only index does not know."""
+    from src.booklet_catalog import available_sources, load_catalog
+    return available_sources(config.BOOKLETS_DIR, load_catalog(config.DATA_DIR / "booklet_catalog.json"))
 
 
 def make_agent_session(fixed_vote_id: Optional[str], on_event: Callable[[TraceEvent], None],
@@ -75,14 +92,14 @@ def make_agent_session(fixed_vote_id: Optional[str], on_event: Callable[[TraceEv
     from src.apertus_client import ApertusClient
     from src.inference import ClaimVerificationEngine
 
-    mock = os.environ.get(AGENT_MOCK) == "1"
+    mock = mock_mode()
     run_id = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S}-app-{uuid.uuid4().hex[:8]}"
     engine = ClaimVerificationEngine(apertus_client=ApertusClient(mock=mock))
     journal = None if mock else settings.TRACE_DIR / f"{run_id}.requests.jsonl"
     budget = RequestBudget(limit=settings.MAX_REQUESTS, journal_path=journal)
     if not mock:
         install_on_apertus(engine.client, budget)  # the NLI client; the agent LLM is counted in make_decider
-    backend = LocalBackend(get_agent_index(), engine, config.BOOKLETS_DIR)
+    backend = LocalBackend(get_agent_index(), engine, config.BOOKLETS_DIR, catalog=catalog_sources())
     if session_vote is not None:
         backend.add_vote(session_vote)
         fixed_vote_id = session_vote.vote_id
@@ -127,6 +144,13 @@ class AgentCheck:
     @property
     def running(self) -> bool:
         return self._lock.locked()
+
+    def cancel(self) -> None:
+        """The check is dropped: its session's budget refuses every further request, so a worker that still runs
+        ends with the budget's refusal (a technical error) instead of sending the rest of its requests."""
+        budget = getattr(self.session, "budget", None)
+        if budget is not None:
+            budget.cancel()
 
     def run(self, call: Callable[[Any], Any]) -> Iterator[TraceEvent]:
         """Runs `call(session)` in a worker thread and yields its events as they come. Yields nothing and runs

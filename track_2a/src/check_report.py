@@ -5,6 +5,10 @@ from urllib.parse import urlparse
 from src.booklet_catalog import OFFICIAL_HOSTS
 from src.ui_i18n import translate
 
+# the agent's vote titles for a whole booklet and an own PDF: app texts, translated (agent_ui.TITLE_WHOLE_BOOKLET,
+# agent_ui.TITLE_UPLOAD; not imported, the report needs no agent module)
+PLACEHOLDER_TITLES = ('Gesamtes Büchlein', 'Eigenes PDF')
+
 
 def batch_report_records(outcomes, context):
     return [{**context, 'claim': item['claim'], 'attempts': item.get('attempts', 1),
@@ -28,9 +32,12 @@ def render_check_report(records, language='de', generated_at=None):
         error = record.get('error')
         label = result.get('label')
         title = t('Technischer Fehler – keine Einordnung') if error else t(verdicts.get(label, 'Nicht verfügbar'))
-        origin = t('Prüfung fehlgeschlagen') if error else (t('Gespeicherte Demoantwort') if record.get('origin') == 'saved_demo' else t('Gespeicherte Liveantwort'))
+        origins = {'saved_demo': 'Gespeicherte Demoantwort', 'mock': 'Testmodus, kein Apertus-Urteil'}  # else live
+        origin = t('Prüfung fehlgeschlagen') if error else t(origins.get(record.get('origin'), 'Gespeicherte Liveantwort'))
+        vote = record.get('vote')
+        vote = t(vote) if vote in PLACEHOLDER_TITLES else vote  # an official title stays in its language
         metadata = [('Quelle', record.get('source_file')), ('Quellendatum', record.get('date')),
-                    ('Sprache des Büchleins', record.get('language')), ('Vorlage', record.get('vote')),
+                    ('Sprache des Büchleins', record.get('language')), ('Vorlage', vote),
                     ('Strategie', result.get('strategy') or record.get('strategy')),
                     ('Gespeichert / angezeigt (UTC)', record.get('created_at')),
                     ('SHA-256 der Quelle', record.get('source_sha256'))]
