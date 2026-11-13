@@ -8,7 +8,9 @@ import unittest
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.agent.decider import ScriptedDecider
 from src.agent.search_backend import LocalBackend
+from src.agent.source_index import VoteRef
 from src.agent.tools import AgentTools
 from src.agent.trace import Tracer
 from tests.test_agent_graph import (BOOKLETS, CLAIM, CLEAR, CLOSE, FRENCH_CLAIM, HAS_LANGGRAPH, V1, V2, FakeEngine,
@@ -19,6 +21,11 @@ if HAS_LANGGRAPH:
     from src.agent.graph import AgentResult
     from src.agent import session as session_module
     from src.agent.session import AgentSession, Pending
+
+
+V3 = VoteRef('2024-11-24_de#3', '2024-11-24_de', '2024-11-24', 'de', 'Änderung des Obligationenrechts (Mietrecht: Sonstiges)',
+             (4, 5))  # a vote the guard does not offer for CLAIM; the pages of v2_engine's passages
+HINT = 'Zuletzt gewählte Vorlage der Person: «{title}» ({vote_id}).'
 
 
 def v2_decider():
@@ -208,6 +215,95 @@ class AgentSessionTests(unittest.TestCase):
         result = session.answer(V2.vote_id)
         self.assertEqual((result.outcome, result.error), ('gestuetzt', None))
         self.assertIs(type(engine.verify_calls[0]['passages'][0]['retrieval_score']), float)
+
+
+@unittest.skipUnless(HAS_LANGGRAPH, 'Install requirements-agent.txt')
+class LastVoteTests(unittest.TestCase):
+    """The session memory: the last chosen vote is a hint and one more answer, never the choice."""
+
+    def make(self, decider=None, **kwargs):
+        return make_session(decider, index=FakeIndex(CLOSE, votes=(V1, V2, V3)), **kwargs)
+
+    def test_hint_text_names_title_and_id(self):
+        decider = v2_decider()
+        session, _, _ = self.make(decider)
+        session.start(CLAIM, last_vote=V2)
+        content = decider.calls[0]['messages'][1]['content']
+        self.assertEqual(content, CLAIM + '\n' + HINT.format(title=V2.title, vote_id=V2.vote_id))
+        self.assertEqual(sum('Zuletzt gewählte Vorlage' in line for line in content.splitlines()), 1)
+        self.assertNotIn('Zuletzt gewählte', decider.calls[0]['messages'][0]['content'])  # a hint, not a rule
+
+    def test_without_a_last_vote_the_message_is_the_claim_alone(self):
+        decider = v2_decider()
+        session, _, _ = self.make(decider)
+        session.start(CLAIM)
+        self.assertEqual(decider.calls[0]['messages'][1]['content'], CLAIM)
+        self.assertIsNone(session.pending.last_vote)
+
+    def test_last_vote_is_only_a_hint_and_never_fixes_the_vote(self):
+        decider = v2_decider()
+        session, tools, engine = self.make(decider)
+        turn = session.start(CLAIM, last_vote=V1)
+        self.assertIsInstance(turn, Pending)  # the guard asks although the person's last vote is among the candidates
+        self.assertEqual(turn.asked_by, 'guard')
+        self.assertIsNone(tools.fixed_vote_id)
+        self.assertEqual(engine.verify_calls, [])
+        self.assertEqual(turn.last_vote, V1)
+        self.assertEqual(turn.options, (V1, V2))
+        self.assertIn('suche_vorlagen', decider.calls[0]['tools'])  # the model still searches: nothing is fixed
+        result = session.answer(V2.vote_id)  # the person may pick another vote than the last one
+        self.assertEqual((result.outcome, result.vote), ('gestuetzt', V2))
+        self.assertEqual(tools.fixed_vote_id, V2.vote_id)
+
+    def test_the_last_vote_outside_the_options_can_be_answered_and_nothing_else_can(self):
+        decider = PresetDecider(search_votes(), search_passages(V1), search_passages(V3),
+                                act('pruefen', vorlage_id=V3.vote_id))
+        session, tools, engine = self.make(decider)
+        turn = session.start(CLAIM, last_vote=V3)
+        self.assertEqual((turn.options, turn.last_vote), ((V1, V2), V3))
+        with self.assertRaises(ValueError):  # Review Focus 3: any other id stays refused
+            session.answer('2024-11-24_de#9')
+        self.assertEqual(session.pending, turn)
+        self.assertIsNone(tools.fixed_vote_id)
+        result = session.answer(V3.vote_id)
+        self.assertEqual((result.outcome, result.vote), ('gestuetzt', V3))
+        self.assertEqual(tools.fixed_vote_id, V3.vote_id)
+        self.assertEqual(engine.verify_calls[0]['vote'], V3.title)
+
+    def test_the_extra_answer_belongs_to_the_check_that_was_started_with_it(self):
+        decider = PresetDecider(search_votes(), search_passages(V1), search_votes(), search_passages(V1))
+        session, tools, _ = self.make(decider)
+        session.start(CLAIM, last_vote=V3)
+        second = session.start(CLAIM)  # a new check without memory
+        self.assertIsNone(second.last_vote)
+        with self.assertRaises(ValueError):
+            session.answer(V3.vote_id)
+        self.assertIsNone(tools.fixed_vote_id)
+
+    def test_a_last_vote_the_session_does_not_know_is_ignored(self):
+        stranger = VoteRef('upload-1#0', 'upload-1', '', 'de', 'Eigenes PDF', (1,))
+        decider = v2_decider()
+        session, _, _ = self.make(decider)
+        turn = session.start(CLAIM, last_vote=stranger)
+        self.assertEqual(decider.calls[0]['messages'][1]['content'], CLAIM)  # no hint for a vote nobody can fix
+        self.assertIsNone(turn.last_vote)
+        with self.assertRaises(ValueError):
+            session.answer(stranger.vote_id)
+
+    def test_a_given_vote_gets_no_hint_and_no_extra_answer(self):
+        decider = PresetDecider(search_passages(V1), act('pruefen', vorlage_id=V1.vote_id))
+        engine = v2_engine()
+        tools = AgentTools(LocalBackend(FakeIndex(CLOSE, votes=(V1, V2, V3)), engine, BOOKLETS), BOOKLETS,
+                           fixed_vote_id=V1.vote_id)
+        session = AgentSession(tools, decider, engine, Tracer())
+        session.start(CLAIM, last_vote=V2)
+        self.assertEqual(decider.calls[0]['messages'][1]['content'], CLAIM)
+
+    def test_the_scripted_decider_searches_with_the_claim_only(self):
+        index = FakeIndex(CLEAR, votes=(V1, V2, V3))
+        session, _, _ = make_session(ScriptedDecider(), index=index, engine=FakeEngine())
+        session.start(CLAIM, last_vote=V2)
+        self.assertEqual(index.vote_calls[0], CLAIM)
 
 
 if __name__ == '__main__':

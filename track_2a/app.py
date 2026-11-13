@@ -1390,6 +1390,13 @@ def _drop_agent_check() -> None:
         st.session_state.pop(key, None)
 
 
+def _last_vote():
+    """The session memory: the vote the person chose last (an answered question of this browser session), if the
+    agent's index still holds it. It only becomes a hint for the agent and an extra button, never a choice."""
+    vote_id = st.session_state.get("last_vote_id")
+    return agent_app.agent_votes().get(vote_id) if vote_id else None
+
+
 def _vote_date(iso_date: str) -> str:
     return date_label(next(iter(date_options({"vote": {"date": iso_date}}))), UI_LANGUAGE)
 
@@ -1431,7 +1438,8 @@ def _step_line(row) -> str:
 
 def _draw_agent_steps(placeholder, check, events, *, question=None) -> Optional[str]:
     """Draws the finished step list into `placeholder`, an error row red. With an open `question` (a `Pending`)
-    its text and one button per option sit inside the last ask step. Returns the vote id of a clicked option."""
+    its text and one button per option sit inside the last ask step, plus the "wie zuletzt" button of the question's
+    `last_vote`. Returns the vote id of a clicked button."""
     rows = agent_ui.step_rows(events)
     asks = [index for index, row in enumerate(rows) if row.mark == "ask"]
     question_at = asks[-1] if asks else len(rows) - 1
@@ -1446,10 +1454,11 @@ def _draw_agent_steps(placeholder, check, events, *, question=None) -> Optional[
                             unsafe_allow_html=True)
             if question is not None and index == question_at:
                 st.markdown(f"**{t(agent_ui.TITLE_QUESTION)}** {t(agent_ui.TEXT_QUESTION)}")
-                for option in question.options:
-                    if st.button(f"{option.title} · {_vote_date(option.date)}", width="stretch",
-                                 key=f"agent_option_{check.key}_{option.vote_id}"):
-                        chosen = option.vote_id
+                for option in agent_ui.options_with_last(question.options, question.last_vote):
+                    label = t(agent_ui.TEXT_LAST_VOTE).format(v0=option.label) if option.is_last else option.label
+                    if st.button(f"{label} · {_vote_date(option.vote.date)}", width="stretch",
+                                 key=f"agent_option_{check.key}_{option.vote.vote_id}"):
+                        chosen = option.vote.vote_id
     return chosen
 
 
@@ -1527,7 +1536,8 @@ def run_agent_check(steps, verify_clicked: bool, claim: str, claim_lang: str, si
         check = _new_agent_check(own_source, pdf_path, vote, upload_language)
         if check is not None:
             st.session_state.update(agent_session=check, agent_signature=signature, agent_turn=None, agent_events=[])
-            _run_agent(steps, check, lambda session: session.start(claim, claim_lang))
+            last_vote = _last_vote()
+            _run_agent(steps, check, lambda session: session.start(claim, claim_lang, last_vote=last_vote))
     check = st.session_state.get("agent_session")
     if check is None:
         return
@@ -1540,6 +1550,7 @@ def run_agent_check(steps, verify_clicked: bool, claim: str, claim_lang: str, si
     chosen = _draw_agent_steps(steps, check, st.session_state["agent_events"],
                                question=turn if agent_app.is_question(turn) else None)
     if chosen is not None and check.session.pending is not None and not check.running:
+        st.session_state["last_vote_id"] = chosen  # the memory of this browser session only, never saved
         _run_agent(steps, check, lambda session: session.answer(chosen))
         _adopt_agent_turn(check, save_history)
         _draw_agent_steps(steps, check, st.session_state["agent_events"])

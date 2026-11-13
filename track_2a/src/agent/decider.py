@@ -36,6 +36,8 @@ THINKING_START, THINKING_END = "<|inner_prefix|>", "<|inner_suffix|>"  # Apertus
 CUT_OFF_RAW = "(Antwort im Denkanteil abgebrochen; der Denktext wird nicht übernommen.)"  # history entry for it
 CUT_OFF_ERROR = ("Denkanteil abgeschnitten: Die Antwort endete, bevor das Nachdenken abgeschlossen war. Es wurde keine "
                  "Aktion ausgeführt. Antworte knapp mit genau einem JSON-Objekt.")
+LAST_VOTE_HINT_PREFIX = "Zuletzt gewählte Vorlage der Person:"  # starts the one hint line after the claim
+LAST_VOTE_HINT = LAST_VOTE_HINT_PREFIX + " «{title}» ({vote_id})."  # session memory: a hint, never a given vote
 CONNECT_TIMEOUT_S = 10.0
 FORMAT_INSTRUCTION = (
     'Antworte ausschließlich mit genau einem JSON-Objekt der Form {"tool": "<Werkzeugname>", "args": {<Argumente>}}. '
@@ -221,9 +223,13 @@ class JsonActionDecider:
 
 
 def _claim(messages: List[dict]) -> Optional[str]:
+    """The claim: the first user message without its last-vote hint line (the scripted policy never reads hints)."""
     for message in messages:
         if message.get("role") == "user":
-            return _text(message.get("content")).strip() or None
+            lines = _text(message.get("content")).strip().splitlines()
+            if lines and lines[-1].startswith(LAST_VOTE_HINT_PREFIX) and len(lines) > 1:
+                lines.pop()
+            return "\n".join(lines).strip() or None
     return None
 
 

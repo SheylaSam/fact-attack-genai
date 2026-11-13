@@ -54,6 +54,7 @@ TEXT_PICK_SOURCE = ("Die Suche über alle Vorlagen gibt es bisher nur für deuts
                     "mit gewählter Quelle wird die Behauptung in jeder Sprache geprüft.")
 TITLE_NO_SOURCE = "Keine passende Vorlage gefunden"
 TEXT_NO_SOURCE = "Zur Behauptung passt keine Vorlage. Wähle die Quelle selbst oder formuliere die Behauptung um."
+TEXT_LAST_VOTE = "wie zuletzt: {v0}"  # the button of the person's last chosen vote; {v0} is its title
 TITLE_TECHNICAL = "Die Prüfung konnte nicht abgeschlossen werden"
 TEXT_TECHNICAL = "Die Prüfung wurde wegen eines technischen Fehlers abgebrochen; es gibt kein Urteil."
 
@@ -61,7 +62,7 @@ TEXT_KEYS: Tuple[str, ...] = tuple(dict.fromkeys((
     TITLE_ASK, TITLE_DECIDE, TITLE_RUNNING, *TOOL_TITLES.values(), *NODE_TITLES.values(),
     TITLE_SUPPORTED, TEXT_SUPPORTED, TITLE_NOT_PROVEN, TEXT_NOT_PROVEN, TITLE_CONTRADICTED, TEXT_CONTRADICTED,
     TITLE_QUESTION, TEXT_QUESTION, TITLE_PICK_SOURCE, TEXT_PICK_SOURCE, TITLE_NO_SOURCE, TEXT_NO_SOURCE,
-    TITLE_TECHNICAL, TEXT_TECHNICAL)))
+    TEXT_LAST_VOTE, TITLE_TECHNICAL, TEXT_TECHNICAL)))
 
 # outcome -> NLI label (the card's label); the same mapping as the agent graph's, without importing langgraph
 OUTCOME_LABELS = {"gestuetzt": 0, "nicht_belegt": 1, "widersprochen": 2}
@@ -217,6 +218,24 @@ def vote_for_selection(votes: Mapping[str, "VoteRef"], source_id: str, title: Op
     if whole is None:
         raise ValueError(f"Für die Quelle {source_id} gibt es keine passende Vorlage.")
     return whole
+
+
+# --- answer buttons ------------------------------------------------------------------------------------------------
+@dataclass(frozen=True)
+class OptionButton:
+    vote: "VoteRef"
+    label: str  # the vote's title; the app shows it with `TEXT_LAST_VOTE` when `is_last`
+    is_last: bool  # the person's last chosen vote: the "wie zuletzt" button, an extra one or an option's own
+
+
+def options_with_last(options: Sequence["VoteRef"], last: Optional["VoteRef"]) -> List[OptionButton]:
+    """One button per option in the order given, and the "wie zuletzt" button for `last`: the option's own button
+    carries the mark if `last` is one of the options (no duplicate), otherwise one extra button comes after the
+    options. Without `last` the plain options. The buttons only offer; nothing is chosen until the person clicks."""
+    buttons = [OptionButton(vote, vote.title, last is not None and vote.vote_id == last.vote_id) for vote in options]
+    if last is not None and not any(button.is_last for button in buttons):
+        buttons.append(OptionButton(last, last.title, True))
+    return buttons
 
 
 # --- live stream ---------------------------------------------------------------------------------------------------

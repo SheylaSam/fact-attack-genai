@@ -15,6 +15,7 @@ from streamlit.testing.v1 import AppTest
 from tests.test_agent_graph import (BOOKLETS, CLAIM, CLEAR, CLOSE, FRENCH_CLAIM, HAS_LANGGRAPH, NOT_FOUND, V1, V2,
                                     FakeEngine, FakeIndex, PresetDecider, act, make_prediction, search_passages,
                                     search_votes, v2_engine)
+from tests.test_agent_session import V3
 
 pytestmark = pytest.mark.skipif(not HAS_LANGGRAPH, reason='Install requirements-agent.txt')
 
@@ -43,6 +44,7 @@ class Fakes:
         self.index = index or FakeIndex(CLEAR)
         self.engine = engine or FakeEngine()
         self.sessions = []  # (fixed_vote_id, session)
+        self.deciders = []  # the decider of every session
         self.answers = []  # every vote id given to a session's `answer`
         self.uploads = []  # every upload vote given to `make`
 
@@ -57,8 +59,9 @@ class Fakes:
             backend.add_vote(upload)
             fixed_vote_id = upload.vote_id
         tools = AgentTools(backend, BOOKLETS, fixed_vote_id=fixed_vote_id)
-        session = AgentSession(tools, PresetDecider(*self.actions), self.engine, Tracer(on_event=on_event),
-                               nachsuche=False)
+        decider = PresetDecider(*self.actions)
+        self.deciders.append(decider)
+        session = AgentSession(tools, decider, self.engine, Tracer(on_event=on_event), nachsuche=False)
         answer = session.answer
 
         def counted_answer(vote_id):
@@ -427,3 +430,96 @@ def test_unreadable_upload_shows_a_translated_message_and_starts_no_check():
         assert any('Ce PDF ne peut pas être lu' in item.value for item in app.error)
         assert not any('custom_' in item.value or 'Traceback' in item.value for item in app.error)
         assert not fakes.sessions and not has_verdict(app)
+
+
+# --- session memory: the last chosen vote -------------------------------------------------------------------------
+LAST = 'wie zuletzt'
+
+
+def last_buttons(app):
+    return [button for button in options(app) if LAST in button.label]
+
+
+def second_check(app):
+    next(button for button in app.button if button.label == VERIFY).click().run()
+    assert not app.exception
+    return app
+
+
+def v3_fakes():
+    """The guard asks between V1 and V2 for CLAIM; V3 is a vote of the index that is none of the options."""
+    return Fakes([search_votes(), search_passages(V1), search_passages(V3), act('pruefen', vorlage_id=V3.vote_id)],
+                 index=FakeIndex(CLOSE, votes=(V1, V2, V3)), engine=v2_engine())
+
+
+def test_no_last_vote_without_a_previous_answer():
+    fakes = close_fakes()
+    with agent_app(fakes) as app:
+        check(app)
+        assert len(options(app)) == 2 and not last_buttons(app)
+        assert 'last_vote_id' not in app.session_state  # an open question is no answer
+        app.text_area(key='claim_input').set_value(CLAIM + ' Und mehr.').run()  # dropped unanswered ...
+        second_check(app)
+        assert len(options(app)) == 2 and not last_buttons(app)  # ... leaves no memory
+        assert 'Zuletzt gewählte' not in fakes.deciders[-1].calls[0]['messages'][1]['content']
+    clear = clear_fakes()
+    with agent_app(clear) as app:
+        check(app)
+        assert has_verdict(app)
+        assert 'last_vote_id' not in app.session_state  # a check without a question chose nothing
+
+
+def test_second_question_offers_the_last_chosen_vote_as_extra_button():
+    fakes = close_fakes()
+    with agent_app(fakes) as app:
+        check(app)
+        next(button for button in options(app) if button.label.startswith(V2.title)).click().run()
+        assert app.session_state['last_vote_id'] == V2.vote_id  # written after the answer
+        second_check(app)
+        buttons = options(app)
+        assert [button.label.split(' · ')[0] for button in buttons] == [V1.title, f'{LAST}: {V2.title}']
+        assert len(last_buttons(app)) == 1  # V2 is an option: its button carries the mark, no duplicate
+        assert '24. November 2024' in last_buttons(app)[0].label
+        app.selectbox(key='ui_language').set_value('fr').run()
+        assert not app.exception and len(last_buttons(app)) == 0
+        assert [button.label.split(' · ')[0] for button in options(app)][1].startswith('comme la dernière fois')
+        assert fakes.answers == [V2.vote_id]  # nothing was answered for the second question
+
+
+def test_the_extra_button_for_a_vote_outside_the_options_answers_the_check():
+    fakes = v3_fakes()
+    votes = {**VOTES, V3.vote_id: V3}
+    with agent_app(fakes, votes=votes) as app:
+        app.session_state['last_vote_id'] = V3.vote_id
+        check(app)
+        buttons = options(app)
+        assert [button.label.split(' · ')[0] for button in buttons] == [V1.title, V2.title, f'{LAST}: {V3.title}']
+        assert len(last_buttons(app)) == 1
+        last_buttons(app)[0].click().run()
+        assert not app.exception
+        assert fakes.answers == [V3.vote_id]
+        assert has_verdict(app) and any(V3.title in item.value for item in app.caption)
+        assert app.session_state['last_vote_id'] == V3.vote_id
+
+
+def test_last_vote_is_never_chosen_without_a_click():
+    fakes = v3_fakes()
+    votes = {**VOTES, V3.vote_id: V3}
+    with agent_app(fakes, votes=votes) as app:
+        app.session_state['last_vote_id'] = V3.vote_id
+        check(app)
+        session = fakes.sessions[-1][1]
+        assert session._tools.fixed_vote_id is None  # the hint did not fix the vote
+        assert session.pending is not None and fakes.answers == []
+        assert not has_verdict(app) and 'last_check' not in app.session_state
+        assert fakes.deciders[-1].calls[0]['messages'][1]['content'].endswith(
+            f'Zuletzt gewählte Vorlage der Person: «{V3.title}» ({V3.vote_id}).')
+        assert app.session_state['last_vote_id'] == V3.vote_id  # unchanged until the person answers
+
+
+def test_an_unknown_last_vote_in_the_session_is_dropped_without_an_error():
+    fakes = close_fakes()
+    with agent_app(fakes) as app:
+        app.session_state['last_vote_id'] = 'upload-0#0'  # not in the index (e.g. an own upload of an earlier check)
+        check(app)
+        assert len(options(app)) == 2 and not last_buttons(app)

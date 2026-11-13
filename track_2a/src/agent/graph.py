@@ -64,7 +64,7 @@ from langgraph.types import interrupt
 
 from src import config
 from src.agent import guard, settings
-from src.agent.decider import AgentAction, Decider
+from src.agent.decider import LAST_VOTE_HINT, AgentAction, Decider
 from src.agent.prompts import system_prompt
 from src.agent.source_index import VoteRef
 from src.agent.tools import (ERROR_INVALID_ARGS, TERMINAL_TOOLS, AgentTools, Observation, engine_vote,
@@ -168,6 +168,7 @@ class _State(TypedDict, total=False):
     evidence: List[EvidenceItem]
     question: str
     options: List[VoteRef]
+    last_vote: VoteRef  # session memory: the person's last chosen vote; the question may be answered with it too
     reasoning: str
     note: str
     error: str
@@ -487,7 +488,8 @@ class _Nodes:
             return {"outcome": "rueckfrage", "reasoning": state.get("ask_reason", QUESTION_REASON), "route": "finish"}
         # Resuming runs this node again from the top, so the interrupt comes first and the side effects after it.
         answer = interrupt({"question": state["question"], "options": ids, "asked_by": asked_by})
-        if answer not in ids:
+        last = state.get("last_vote")  # the only answer outside the options (an extra button of the app)
+        if answer not in ids and not (last is not None and answer == last.vote_id):
             raise ValueError(ANSWER_NOT_AN_OPTION.format(answer=_short(repr(answer), 80), options=", ".join(ids)))
         vote = self.tools.fix_vote(answer)
         self.emit(step, "ask", started, tool="rueckfrage", args={"optionen": ids, "antwort": vote.vote_id},
@@ -680,15 +682,24 @@ def _validate_claim(claim: Any) -> None:
                          f"(erhalten: {length}).")
 
 
-def prepare(claim: str, tools: AgentTools, tracer: Tracer,
-            claim_language: Optional[str] = None) -> Union[AgentResult, dict]:
+def usable_last_vote(tools: AgentTools, last_vote: Optional[VoteRef]) -> Optional[VoteRef]:
+    """The session memory's vote as this check can use it: the tools' own `VoteRef` of it, or None for no previous
+    vote, a vote these tools do not know (it could not be fixed) or a check whose vote is given (nothing to ask)."""
+    if last_vote is None or tools.fixed_vote_id is not None:
+        return None
+    return tools.votes.get(last_vote.vote_id)
+
+
+def prepare(claim: str, tools: AgentTools, tracer: Tracer, claim_language: Optional[str] = None,
+            last_vote: Optional[VoteRef] = None) -> Union[AgentResult, dict]:
     """The start of a check: the early result or the start state of the graph.
 
     Raises ValueError for a claim outside 1-`settings.MAX_CLAIM_CHARS` characters. `EVIDENCE_POLICY=legacy` is a
     technical error and a claim outside `settings.LANGUAGES` without a given vote is `quelle_fehlt`, both before any LLM
     call (the result carries the events emitted here). Otherwise the state the graph starts with: `claim`, `language`,
     `messages` (system prompt, claim), an empty `history` and no steps. `claim_language` defaults to
-    `guess_language(claim)`.
+    `guess_language(claim)`. A usable `last_vote` (see `usable_last_vote`) adds one hint line to the user message and
+    is kept in the state as `last_vote`; it never fixes the vote.
     """
     _validate_claim(claim)
     first_event = len(tracer.events)
@@ -703,9 +714,16 @@ def prepare(claim: str, tools: AgentTools, tracer: Tracer,
                     summary=f"Ergebnis: quelle_fehlt, Sprache {language} ohne vorgegebene Quelle")
         return AgentResult(outcome="quelle_fehlt", reasoning=reasoning, events=tracer.events[first_event:])
     fixed_vote = tools.check_vote_id(tools.fixed_vote_id) if tools.fixed_vote_id is not None else None
-    messages = [{"role": "system", "content": system_prompt(fixed_vote)}, {"role": "user", "content": claim}]
-    return {"claim": claim, "language": language, "messages": messages, "history": [], "steps": 0,
-            "search_steps": 0}
+    last = usable_last_vote(tools, last_vote)
+    content = claim
+    if last is not None:  # one extra line after the claim: the model may use it, the guard still decides to ask
+        content += "\n" + LAST_VOTE_HINT.format(title=" ".join(last.title.split()), vote_id=last.vote_id)
+    messages = [{"role": "system", "content": system_prompt(fixed_vote)}, {"role": "user", "content": content}]
+    state = {"claim": claim, "language": language, "messages": messages, "history": [], "steps": 0,
+             "search_steps": 0}
+    if last is not None:
+        state["last_vote"] = last
+    return state
 
 
 def run_check(claim: str, *, tools: AgentTools, decider: Decider, engine, tracer: Tracer,

@@ -242,6 +242,31 @@ class VoteForSelectionTests(unittest.TestCase):
             agent_ui.vote_for_selection(self.votes, '1999-01-01_de', None)
 
 
+class OptionsWithLastTests(unittest.TestCase):
+    def test_options_with_last_adds_one_extra_button_or_marks_the_existing_one(self):
+        # a last vote outside the options: one more button, after the options
+        buttons = agent_ui.options_with_last((V1, V2), OTHER)
+        self.assertEqual([(button.vote, button.is_last) for button in buttons],
+                         [(V1, False), (V2, False), (OTHER, True)])
+        self.assertEqual([button.label for button in buttons], [V1.title, V2.title, OTHER.title])
+        # a last vote that is already an option: that button carries the mark, no duplicate
+        buttons = agent_ui.options_with_last((V1, V2), V2)
+        self.assertEqual([(button.vote, button.is_last) for button in buttons], [(V1, False), (V2, True)])
+        self.assertEqual(len({button.vote.vote_id for button in buttons}), 2)
+        # no previous answer: the options as they are, none marked
+        buttons = agent_ui.options_with_last((V1, V2), None)
+        self.assertEqual([(button.vote, button.is_last) for button in buttons], [(V1, False), (V2, False)])
+
+    def test_the_marked_button_is_the_last_vote_not_a_position(self):
+        buttons = agent_ui.options_with_last([V2, V1], V1)  # the guard's order is kept
+        self.assertEqual([button.vote for button in buttons], [V2, V1])
+        self.assertEqual([button.is_last for button in buttons], [False, True])
+
+    def test_the_label_text_is_translatable_and_names_the_vote(self):
+        self.assertIn('{v0}', agent_ui.TEXT_LAST_VOTE)
+        self.assertIn(agent_ui.TEXT_LAST_VOTE, agent_ui.TEXT_KEYS)
+
+
 class StreamTests(unittest.TestCase):
     def test_stream_yields_events_while_the_call_runs_then_the_turn(self):
         events: 'queue.Queue[TraceEvent]' = queue.Queue()
