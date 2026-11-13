@@ -203,6 +203,13 @@ def _passage_key(passage: Dict[str, Any]) -> Tuple[int, str]:
     return int(passage["page_number"]), hashlib.sha256(passage["text"].encode("utf-8")).hexdigest()
 
 
+def _plain(passage: Dict[str, Any]) -> Dict[str, Any]:
+    """A copy whose numpy scalars (the engine's BM25 `retrieval_score`) are Python numbers: pooled passages enter the
+    graph state, which the interactive mode's checkpointer serializes and which refuses numpy types."""
+    return {key: value.item() if type(value).__module__ == "numpy" and hasattr(value, "item") else value
+            for key, value in passage.items()}
+
+
 class AgentTools:
     """The agent's search tools over one `SearchBackend`; one instance per check (it holds the pool).
 
@@ -369,7 +376,7 @@ class AgentTools:
         """Pools the passages on the pages of `vote`; a passage of another page is shown but never pooled. In the
         Nachsuche (`research`) a new passage is admitted even when the pool is full, and remembered as the
         Nachsuche's."""
-        keyed = [(_passage_key(p), dict(p)) for p in found]  # fails before anything enters the pool
+        keyed = [(_passage_key(p), _plain(p)) for p in found]  # fails before anything enters the pool
         pool = self._pool.setdefault(vote.vote_id, [])
         seen = self._seen.setdefault(vote.vote_id, set())
         added = self._research_keys.setdefault(vote.vote_id, set())

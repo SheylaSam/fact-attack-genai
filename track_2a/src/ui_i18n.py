@@ -252,6 +252,17 @@ Zur Behauptung passt keine Vorlage. Wähle die Quelle selbst oder formuliere die
 Die Prüfung konnte nicht abgeschlossen werden|La vérification n’a pas pu être terminée|Non è stato possibile completare la verifica
 Die Prüfung wurde wegen eines technischen Fehlers abgebrochen; es gibt kein Urteil.|La vérification a été interrompue par une erreur technique ; il n’y a pas de verdict.|La verifica è stata interrotta da un errore tecnico; non c’è alcun giudizio.
 """
+_ROWS += """
+Schritte der Prüfung|Étapes de la vérification|Fasi della verifica
+Der Agent wird vorbereitet …|Préparation de l’agent …|Preparazione dell’agente …
+Die Prüfung läuft noch …|La vérification est encore en cours …|La verifica è ancora in corso …
+Diese Quelle für die Prüfung vorgeben|Imposer cette source pour la vérification|Imporre questa fonte per la verifica
+Ohne Häkchen sucht der Agent die passende Vorlage selbst.|Sans coche, l’agent cherche lui-même l’objet correspondant.|Senza spunta, l’agente cerca da solo l’oggetto corrispondente.
+Der Agent kann die gewählte Quelle nicht prüfen. Wähle eine andere Quelle oder lass den Agenten die Vorlage suchen.|L’agent ne peut pas vérifier la source choisie. Choisissez une autre source ou laissez l’agent chercher l’objet.|L’agente non può verificare la fonte scelta. Scegli un’altra fonte o lascia che l’agente cerchi l’oggetto.
+Die Agentenschicht ist nicht verfügbar; die Prüfung läuft wie bisher ohne Agenten.|La couche agent n’est pas disponible ; la vérification se fait comme avant, sans agent.|Il livello agente non è disponibile; la verifica si svolge come prima, senza agente.
+Eigene PDFs werden ohne Agenten geprüft.|Les PDF personnels sont vérifiés sans agent.|I PDF personali vengono verificati senza agente.
+Geprüfte Vorlage: {title}|Objet vérifié : {title}|Oggetto verificato: {title}
+"""
 TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
 
 

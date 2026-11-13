@@ -198,6 +198,17 @@ class AgentSessionTests(unittest.TestCase):
         self.assertIn('Graph kaputt', result.error)
         self.assertIsNone(session.pending)  # the answer was used up; start again for a new check
 
+    def test_numpy_scores_of_the_real_engine_survive_the_checkpoint(self):
+        """The engine's BM25 search gives numpy floats (`retrieval_score`); the paused state is serialized."""
+        import numpy as np
+        engine = v2_engine()
+        engine.passages = [dict(p, retrieval_score=np.float64(1.5)) for p in engine.passages]
+        session, _, _ = make_session(engine=engine)
+        self.assertIsInstance(session.start(CLAIM), Pending)
+        result = session.answer(V2.vote_id)
+        self.assertEqual((result.outcome, result.error), ('gestuetzt', None))
+        self.assertIs(type(engine.verify_calls[0]['passages'][0]['retrieval_score']), float)
+
 
 if __name__ == '__main__':
     unittest.main()

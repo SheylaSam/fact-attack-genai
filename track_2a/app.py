@@ -37,6 +37,7 @@ from src.ui_i18n import LANGUAGES, translate, translate_static_html, date_label
 from src.check_history import save_check, load_checks, matching_source, set_removed, export_checks, filter_checks, sort_checks
 from src.booklet_catalog import load_catalog, available_sources, date_options, languages_for_date, filter_sources
 from src.ui_strategies import STANDARD, strategy_options, strategy_from_label, rag_available, store_uploaded_source, load_completed_dev42
+from src import agent_app, agent_ui  # without langgraph: the agent layer itself is imported only on the agent path
 
 # Page Configuration
 st.set_page_config(
@@ -952,6 +953,11 @@ st.markdown("""
         color: #64748b;
         margin-top: 0.4rem;
     }
+    .agent-step { font-size: 0.9rem; padding: 0.25rem 0; color: #cbd5e1; }
+    .agent-step-done::first-letter { color: #10b981; }
+    .agent-step-ask { color: #fbbf24; }
+    .agent-step-running { color: #94a3b8; font-style: italic; }
+    .agent-step-error { color: #f87171; }
 
     /* ── Document Facsimile ────────────────────────────────────── */
     .doc-facsimile {
@@ -1371,6 +1377,161 @@ def find_cached_case(claim: str, booklet_file: str, vote: Optional[str]) -> Opti
     return None
 
 
+# ── Agent check in the fact-check tab ────────────────────────────────────────
+AGENT_KEYS = ("agent_session", "agent_turn", "agent_signature", "agent_events")
+AGENT_MARKS = {"done": "✓", "ask": "?", "error": "✕", "running": "…"}
+AGENT_UNKNOWN_SOURCE = ("Der Agent kann die gewählte Quelle nicht prüfen. "
+                        "Wähle eine andere Quelle oder lass den Agenten die Vorlage suchen.")
+
+
+def _drop_agent_check() -> None:
+    for key in AGENT_KEYS:
+        st.session_state.pop(key, None)
+
+
+def _vote_date(iso_date: str) -> str:
+    return date_label(next(iter(date_options({"vote": {"date": iso_date}}))), UI_LANGUAGE)
+
+
+def _new_agent_check(own_source: bool, pdf_path: Path, vote: Optional[str]):
+    """A new AgentCheck for the tab's selection, or None after a shown message. With `own_source` the chosen
+    booklet (and vote) is the fixed vote; a selection the agent's index does not hold is a translated message."""
+    try:
+        with st.spinner(t("Der Agent wird vorbereitet …")):
+            fixed_vote_id = None
+            if own_source:
+                votes = agent_app.agent_votes()
+                try:
+                    fixed_vote_id = agent_ui.vote_for_selection(votes, pdf_path.stem, vote).vote_id
+                except ValueError:
+                    st.error(t(AGENT_UNKNOWN_SOURCE))
+                    return None
+            return agent_app.AgentCheck(agent_app.make_agent_session, fixed_vote_id)
+    except Exception as exc:  # no API key, no index: the check cannot start
+        st.error(t('Die Prüfung konnte nicht abgeschlossen werden ({v0}).').format(v0=exc))
+        return None
+
+
+def _step_line(row) -> str:
+    return f"{AGENT_MARKS[row.mark]} {t(row.title)}" + (f" · {row.detail}" if row.detail else "")
+
+
+def _draw_agent_steps(placeholder, check, events, *, question=None) -> Optional[str]:
+    """Draws the finished step list into `placeholder`, an error row red. With an open `question` (a `Pending`)
+    its text and one button per option sit inside the last ask step. Returns the vote id of a clicked option."""
+    rows = agent_ui.step_rows(events)
+    asks = [index for index, row in enumerate(rows) if row.mark == "ask"]
+    question_at = asks[-1] if asks else len(rows) - 1
+    chosen = None
+    with placeholder.container():
+        st.markdown("#### " + t("Schritte der Prüfung"))
+        for index, row in enumerate(rows):
+            if row.mark == "error":
+                st.error(f"{_step_line(row)}\n\n{row.error}")
+            else:
+                st.markdown(f'<div class="agent-step agent-step-{row.mark}">{html.escape(_step_line(row))}</div>',
+                            unsafe_allow_html=True)
+            if question is not None and index == question_at:
+                st.markdown(f"**{t(agent_ui.TITLE_QUESTION)}** {t(agent_ui.TEXT_QUESTION)}")
+                for option in question.options:
+                    if st.button(f"{option.title} · {_vote_date(option.date)}", width="stretch",
+                                 key=f"agent_option_{check.key}_{option.vote_id}"):
+                        chosen = option.vote_id
+    return chosen
+
+
+def _draw_live_steps(placeholder, events) -> None:
+    """The step list while the check runs, as one element: a container redrawn with fewer children keeps the
+    surplus ones of its previous drawing, a single element is replaced whole."""
+    lines = "".join(f'<div class="agent-step agent-step-{row.mark}">{html.escape(_step_line(row))}'
+                    + (f'<br>{html.escape(row.error)}' if row.error else "") + "</div>"
+                    for row in agent_ui.step_rows(events, running=True))
+    placeholder.markdown(f'<div class="agent-steps-live"><h4>{html.escape(t("Schritte der Prüfung"))}</h4>{lines}</div>',
+                         unsafe_allow_html=True)
+
+
+def _run_agent(placeholder, check, call) -> None:
+    """Runs `call(session)` through the check and redraws the step list with every event."""
+    events = list(check.session.events)
+    _draw_live_steps(placeholder, events)
+    for event in check.run(call):
+        events.append(event)
+        _draw_live_steps(placeholder, events)
+
+
+def _adopt_agent_turn(check, save_history: bool) -> None:
+    """Keeps the turn the check's worker left, with the check's events. A verdict becomes `last_check` (the result
+    card) and, if wanted, a history entry; questions and states are never saved."""
+    done = check.take()
+    if done is None:
+        return
+    kind, turn = done
+    st.session_state["agent_events"] = list(check.session.events)
+    st.session_state["agent_turn"] = turn  # an exception of start/answer is shown as an error
+    if kind != "turn" or agent_app.is_question(turn) or turn.prediction is None:
+        return
+    if agent_ui.outcome_view(turn).kind != "verdict":
+        return
+    vote = turn.vote
+    source = (config.BOOKLETS_DIR / f"{vote.source_id}.pdf", vote.date, vote.language, vote.title)
+    prediction = agent_ui.prediction_for_card(turn)
+    st.session_state["last_check"] = {"signature": st.session_state["agent_signature"], "result": prediction,
+                                      "notice": None, "created_at": datetime.now(timezone.utc).isoformat(),
+                                      "source": source, "discarded": agent_app.is_discarded(turn)}
+    if save_history:
+        try:
+            save_check(HISTORY_PATH, result=prediction.model_dump(mode="json"), source_path=source[0],
+                       date=vote.date, language=vote.language, vote=vote.title)
+        except (OSError, ValueError, sqlite3.Error):
+            st.warning(t("Das Ergebnis ist verfügbar, konnte aber nicht im lokalen Verlauf gespeichert werden."))
+
+
+def _show_agent_outcome(turn) -> None:
+    """A state (no source, technical error) or a failed start/answer; verdicts are shown by the result card."""
+    if turn is None:
+        return
+    if isinstance(turn, Exception):
+        st.error(t('Die Prüfung konnte nicht abgeschlossen werden ({v0}).').format(v0=turn))
+        return
+    if agent_app.is_question(turn):
+        return
+    view = agent_ui.outcome_view(turn)
+    if view.kind != "verdict":
+        show = {"ok": st.success, "warn": st.warning, "error": st.error, "info": st.info}[view.tone]
+        show(f"**{t(view.title)}** · {t(view.text)}")
+
+
+def run_agent_check(steps, verify_clicked: bool, claim: str, claim_lang: str, signature: tuple,
+                    own_source: bool, pdf_path: Path, vote: Optional[str], save_history: bool) -> None:
+    """The fact-check tab on the agent: starts a check on «Behauptung prüfen», shows its steps live in `steps`, the
+    question inside its step and continues the same check with the clicked option. Draws into the current column."""
+    if verify_clicked and claim.strip():
+        st.session_state.pop("batch_check", None)
+        st.session_state.pop("last_check", None)
+        _drop_agent_check()
+        check = _new_agent_check(own_source, pdf_path, vote)
+        if check is not None:
+            st.session_state.update(agent_session=check, agent_signature=signature, agent_turn=None, agent_events=[])
+            _run_agent(steps, check, lambda session: session.start(claim, claim_lang))
+    check = st.session_state.get("agent_session")
+    if check is None:
+        return
+    if check.running:  # a worker of a run that a second click stopped: wait for it, never ask the session twice
+        _draw_live_steps(steps, check.session.events)
+        with st.spinner(t("Die Prüfung läuft noch …")):
+            check.wait()
+    _adopt_agent_turn(check, save_history)
+    turn = st.session_state.get("agent_turn")
+    chosen = _draw_agent_steps(steps, check, st.session_state["agent_events"],
+                               question=turn if agent_app.is_question(turn) else None)
+    if chosen is not None and check.session.pending is not None and not check.running:
+        _run_agent(steps, check, lambda session: session.answer(chosen))
+        _adopt_agent_turn(check, save_history)
+        _draw_agent_steps(steps, check, st.session_state["agent_events"])
+        turn = st.session_state.get("agent_turn")
+    _show_agent_outcome(turn)
+
+
 
 
 # =============================================================================
@@ -1433,6 +1594,10 @@ with tab_factcheck:
 
     if st.session_state.get("ballot") not in BOOKLET_CATALOG:
         st.session_state["ballot"] = next(iter(BOOKLET_CATALOG))
+    agent_on = agent_app.agent_available()
+    # the agent's tools know the catalog's booklets only: an own PDF is checked the old way
+    agent_mode = agent_on and st.session_state.get("uploaded_pdf") is None
+    own_source = agent_mode and bool(st.session_state.get("agent_own_source"))
     col_in, col_out = st.columns([1, 1.12], gap="large")
 
     # ── LEFT: input ──────────────────────────────────────────────────────────
@@ -1455,56 +1620,65 @@ with tab_factcheck:
         if active_case:
             st.caption(active_case["story"])
 
-        st.markdown(th('<div class="flow-heading"><span>2</span> Quelle wählen</div>'), unsafe_allow_html=True)
-        c_search, c_year = st.columns([2, 1])
-        with c_search:
-            source_query = st.text_input(t("Thema oder Vorlage suchen"), key="source_query",
-                                        placeholder=t("z. B. Mietrecht, Rente, biodiversité"),
-                                        help=t("Sucht lokal in den Vorlagentiteln auf DE, FR und IT; keine Volltextsuche im PDF."))
-        with c_year:
-            years = ["Alle Jahre"] + sorted({entry["date"][:4] for entry in AVAILABLE_SOURCES.values()}, reverse=True)
-            if st.session_state.get("source_year", "Alle Jahre") not in years:
-                st.session_state["source_year"] = "Alle Jahre"
-            source_year = st.selectbox(t("Jahr"), years, key="source_year", format_func=t)
-        filtered_sources = filter_sources(AVAILABLE_SOURCES, source_query, source_year)
-        filtered_dates = date_options(filtered_sources)
-        no_source_matches = not filtered_dates
-        if no_source_matches:
-            st.info(t("Keine passende Quelle gefunden. Versuche einen anderen Begriff oder setze die Filter zurück. Die bisherige Quelle bleibt ausgewählt."))
-            filtered_dates = {st.session_state["ballot"]: BOOKLET_CATALOG[st.session_state["ballot"]]}
-        elif st.session_state.get("ballot") not in filtered_dates:
-            st.session_state["ballot"] = next(iter(filtered_dates))
-        if source_query.strip() or source_year != "Alle Jahre":
-            st.caption(t('{v0} von {v1} Terminen gefunden · Suche in Vorlagentiteln').format(v0=len(date_options(filtered_sources)), v1=len(BOOKLET_CATALOG)))
-            st.button(t("Quellenfilter zurücksetzen"), on_click=_reset_source_filters)
-        uploaded_file = st.session_state.get("uploaded_pdf")
-        c_ballot, c_lang = st.columns([1.5, 1])
-        with c_ballot:
-            selected_ballot_name = st.selectbox(t("Abstimmung"), list(filtered_dates), key="ballot", disabled=no_source_matches or uploaded_file is not None, format_func=lambda label: date_label(label, UI_LANGUAGE))
-            selected_date = BOOKLET_CATALOG[selected_ballot_name]
-        with c_lang:
-            language_options = ["DE", "FR", "IT"] if uploaded_file is not None else languages_for_date(AVAILABLE_SOURCES, selected_date)
-            if st.session_state.get("booklet_lang") not in language_options:
-                st.session_state["booklet_lang"] = language_options[0]
-            selected_lang = st.radio(t("Sprache des Büchleins"), language_options, horizontal=True, key="booklet_lang")
-            lang_code = selected_lang.lower()
+        if agent_mode:  # the agent finds the source itself; choosing it is optional
+            source_box = st.expander(t(agent_ui.TITLE_PICK_SOURCE), expanded=own_source or getattr(
+                st.session_state.get("agent_turn"), "outcome", None) == "quelle_fehlt")
+        else:
+            st.markdown(th('<div class="flow-heading"><span>2</span> Quelle wählen</div>'), unsafe_allow_html=True)
+            source_box = st.container()
+        with source_box:
+            if agent_mode:
+                st.checkbox(t("Diese Quelle für die Prüfung vorgeben"), key="agent_own_source",
+                            help=t("Ohne Häkchen sucht der Agent die passende Vorlage selbst."))
+            c_search, c_year = st.columns([2, 1])
+            with c_search:
+                source_query = st.text_input(t("Thema oder Vorlage suchen"), key="source_query",
+                                            placeholder=t("z. B. Mietrecht, Rente, biodiversité"),
+                                            help=t("Sucht lokal in den Vorlagentiteln auf DE, FR und IT; keine Volltextsuche im PDF."))
+            with c_year:
+                years = ["Alle Jahre"] + sorted({entry["date"][:4] for entry in AVAILABLE_SOURCES.values()}, reverse=True)
+                if st.session_state.get("source_year", "Alle Jahre") not in years:
+                    st.session_state["source_year"] = "Alle Jahre"
+                source_year = st.selectbox(t("Jahr"), years, key="source_year", format_func=t)
+            filtered_sources = filter_sources(AVAILABLE_SOURCES, source_query, source_year)
+            filtered_dates = date_options(filtered_sources)
+            no_source_matches = not filtered_dates
+            if no_source_matches:
+                st.info(t("Keine passende Quelle gefunden. Versuche einen anderen Begriff oder setze die Filter zurück. Die bisherige Quelle bleibt ausgewählt."))
+                filtered_dates = {st.session_state["ballot"]: BOOKLET_CATALOG[st.session_state["ballot"]]}
+            elif st.session_state.get("ballot") not in filtered_dates:
+                st.session_state["ballot"] = next(iter(filtered_dates))
+            if source_query.strip() or source_year != "Alle Jahre":
+                st.caption(t('{v0} von {v1} Terminen gefunden · Suche in Vorlagentiteln').format(v0=len(date_options(filtered_sources)), v1=len(BOOKLET_CATALOG)))
+                st.button(t("Quellenfilter zurücksetzen"), on_click=_reset_source_filters)
+            uploaded_file = st.session_state.get("uploaded_pdf")
+            c_ballot, c_lang = st.columns([1.5, 1])
+            with c_ballot:
+                selected_ballot_name = st.selectbox(t("Abstimmung"), list(filtered_dates), key="ballot", disabled=no_source_matches or uploaded_file is not None, format_func=lambda label: date_label(label, UI_LANGUAGE))
+                selected_date = BOOKLET_CATALOG[selected_ballot_name]
+            with c_lang:
+                language_options = ["DE", "FR", "IT"] if uploaded_file is not None else languages_for_date(AVAILABLE_SOURCES, selected_date)
+                if st.session_state.get("booklet_lang") not in language_options:
+                    st.session_state["booklet_lang"] = language_options[0]
+                selected_lang = st.radio(t("Sprache des Büchleins"), language_options, horizontal=True, key="booklet_lang")
+                lang_code = selected_lang.lower()
 
-        source_date = None if uploaded_file is not None else selected_date
-        pdf_path = config.BOOKLETS_DIR / f"{selected_date}_{lang_code}.pdf"
-        if uploaded_file is not None:
-            uploaded_bytes = bytes(uploaded_file.getbuffer())
-            pdf_path = store_uploaded_source(config.BOOKLETS_DIR, uploaded_bytes)
-            st.success(t('✓ {v0} geladen').format(v0=uploaded_file.name))
-            st.info(t("Aktive Quelle: eigenes PDF. Das Abstimmungsdatum ist unbekannt; die offizielle Datumsauswahl ist deaktiviert."))
+            source_date = None if uploaded_file is not None else selected_date
+            pdf_path = config.BOOKLETS_DIR / f"{selected_date}_{lang_code}.pdf"
+            if uploaded_file is not None:
+                uploaded_bytes = bytes(uploaded_file.getbuffer())
+                pdf_path = store_uploaded_source(config.BOOKLETS_DIR, uploaded_bytes)
+                st.success(t('✓ {v0} geladen').format(v0=uploaded_file.name))
+                st.info(t("Aktive Quelle: eigenes PDF. Das Abstimmungsdatum ist unbekannt; die offizielle Datumsauswahl ist deaktiviert."))
 
-        vote_options = [VOTE_AUTO] + ([] if uploaded_file is not None else DEMO_VOTES.get(pdf_path.name, SOURCE_METADATA.get(pdf_path.name, {}).get("votes", [])))
-        if st.session_state.get("vote") not in vote_options:
-            st.session_state["vote"] = VOTE_AUTO
-        selected_vote = st.selectbox(t("Vorlage"), vote_options, key="vote", format_func=lambda label: t(label) if label == VOTE_AUTO else label)
-        vote = None if selected_vote == VOTE_AUTO else selected_vote
-        if uploaded_file is None:
-            st.caption(t('{v0} Abstimmungstermine · {v1} Sprachfassungen lokal verfügbar').format(v0=len(BOOKLET_CATALOG), v1=len(AVAILABLE_SOURCES)))
-            st.link_button(t("Original bei der Bundeskanzlei öffnen ↗"), SOURCE_METADATA[pdf_path.name]["url"])
+            vote_options = [VOTE_AUTO] + ([] if uploaded_file is not None else DEMO_VOTES.get(pdf_path.name, SOURCE_METADATA.get(pdf_path.name, {}).get("votes", [])))
+            if st.session_state.get("vote") not in vote_options:
+                st.session_state["vote"] = VOTE_AUTO
+            selected_vote = st.selectbox(t("Vorlage"), vote_options, key="vote", format_func=lambda label: t(label) if label == VOTE_AUTO else label)
+            vote = None if selected_vote == VOTE_AUTO else selected_vote
+            if uploaded_file is None:
+                st.caption(t('{v0} Abstimmungstermine · {v1} Sprachfassungen lokal verfügbar').format(v0=len(BOOKLET_CATALOG), v1=len(AVAILABLE_SOURCES)))
+                st.link_button(t("Original bei der Bundeskanzlei öffnen ↗"), SOURCE_METADATA[pdf_path.name]["url"])
 
         with st.expander(t("Sprache der Behauptung"), expanded=False):
             claim_lang_choice = st.selectbox(t("Erkennung"), ["Automatisch", "DE", "FR", "IT"], key="claim_lang", format_func=t)
@@ -1512,8 +1686,13 @@ with tab_factcheck:
         claim_lang = guess_language(claim) if claim_lang_choice == "Automatisch" else claim_lang_choice.lower()
         save_history = st.checkbox(t("Prüfung lokal im Verlauf speichern"), value=True, key="save_history",
                                    help=t("Speichert Behauptung, Quelle und Ergebnis auf diesem Rechner. Der Verlauf ist für Nutzer dieser lokalen App-Installation sichtbar."))
-        verify_clicked = st.button(t("Behauptung prüfen"), type="primary", width="stretch", disabled=not claim.strip() or (no_source_matches and uploaded_file is None))
+        verify_clicked = st.button(t("Behauptung prüfen"), type="primary", width="stretch", disabled=not claim.strip() or (
+            not agent_mode and no_source_matches and uploaded_file is None))
         st.caption(t("Beim Prüfen werden die Behauptung und ausgewählte Textstellen an Apertus auf CSCS gesendet."))
+        if not agent_on:
+            st.caption(t("Die Agentenschicht ist nicht verfügbar; die Prüfung läuft wie bisher ohne Agenten."))
+        elif not agent_mode:
+            st.caption(t("Eigene PDFs werden ohne Agenten geprüft."))
         st.markdown(
             th('<div class="disclaimer">Vergleicht die Aussage mit dem Büchlein. Keine allgemeine Wahrheitsprüfung und keine Abstimmungsempfehlung.</div>'),
             unsafe_allow_html=True,
@@ -1590,8 +1769,16 @@ with tab_factcheck:
                 st.rerun()
 
     # ── Verification ─────────────────────────────────────────────────────────
-    signature = (claim.strip(), str(pdf_path), batch_signature[2], vote, strat, claim_lang)
-    if verify_clicked and claim.strip():
+    if agent_mode:  # the agent finds the vote itself unless the source is given: the selection counts only then
+        signature = ("agent", claim.strip(), (pdf_path.name, vote) if own_source else None, claim_lang)
+        if st.session_state.get("agent_signature") != signature:  # changed input: an open question is dropped
+            _drop_agent_check()
+        with col_out:
+            run_agent_check(st.empty(), verify_clicked, claim, claim_lang, signature, own_source, pdf_path, vote,
+                            save_history)
+    else:
+        signature = (claim.strip(), str(pdf_path), batch_signature[2], vote, strat, claim_lang)
+    if verify_clicked and claim.strip() and not agent_mode:
         st.session_state.pop("batch_check", None)
         st.session_state.pop("last_check", None)
         if not pdf_path.exists():
@@ -1677,7 +1864,7 @@ with tab_factcheck:
             st.caption(t("Erfolgreiche Prüfungen werden einzeln im Verlauf gespeichert, wenn die lokale Speicherung aktiviert ist. Ein erneuter Start prüft alle ausgewählten Aussagen nochmals."))
         elif batch_check:
             st.info(t("Quelle oder Auswahl geändert. Die bisherigen Mehrfachergebnisse passen nicht mehr zur aktuellen Auswahl."))
-        if result is None and not current_batch:
+        if result is None and not current_batch and not (agent_mode and st.session_state.get("agent_session")):
             stale = bool(last_check and claim.strip())
             st.markdown(th(f"""
             <div class="result-placeholder">
@@ -1695,8 +1882,13 @@ with tab_factcheck:
                 st.caption("Experimentelles Ergebnis · " + ("Vektorsuche" if result.strategy == "vector" else "BM25 + Vektor"))
             if last_check.get("notice"):
                 st.markdown(f'<div class="notice-box">ℹ️ {t(last_check["notice"])}</div>', unsafe_allow_html=True)
+            # an agent result names its own booklet and vote; the old flow's is the selection
+            card_pdf, card_date, card_lang, card_vote = last_check.get("source") or (pdf_path, source_date, lang_code, vote)
+            discarded = last_check.get("discarded", False)  # its probabilities and number check belong to a dropped label
+            if "source" in last_check:
+                st.caption(t("Geprüfte Vorlage: {title}").format(title=card_vote))
 
-            b_data = engine._get_booklet_data(pdf_path)
+            b_data = engine._get_booklet_data(card_pdf)
             total_pages = len(b_data["pages"])
             pages_read = len(result.context_pages) if result.context_pages else total_pages
             v_cls, v_icon, v_title, v_desc = VERDICTS[result.label]
@@ -1716,9 +1908,9 @@ with tab_factcheck:
             </div>
             """, unsafe_allow_html=True)
 
-            report_record = {"result": result.model_dump(mode="json"), "source_file": pdf_path.name,
-                             "source_sha256": hashlib.sha256(pdf_path.read_bytes()).hexdigest(),
-                             "date": source_date, "language": lang_code, "vote": vote,
+            report_record = {"result": result.model_dump(mode="json"), "source_file": card_pdf.name,
+                             "source_sha256": hashlib.sha256(card_pdf.read_bytes()).hexdigest(),
+                             "date": card_date, "language": card_lang, "vote": card_vote,
                              "created_at": last_check.get("created_at"),
                              "origin": "saved_demo" if last_check.get("notice") else "live"}
             st.download_button(t("Prüfbericht herunterladen (HTML)"),
@@ -1726,7 +1918,7 @@ with tab_factcheck:
                                file_name="faktencheck.html", mime="text/html", key="single_report")
             st.caption(t("Druckfähige Datei ohne externe Inhalte. Im Browser öffnen und bei Bedarf als PDF drucken."))
 
-            if getattr(result, "numerical_conflict", None):
+            if getattr(result, "numerical_conflict", None) and not discarded:
                 st.markdown(f"""
                 <div class="guardrail-banner guardrail-vac animate-in">
                     <span class="guardrail-icon">🔢</span>
@@ -1756,14 +1948,14 @@ with tab_factcheck:
                 primary_quote, primary_page = snippets[0], first.page_number
                 st.markdown(evidence_html(first, snippets[0]), unsafe_allow_html=True)
                 if first.page_number in pages_by_no:
-                    show_original_page(pdf_path, first, snippets[0], result.label,
+                    show_original_page(card_pdf, first, snippets[0], result.label,
                                        pages_by_no[first.page_number]["text"])
                 if len(result.evidence_sources) > 1:
                     with st.expander(t('Weitere Belegstellen ({v0})').format(v0=len(result.evidence_sources) - 1), expanded=False):
                         for src, snippet in zip(result.evidence_sources[1:], snippets[1:]):
                             st.markdown(evidence_html(src, snippet), unsafe_allow_html=True)
                             if src.page_number in pages_by_no and src.page_number != first.page_number:
-                                show_original_page(pdf_path, src, snippet, result.label,
+                                show_original_page(card_pdf, src, snippet, result.label,
                                                    pages_by_no[src.page_number]["text"])
             elif result.label == 1:
                 chips = "".join(
@@ -1779,27 +1971,28 @@ with tab_factcheck:
                 """, unsafe_allow_html=True)
 
             with st.expander(t("Details zur Prüfung"), expanded=False):
-                st.caption(t('Behauptung: {v0} · Quelle: {v1} · {v2} von {v3} Quellseiten im Kontext').format(v0=claim_lang.upper(), v1=lang_code.upper(), v2=pages_read, v3=total_pages))
-                st.markdown(f"""
-                <div style="margin-bottom: 1.2rem;">
-                    <div class="conf-row">
-                        <span class="conf-label">Entailment</span>
-                        <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {result.p_entail*100:.1f}%; background: #10b981;"></div></div>
-                        <span class="conf-value">{result.p_entail*100:.0f}%</span>
+                st.caption(t('Behauptung: {v0} · Quelle: {v1} · {v2} von {v3} Quellseiten im Kontext').format(v0=claim_lang.upper(), v1=card_lang.upper(), v2=pages_read, v3=total_pages))
+                if not discarded:
+                    st.markdown(f"""
+                    <div style="margin-bottom: 1.2rem;">
+                        <div class="conf-row">
+                            <span class="conf-label">Entailment</span>
+                            <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {result.p_entail*100:.1f}%; background: #10b981;"></div></div>
+                            <span class="conf-value">{result.p_entail*100:.0f}%</span>
+                        </div>
+                        <div class="conf-row">
+                            <span class="conf-label">Neutral</span>
+                            <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {result.p_neutral*100:.1f}%; background: #f59e0b;"></div></div>
+                            <span class="conf-value">{result.p_neutral*100:.0f}%</span>
+                        </div>
+                        <div class="conf-row">
+                            <span class="conf-label">Contradiction</span>
+                            <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {result.p_contra*100:.1f}%; background: #ef4444;"></div></div>
+                            <span class="conf-value">{result.p_contra*100:.0f}%</span>
+                        </div>
                     </div>
-                    <div class="conf-row">
-                        <span class="conf-label">Neutral</span>
-                        <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {result.p_neutral*100:.1f}%; background: #f59e0b;"></div></div>
-                        <span class="conf-value">{result.p_neutral*100:.0f}%</span>
-                    </div>
-                    <div class="conf-row">
-                        <span class="conf-label">Contradiction</span>
-                        <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {result.p_contra*100:.1f}%; background: #ef4444;"></div></div>
-                        <span class="conf-value">{result.p_contra*100:.0f}%</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                st.caption(t("Konfidenzen schätzt Apertus selbst; sie sind nicht kalibriert."))
+                    """, unsafe_allow_html=True)
+                    st.caption(t("Konfidenzen schätzt Apertus selbst; sie sind nicht kalibriert."))
                 t1, t2, t3 = st.columns(3)
                 t1.metric(t("Inferenzzeit"), f"{result.latency_ms:.0f} ms")
                 t2.metric(t("Input-Tokens"), fmt(result.tokens_prompt))
@@ -1814,7 +2007,7 @@ with tab_factcheck:
                 card_quote = primary_quote or "Im geprüften Kontext wurde keine bestätigende oder widersprechende Belegstelle gefunden."
                 card_svg = generate_fact_card_svg(
                     claim=claim, label=result.label, quote=card_quote,
-                    page_number=primary_page, proposal_id=None, date_str=source_date or t("Eigenes PDF"),
+                    page_number=primary_page, proposal_id=None, date_str=card_date or t("Eigenes PDF"),
                 )
                 st.markdown(f'<div class="fact-card-wrap">{card_svg}</div>', unsafe_allow_html=True)
                 st.download_button(

@@ -10,8 +10,9 @@ APP=Path(__file__).parents[1]/'app.py'
 
 
 @pytest.fixture(autouse=True)
-def isolated_history(tmp_path):
+def isolated_history(tmp_path, monkeypatch):
     from src.check_history import save_check, load_checks, set_removed
+    monkeypatch.setenv('FACT_ATTACK_AGENT', '0')  # these tests check the flow without the agent layer
     database = tmp_path / 'history.sqlite3'
     with patch('src.check_history.save_check', side_effect=lambda path, **kwargs: save_check(database, **kwargs)), \
          patch('src.check_history.load_checks', side_effect=lambda path, **kwargs: load_checks(database, **kwargs)), \
