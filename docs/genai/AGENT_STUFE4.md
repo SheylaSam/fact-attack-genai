@@ -207,7 +207,8 @@ Entscheidungen während der Umsetzung (Rulings des Ablaufprotokolls):
   der Optionen lehnt die Sitzung ab (die Frage bleibt offen); käme sie am Graphen vorbei, wäre es dort ein
   technischer Fehler, der den Lauf beendet (Review-Minor, zurückgestellt, die UI bietet nur die Optionen an).
 - **Nur deutsche Behauptungen ohne Quelle** (`LANGUAGES = ("de",)`); FR/IT-Behauptungen brauchen eine gewählte Quelle.
-  FR/IT-Büchlein sind nur wählbar, wenn der Agentenindex sie enthält (heute nicht, siehe offene Punkte).
+  FR/IT-Büchlein kennt der Agentenindex nicht; als gewählte Quelle prüft der Agent sie als ganzes Büchlein (auch mit
+  gewählter Vorlage: Die Engine erkennt die Vorlage darin selbst, der Titel geht nicht an die Engine).
 - **Die technische Detailzeile der Schritte** (Werkzeugnamen, Wächtertext, Fehlermeldungen) bleibt deutsch; die UI
   übersetzt Titel, Frage, Knöpfe und Ergebnisse.
 - **Pro Prüfung höchstens 12 HTTP-Anfragen** (`MAX_REQUESTS`): Der Deckel gilt für die ganze Prüfung, auch für den
@@ -221,16 +222,17 @@ standen im Ablaufprotokoll als bewusst zurückgestellt und sind hier benannt; di
 Apertus-Läufe aus der Oberfläche erlaubt sind.
 
 1. **Ein verwaister Worker läuft nach einer Eingabeänderung weiter.** Ändert die Person Behauptung oder Quelle,
-   während ein Lauf arbeitet, wird die Prüfung verworfen, der Worker-Thread aber nicht abgebrochen. Er läuft bis zum
-   Ende (bis zu `MAX_REQUESTS` echten Anfragen) und sein Ergebnis wird nie gezeigt.
+   während ein Lauf arbeitet, wird die Prüfung verworfen, der Worker-Thread aber nicht abgebrochen. **Gemildert in der
+   Fix-Welle (I1):** Das Budget der verworfenen Prüfung ist gesperrt, ihre nächste Anfrage wird abgelehnt; der Thread
+   läuft bis zu dieser Anfrage weiter.
 2. **Der geteilte `SourceIndex` wird ohne Sperre aus mehreren Threads benutzt.** Zwei Browser-Sitzungen (oder ein
    verwaister Worker neben einer neuen Prüfung) rufen den lokalen Qdrant-Client gleichzeitig auf; das ist nicht
    ausgeübt und nicht abgesichert.
-3. **FR/IT-Büchlein werden angeboten, sind aber als Quelle unbrauchbar.** Die Quellenauswahl zeigt sie (und mit der
-   Auswahl „Quelle vorgeben“ ist der Klick möglich), der Agentenindex enthält nur deutsche Büchlein
-   (`LANGUAGES = ("de",)`); nach dem Klick erscheint „Der Agent kann die gewählte Quelle nicht prüfen“.
-4. **Demo-Beispiele verlieren im Agentenmodus den Fallback auf das gespeicherte Ergebnis.** Ist Apertus nicht
-   erreichbar, gibt es nur im alten Ablauf die gekennzeichnete gespeicherte Antwort.
+3. **Behoben in der Fix-Welle (C1): FR/IT-Büchlein waren als Quelle unbrauchbar.** Siehe „Fix-Welle nach dem
+   Gesamt-Review“.
+4. **Demo-Beispiele verlieren im Agentenmodus den Fallback auf das gespeicherte Ergebnis.** Teilweise behoben (C1):
+   Ohne API-Schlüssel (und ohne Mock) läuft der Tab im alten Ablauf, mit gekennzeichneter gespeicherter Antwort. Ist ein
+   Schlüssel da, aber Apertus nicht erreichbar, gibt es im Agentenpfad weiter nur den technischen Fehler.
 5. **Der AppTest für den Upload schreibt in das echte `data/booklets`.** Der Hilfsaufruf legt `custom_<sha>.pdf` in das
    (von Git ausgeschlossene) Büchleinverzeichnis und löscht es danach; wird der Test hart abgebrochen, bleibt die
    Datei. Abhilfe: `src.config.BOOKLETS_DIR` im Test auf ein Temp-Verzeichnis setzen.
@@ -256,8 +258,7 @@ Apertus-Läufe aus der Oberfläche erlaubt sind.
    `test_vote_for_selection_returns_a_whole_booklet_vote_for_a_source_without_a_title`,
    `test_a_catalog_vote_is_never_shadowed_by_the_whole_booklet_vote` und der AppTest
    `test_picking_a_source_with_automatic_object_runs_the_agent_with_a_whole_booklet_vote` (echte Verdrahtung, Mock).
-   FR/IT-Büchlein bleiben unbrauchbar (Punkt 3): Der Index kennt ihre Quelle nicht, also gibt es auch kein ganzes
-   Büchlein.
+   FR/IT-Büchlein: seit der Fix-Welle ebenfalls als ganzes Büchlein (Punkt 3, C1).
 10. **Kleinere zurückgestellte Befunde der Reviews:** Der Speicher des `MemorySaver` behält verworfene Threads (für eine
     Sitzung unerheblich); `start`/`answer` selbst sind nicht threadsicher (die Sperre sitzt in `AgentCheck`);
     `OUTCOME_LABELS` in `agent_ui.py` doppelt `graph.LABEL_OUTCOMES` ohne Pin-Test; die Hinweiszeile wird im
@@ -270,6 +271,31 @@ Apertus-Läufe aus der Oberfläche erlaubt sind.
     ausdrücklichem Vorlagennamen verlieren gegen Embedding-Scores, zusammengesetzte Behauptungen (Safeguarding) und die
     Evaluation B0/B1/B2 gehören in Stufe 5. Ob das Modell mit dem neuen Hinweis (Einschätzung der Behauptung) anders
     antwortet, zeigt erst ein neuer echter Lauf.
+
+## Fix-Welle nach dem Gesamt-Review
+
+Das Review des ganzen Zweigs fand Fehler, die erst im Zusammenspiel der Tasks sichtbar wurden. Behoben in einem
+Durchgang, jeweils mit Tests, die auf dem alten Stand fehlschlugen:
+
+| Befund | Behebung | Tests |
+|---|---|---|
+| **C1** FR/IT-Büchlein und Demo-Beispiele endeten im Agentenmodus in „Der Agent kann die gewählte Quelle nicht prüfen“; de/it prüfte stillschweigend das deutsche Büchlein; ohne Schlüssel stand die rohe englische Meldung „BASE_URL and API_KEY are required…“ da | Ein Beispiel setzt „Diese Quelle für die Prüfung vorgeben“ (`_apply_case`). Ein Katalogbüchlein, das der Index nicht kennt, wird wie in Task 8 als ganzes Büchlein (`<Quelle>#0`, alle Seiten, Titel „Gesamtes Büchlein“, Datum und Sprache aus dem Katalog) geprüft; eine Vorlage aus dem Katalog dieses Büchleins ist erlaubt, ein fremder Titel bleibt ein Fehler. `LocalBackend.add_vote` nimmt dafür die Katalog-Allowlist (`AVAILABLE_SOURCES`) an, weiter keine freien Pfade, keine Teile, keine Schatten über Indexvorlagen. `agent_available()` verlangt einen API-Schlüssel, außer im Mock | `test_every_demo_case_is_checked_against_its_own_booklet` (alle sieben Beispiele, Mock-Verdrahtung, Netz gesperrt), `test_a_french_booklet_chosen_by_hand_is_checked_as_a_whole_with_a_translated_title`, `test_add_vote_accepts_a_catalog_booklet_the_index_does_not_know`, `test_a_catalog_booklet_the_index_does_not_know_is_checked_as_a_whole`, `test_agent_available_needs_an_api_key_unless_mock_mode` |
+| **I1** Doppelklick auf „Behauptung prüfen“ startete zwei Prüfungen | Läuft eine Prüfung mit gleicher Signatur, übernimmt der Klick sie. Eine verworfene Prüfung sperrt ihr Budget (`RequestBudget.cancel`): Die nächste Anfrage ihres Workers wird wie bei erschöpftem Budget abgelehnt | `test_a_second_click_on_verify_while_the_check_runs_adopts_it`, `test_changing_the_claim_while_a_check_runs_cancels_the_dropped_checks_budget`, `test_cancel_refuses_every_further_request_like_a_spent_budget` |
+| **I2** Mock-Urteile sahen aus wie echte | Hinweis „Testmodus, kein Apertus-Urteil“ (DE/FR/IT) auf der Karte, kein Verlaufseintrag, Herkunft `mock` im Prüfbericht (dort mit demselben Hinweis statt „Gespeicherte Liveantwort“) | `test_mock_mode_marks_the_verdict_as_test_mode_and_saves_nothing`, `test_report_marks_a_mock_verdict_as_test_mode_not_as_live` |
+| **I3** Die Mehrfachprüfung lief im Agentenmodus mit einer nie gewählten Quelle | Im Agentenmodus ist der Knopf ohne vorgegebene Quelle oder eigenes PDF aus, mit übersetztem Hinweis; der alte Ablauf ist unverändert | `test_multi_check_in_agent_mode_needs_a_given_source` |
+| **I4** Nach „Quelle selbst wählen“ musste man zusätzlich das Häkchen setzen | Die Bitte um eine Quelle (Sprache der Behauptung) setzt das Häkchen mit dem Aufklappen, im selben einen Rerun; die Bitte bleibt sichtbar | `test_the_request_to_pick_the_source_ticks_the_box_so_a_chosen_booklet_runs` |
+| **I5** „Gesamtes Büchlein“ hatte keine FR/IT-Zeile | Zeile in `ui_i18n.py`, Konstanten `TITLE_WHOLE_BOOKLET`/`TITLE_UPLOAD` in `agent_ui.TEXT_KEYS`; Karte, Verlauf und Bericht übersetzen nur diese Platzhalter, amtliche Titel nicht | `test_the_placeholder_titles_are_translated_texts_of_this_module`, `test_report_translates_the_placeholder_vote_titles_only`, FR-Karte im AppTest zu C1 |
+| **M1** Fehlertexte aus dem Lauf wurden als Markdown gesetzt | Escape aller Markdown-/LaTeX-Zeichen (`_md`) in `st.error`/`st.warning` | `test_run_texts_in_error_boxes_are_not_rendered_as_markdown` |
+| **M4** „Mehrere Vorlagen passen …“ auch bei der Rückfrage des Wächters wegen Widerspruch | Dort der neutrale Text „Wähle die Vorlage, die du meinst; …“ (`agent_ui.question_text`) | `test_the_mismatch_question_does_not_say_that_several_votes_fit`, `test_the_mismatch_question_does_not_claim_that_several_votes_fit` |
+| **M7** Schritte einer früheren Prüfung blieben über den Ergebnissen der Mehrfachprüfung | Die Mehrfachprüfung verwirft die Agentenprüfung | `test_a_multi_check_drops_the_agent_check_above_it` |
+| **M9** Ruling A war nur mit Patches getestet | Ein Test sperrt `langgraph` und `httpx` im Import eines frischen Interpreters und lädt die App | `test_the_app_and_its_agent_modules_load_without_langgraph_and_httpx` (bestand schon auf dem alten Stand: sichert ab, was schon galt) |
+
+Weiter offen aus dem Gesamt-Review: **M2** jede UI-Prüfung schreibt eine Spurdatei, auch ohne Häkchen beim Verlauf;
+**M3** die Schrittliste steht still, solange `check.wait` blockiert; **M5** `agent_available` prüft nur, ob das
+Indexverzeichnis existiert, nicht ob ein vollständiger Index darin liegt; **M6** die Hinweiszeile wird nur im Mock-
+Entscheider abgestreift; **M8** das Budget gilt für Frage und Antwort zusammen. Dazu die offenen Punkte oben.
+
+Im Browser nicht nachgeprüft: Die Fix-Welle ist nur über AppTests und Unit-Tests belegt.
 
 ## Starten und testen
 
@@ -299,9 +325,10 @@ FACT_ATTACK_ENV_FILE=<Pfad zur eigenen .env> HF_HOME=... HF_HUB_OFFLINE=1 \
 | `AGENT_TRACE_DIR` | Ordner der Spuren (`<Lauf>.trace.jsonl`, echt auch `<Lauf>.requests.jsonl`); Standard `.agent-traces`. |
 | `AGENT_INDEX_DIR` | Ordner des Agentenindex; fehlt er, ist der Agentenpfad nicht verfügbar. |
 
-Ohne `FACT_ATTACK_AGENT_MOCK` und ohne Schlüssel soll die UI die übersetzte Meldung „Die Prüfung konnte nicht
-abgeschlossen werden“ zeigen (so beschreibt es der Bericht zu Task 4; in der Handprobe nicht ausprobiert, weil dafür
-nichts gesendet werden durfte). Spuren der Handprobe lagen unter einem Temp-Ordner, nicht im Repo.
+Ohne `FACT_ATTACK_AGENT_MOCK` und ohne Schlüssel (`LLM_API_KEY`/`API_KEY`, wie bei der CLI) ist der Agentenpfad seit
+der Fix-Welle nicht verfügbar: Der Tab läuft im alten Ablauf, Demo-Beispiele zeigen ihr gespeichertes Ergebnis
+(`agent_available`, getestet; im Browser nicht ausprobiert). Spuren der Handprobe lagen unter einem Temp-Ordner,
+nicht im Repo.
 
 Tests (die Suite bleibt ohne Netz; die AppTests sperren `_request_completion`):
 
@@ -354,8 +381,8 @@ Büchleins mit „Automatisch erkennen“, ein echtes Modell.
 
 ## Tests
 
-Vollständige Suite auf dem Stand dieser Stufe: **967 Tests bestanden**, 196 Subtests, 8 bekannte Warnungen (fünf
-PDF-Deprecation-Warnungen und drei Warnungen des Fork-Pools; Stand vor Stufe 4: 859 bestanden, 108 neue Tests, davon 9
-aus Task 8; vor Task 8: 958). Die
+Vollständige Suite auf dem Stand dieser Stufe: **994 Tests bestanden**, 206 Subtests, 8 bekannte Warnungen (fünf
+PDF-Deprecation-Warnungen und drei Warnungen des Fork-Pools; Stand vor Stufe 4: 859 bestanden; vor Task 8: 958, nach
+Task 8: 967, nach der Fix-Welle: 994, davon 27 neue Tests der Fix-Welle). Die
 AppTests laufen mit `default_timeout=50` und sperren jede echte HTTP-Anfrage. Nach der Suite blieb kein Server-Prozess
 zurück.
