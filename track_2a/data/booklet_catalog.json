@@ -657,6 +657,72 @@
         "Iniziativa popolare «No a una Svizzera da 10 milioni! (Iniziativa per la sostenibilità)»"
       ],
       "sha256": "b5212bf5086306a5d45058aae56be6cef2af02f76bc963b7f72cf2c71c4b6931"
+    },
+    "2026-09-27_de.pdf": {
+      "date": "2026-09-27",
+      "language": "de",
+      "url": "https://www.admin.ch/dam/de/sd-web/3E6DtQlSES3i/DE-%20Volksabstimmung%20vom%2027.%20September%202026%20-%20Erl%C3%A4uterungen%20des%20Bundesrates.pdf",
+      "votes": [
+        "Volksinitiative «Wahrung der schweizerischen Neutralität (Neutralitätsinitiative)»",
+        "Volksinitiative «Für eine sichere Ernährung – durch Stärkung einer nachhaltigen inländischen Produktion, mehr pflanzliche Lebensmittel und sauberes Trinkwasser (Ernährungsinitiative)»"
+      ],
+      "sha256": "6d27a4c6c5ed0e8583a49864979dcc2ddeeb4c65e895b97a2df3fa1d089dbc15"
+    },
+    "2026-09-27_fr.pdf": {
+      "date": "2026-09-27",
+      "language": "fr",
+      "url": "https://www.admin.ch/dam/fr/sd-web/3E6DtQlSES3i/Votation%20populaire%20du%2027%20septembre%202026%20-%20Explications%20du%20Conseil%20f%C3%A9d%C3%A9ral.pdf",
+      "votes": [
+        "Initiative populaire « Sauvegarder la neutralité suisse (initiative sur la neutralité) »",
+        "Initiative populaire «Pour une alimentation sûre – grâce au renforcement de la production indigène durable, à davantage de denrées alimentaires végétales et à une eau potable propre (initiative sur l’alimentation)»"
+      ],
+      "sha256": "df3b26401da0189ea2872f1d75ed5198e158e84e51c962eb463443aea79e0dfc"
+    },
+    "2026-09-27_it.pdf": {
+      "date": "2026-09-27",
+      "language": "it",
+      "url": "https://www.admin.ch/dam/it/sd-web/3E6DtQlSES3i/Votazione%20popolare%20del%2027%20settembre%202026%20-%20Spiegazioni%20del%20Consiglio%20federale.pdf",
+      "votes": [
+        "Iniziativa popolare «Salvaguardia della neutralità svizzera (Iniziativa sulla neutralità)»",
+        "Iniziativa popolare «Per un’alimentazione sicura – mediante il rafforzamento di una produzione nazionale sostenibile, più derrate alimentari vegetali e acqua potabile pulita (Iniziativa sull’alimentazione)»"
+      ],
+      "sha256": "e7bfa483ffe4623994266cc244d308b8f9eae97815ac0bebcc496f81f5841e00"
+    },
+    "2026-11-29_de.pdf": {
+      "date": "2026-11-29",
+      "language": "de",
+      "url": "https://www.admin.ch/dam/de/sd-web/HXhFMFWOaa6u/BAR_Erlaeuterungen_Nov26_DE_v10.pdf",
+      "votes": [
+        "Bundesbeschluss über die Zusatzfinanzierung der AHV durch eine Erhöhung der Mehrwertsteuer",
+        "Volksinitiative « Für eine Einschränkung von Feuerwerk »",
+        "Volksinitiative « Ja zu fairen Bundessteuern auch für Ehepaare – Diskriminierung der Ehe endlich abschaffen! »",
+        "Änderung des Kriegsmaterialgesetzes"
+      ],
+      "sha256": "391b1f2941820c9859b0fef5ac6dd366e325076ebd125f0c5ecd763fea428be2"
+    },
+    "2026-11-29_fr.pdf": {
+      "date": "2026-11-29",
+      "language": "fr",
+      "url": "https://www.admin.ch/dam/fr/sd-web/HXhFMFWOaa6u/BAR_Erlaeuterungen_Nov26_FR_v10.pdf",
+      "votes": [
+        "Arrêté fédéral sur le financement additionnel de l’AVS par le biais d’un relèvement de la TVA",
+        "Initiative populaire « Pour une limitation des feux d’artifice »",
+        "Initiative populaire « Oui à des impôts fédéraux équitables pour les couples mariés – Pour enfin en finir avec la discrimination du mariage ! »",
+        "Modification de la loi fédérale sur le matériel de guerre"
+      ],
+      "sha256": "45a8599ee538d039f6a3a4169b219446cc6ae4bbb46e7f64401e93edcd97380d"
+    },
+    "2026-11-29_it.pdf": {
+      "date": "2026-11-29",
+      "language": "it",
+      "url": "https://www.admin.ch/dam/it/sd-web/HXhFMFWOaa6u/BAR_Erlaeuterungen_Nov26_IT_v10.pdf",
+      "votes": [
+        "Decreto federale sul finanziamento supplementare dell’AVS mediante un aumento dell’imposta sul valore aggiunto",
+        "Iniziativa popolare «Per una limitazione dei fuochi d’artificio»",
+        "Iniziativa popolare «Sì a imposte federali eque anche per i coniugi – Basta con la discriminazione del matrimonio!»",
+        "Modifica della legge federale sul materiale bellico"
+      ],
+      "sha256": "2a9bb33a75a20e2802ca8f6e10661c38cf24a74300961c213868e42cd0decb55"
     }
   }
 }

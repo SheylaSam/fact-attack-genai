@@ -1,0 +1,1579 @@
+{
+  "date": "2026-11-13",
+  "testset_cases_sha256": "9d356dd19cda156197a2cb0e02d7cb879377466983666bf16d99bae4c89f4e09",
+  "split": "dev",
+  "rows": [
+    {
+      "id": "dev-001",
+      "kind": null,
+      "gold": "2020-02-09_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2020-02-09_de#1",
+          "score": 0.8918878912875993,
+          "hits": 18
+        },
+        {
+          "vote_id": "2026-06-14_de#1",
+          "score": 0.8432408976922056,
+          "hits": 10
+        },
+        {
+          "vote_id": "2026-09-27_de#2",
+          "score": 0.8398848341472009,
+          "hits": 1
+        },
+        {
+          "vote_id": "2024-09-22_de#1",
+          "score": 0.8366658847270081,
+          "hits": 2
+        },
+        {
+          "vote_id": "2025-11-30_de#1",
+          "score": 0.8345079450001063,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-002",
+      "kind": null,
+      "gold": "2020-02-09_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2020-02-09_de#1",
+          "score": 0.9067682668481267,
+          "hits": 14
+        },
+        {
+          "vote_id": "2021-09-26_de#1",
+          "score": 0.8605904277524251,
+          "hits": 3
+        },
+        {
+          "vote_id": "2025-11-30_de#2",
+          "score": 0.85293496955253,
+          "hits": 8
+        },
+        {
+          "vote_id": "2026-03-08_de#2",
+          "score": 0.8487920435579033,
+          "hits": 8
+        },
+        {
+          "vote_id": "2020-09-27_de#4",
+          "score": 0.8454055373573961,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-003",
+      "kind": null,
+      "gold": "2020-09-27_de#2",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2020-09-27_de#2",
+          "score": 0.8855615795220837,
+          "hits": 27
+        },
+        {
+          "vote_id": "2022-02-13_de#1",
+          "score": 0.8428828804713099,
+          "hits": 1
+        },
+        {
+          "vote_id": "2021-06-13_de#2",
+          "score": 0.8426384276934443,
+          "hits": 6
+        },
+        {
+          "vote_id": "2022-09-25_de#1",
+          "score": 0.8383172526869573,
+          "hits": 3
+        },
+        {
+          "vote_id": "2020-11-29_de#1",
+          "score": 0.8367978358930638,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-004",
+      "kind": null,
+      "gold": "2020-09-27_de#2",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2020-09-27_de#2",
+          "score": 0.8960844278956961,
+          "hits": 28
+        },
+        {
+          "vote_id": "2021-06-13_de#5",
+          "score": 0.8609902092950179,
+          "hits": 1
+        },
+        {
+          "vote_id": "2022-09-25_de#1",
+          "score": 0.8542078148804154,
+          "hits": 3
+        },
+        {
+          "vote_id": "2021-11-28_de#3",
+          "score": 0.8521488049424718,
+          "hits": 3
+        },
+        {
+          "vote_id": "2021-06-13_de#4",
+          "score": 0.8491870603662067,
+          "hits": 4
+        }
+      ]
+    },
+    {
+      "id": "dev-005",
+      "kind": null,
+      "gold": "2020-11-29_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2020-11-29_de#1",
+          "score": 0.8927280420734567,
+          "hits": 11
+        },
+        {
+          "vote_id": "2022-05-15_de#1",
+          "score": 0.8591891121404807,
+          "hits": 4
+        },
+        {
+          "vote_id": "2020-09-27_de#2",
+          "score": 0.8534313132597928,
+          "hits": 2
+        },
+        {
+          "vote_id": "2020-11-29_de#2",
+          "score": 0.851938228625835,
+          "hits": 4
+        },
+        {
+          "vote_id": "2021-06-13_de#4",
+          "score": 0.851544839950559,
+          "hits": 3
+        }
+      ]
+    },
+    {
+      "id": "dev-006",
+      "kind": null,
+      "gold": "2020-11-29_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2020-11-29_de#1",
+          "score": 0.8973841003118022,
+          "hits": 12
+        },
+        {
+          "vote_id": "2020-11-29_de#2",
+          "score": 0.8715586675412695,
+          "hits": 5
+        },
+        {
+          "vote_id": "2026-06-14_de#1",
+          "score": 0.8689027233620064,
+          "hits": 3
+        },
+        {
+          "vote_id": "2025-11-30_de#2",
+          "score": 0.868773754666523,
+          "hits": 1
+        },
+        {
+          "vote_id": "2025-02-09_de#1",
+          "score": 0.8647752636848847,
+          "hits": 4
+        }
+      ]
+    },
+    {
+      "id": "dev-007",
+      "kind": null,
+      "gold": "2021-06-13_de#3",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2021-06-13_de#3",
+          "score": 0.9122685431944306,
+          "hits": 18
+        },
+        {
+          "vote_id": "2023-06-18_de#3",
+          "score": 0.8747457101144371,
+          "hits": 5
+        },
+        {
+          "vote_id": "2021-11-28_de#3",
+          "score": 0.8745803039807823,
+          "hits": 12
+        },
+        {
+          "vote_id": "2020-09-27_de#1",
+          "score": 0.8665626770451602,
+          "hits": 3
+        },
+        {
+          "vote_id": "2022-02-13_de#4",
+          "score": 0.8598391418654034,
+          "hits": 2
+        }
+      ]
+    },
+    {
+      "id": "dev-008",
+      "kind": null,
+      "gold": "2021-06-13_de#3",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2021-06-13_de#3",
+          "score": 0.8987477542883764,
+          "hits": 18
+        },
+        {
+          "vote_id": "2021-11-28_de#3",
+          "score": 0.8945875183821692,
+          "hits": 15
+        },
+        {
+          "vote_id": "2023-06-18_de#3",
+          "score": 0.8776020072674156,
+          "hits": 6
+        },
+        {
+          "vote_id": "2020-09-27_de#4",
+          "score": 0.8652337065138413,
+          "hits": 1
+        },
+        {
+          "vote_id": "2021-09-26_de#1",
+          "score": 0.861258243788225,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-009",
+      "kind": null,
+      "gold": "2021-09-26_de#2",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2021-09-26_de#2",
+          "score": 0.906982152591523,
+          "hits": 16
+        },
+        {
+          "vote_id": "2026-11-29_de#3",
+          "score": 0.8697178577858434,
+          "hits": 10
+        },
+        {
+          "vote_id": "2026-03-08_de#4",
+          "score": 0.8656675343928864,
+          "hits": 3
+        },
+        {
+          "vote_id": "2021-03-07_de#2",
+          "score": 0.8612794984327994,
+          "hits": 2
+        },
+        {
+          "vote_id": "2026-06-14_de#1",
+          "score": 0.859815690855604,
+          "hits": 5
+        }
+      ]
+    },
+    {
+      "id": "dev-010",
+      "kind": null,
+      "gold": "2021-09-26_de#2",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2021-09-26_de#2",
+          "score": 0.91354271650119,
+          "hits": 15
+        },
+        {
+          "vote_id": "2026-11-29_de#3",
+          "score": 0.8685254530230657,
+          "hits": 10
+        },
+        {
+          "vote_id": "2021-11-28_de#3",
+          "score": 0.8619093271778091,
+          "hits": 3
+        },
+        {
+          "vote_id": "2026-03-08_de#4",
+          "score": 0.8603859309822488,
+          "hits": 7
+        },
+        {
+          "vote_id": "2020-11-29_de#2",
+          "score": 0.8600763415944502,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-011",
+      "kind": null,
+      "gold": "2021-11-28_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2021-11-28_de#1",
+          "score": 0.8714040677769794,
+          "hits": 14
+        },
+        {
+          "vote_id": "2024-11-24_de#4",
+          "score": 0.8550938593274391,
+          "hits": 15
+        },
+        {
+          "vote_id": "2024-06-09_de#1",
+          "score": 0.8511146099213718,
+          "hits": 7
+        },
+        {
+          "vote_id": "2024-06-09_de#2",
+          "score": 0.8493898948738088,
+          "hits": 9
+        },
+        {
+          "vote_id": "2022-02-13_de#2",
+          "score": 0.845885104223358,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-012",
+      "kind": null,
+      "gold": "2021-11-28_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2021-11-28_de#1",
+          "score": 0.9282477401238926,
+          "hits": 13
+        },
+        {
+          "vote_id": "2024-06-09_de#2",
+          "score": 0.8808690397855626,
+          "hits": 7
+        },
+        {
+          "vote_id": "2024-06-09_de#1",
+          "score": 0.8707055850543168,
+          "hits": 7
+        },
+        {
+          "vote_id": "2020-09-27_de#1",
+          "score": 0.8664079207051238,
+          "hits": 3
+        },
+        {
+          "vote_id": "2025-11-30_de#1",
+          "score": 0.8639989607701577,
+          "hits": 2
+        }
+      ]
+    },
+    {
+      "id": "dev-013",
+      "kind": null,
+      "gold": "2022-02-13_de#2",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2026-06-14_de#1",
+          "score": 0.8579221929367695,
+          "hits": 11
+        },
+        {
+          "vote_id": "2021-06-13_de#2",
+          "score": 0.8551924516247768,
+          "hits": 1
+        },
+        {
+          "vote_id": "2020-09-27_de#2",
+          "score": 0.8529248130927635,
+          "hits": 4
+        },
+        {
+          "vote_id": "2022-02-13_de#4",
+          "score": 0.8516176831022155,
+          "hits": 3
+        },
+        {
+          "vote_id": "2021-06-13_de#5",
+          "score": 0.8506843218030231,
+          "hits": 4
+        }
+      ]
+    },
+    {
+      "id": "dev-014",
+      "kind": null,
+      "gold": "2022-02-13_de#2",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2022-02-13_de#2",
+          "score": 0.9085014814807707,
+          "hits": 17
+        },
+        {
+          "vote_id": "2021-06-13_de#2",
+          "score": 0.8684589630429812,
+          "hits": 5
+        },
+        {
+          "vote_id": "2020-02-09_de#2",
+          "score": 0.8676470135607558,
+          "hits": 2
+        },
+        {
+          "vote_id": "2022-02-13_de#1",
+          "score": 0.8552749442871842,
+          "hits": 5
+        },
+        {
+          "vote_id": "2020-09-27_de#1",
+          "score": 0.854320590330381,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-015",
+      "kind": null,
+      "gold": "2022-05-15_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2022-05-15_de#1",
+          "score": 0.9053410815759241,
+          "hits": 21
+        },
+        {
+          "vote_id": "2026-03-08_de#2",
+          "score": 0.8475351175406449,
+          "hits": 3
+        },
+        {
+          "vote_id": "2023-06-18_de#2",
+          "score": 0.8470822076974102,
+          "hits": 3
+        },
+        {
+          "vote_id": "2024-06-09_de#2",
+          "score": 0.8447209968615993,
+          "hits": 1
+        },
+        {
+          "vote_id": "2021-06-13_de#3",
+          "score": 0.8439997961117665,
+          "hits": 2
+        }
+      ]
+    },
+    {
+      "id": "dev-016",
+      "kind": null,
+      "gold": "2022-05-15_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2022-05-15_de#1",
+          "score": 0.9093709435457806,
+          "hits": 17
+        },
+        {
+          "vote_id": "2026-03-08_de#2",
+          "score": 0.8524827001811351,
+          "hits": 8
+        },
+        {
+          "vote_id": "2023-06-18_de#1",
+          "score": 0.8374054781388841,
+          "hits": 2
+        },
+        {
+          "vote_id": "2022-02-13_de#4",
+          "score": 0.8370620017410988,
+          "hits": 9
+        },
+        {
+          "vote_id": "2021-09-26_de#1",
+          "score": 0.8328513703772596,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-017",
+      "kind": null,
+      "gold": "2022-09-25_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2022-02-13_de#1",
+          "score": 0.8827767864559473,
+          "hits": 6
+        },
+        {
+          "vote_id": "2022-09-25_de#1",
+          "score": 0.8767699203404977,
+          "hits": 13
+        },
+        {
+          "vote_id": "2020-09-27_de#2",
+          "score": 0.8481941492233598,
+          "hits": 8
+        },
+        {
+          "vote_id": "2021-06-13_de#1",
+          "score": 0.8410762397231185,
+          "hits": 3
+        },
+        {
+          "vote_id": "2021-11-28_de#3",
+          "score": 0.8394892636622482,
+          "hits": 7
+        }
+      ]
+    },
+    {
+      "id": "dev-018",
+      "kind": null,
+      "gold": "2022-09-25_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2022-09-25_de#1",
+          "score": 0.869864872973251,
+          "hits": 15
+        },
+        {
+          "vote_id": "2020-09-27_de#2",
+          "score": 0.8519050825689722,
+          "hits": 5
+        },
+        {
+          "vote_id": "2020-02-09_de#1",
+          "score": 0.8517129235494474,
+          "hits": 1
+        },
+        {
+          "vote_id": "2025-11-30_de#1",
+          "score": 0.8499315112776568,
+          "hits": 2
+        },
+        {
+          "vote_id": "2021-11-28_de#3",
+          "score": 0.8496857220321701,
+          "hits": 3
+        }
+      ]
+    },
+    {
+      "id": "dev-019",
+      "kind": null,
+      "gold": "2023-06-18_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2023-06-18_de#1",
+          "score": 0.8812362275669372,
+          "hits": 15
+        },
+        {
+          "vote_id": "2022-02-13_de#3",
+          "score": 0.870016128680233,
+          "hits": 2
+        },
+        {
+          "vote_id": "2022-02-13_de#4",
+          "score": 0.8692415731412058,
+          "hits": 2
+        },
+        {
+          "vote_id": "2022-09-25_de#3",
+          "score": 0.8685394113867844,
+          "hits": 3
+        },
+        {
+          "vote_id": "2021-06-13_de#4",
+          "score": 0.8668875584218376,
+          "hits": 5
+        }
+      ]
+    },
+    {
+      "id": "dev-020",
+      "kind": null,
+      "gold": "2023-06-18_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2022-02-13_de#2",
+          "score": 0.8684160002238053,
+          "hits": 3
+        },
+        {
+          "vote_id": "2021-09-26_de#1",
+          "score": 0.8624496675130308,
+          "hits": 3
+        },
+        {
+          "vote_id": "2022-09-25_de#3",
+          "score": 0.8609695439926934,
+          "hits": 7
+        },
+        {
+          "vote_id": "2024-06-09_de#1",
+          "score": 0.8598084479723487,
+          "hits": 1
+        },
+        {
+          "vote_id": "2023-06-18_de#1",
+          "score": 0.8596127396790288,
+          "hits": 11
+        }
+      ]
+    },
+    {
+      "id": "dev-021",
+      "kind": null,
+      "gold": "2024-06-09_de#2",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2024-06-09_de#2",
+          "score": 0.8959378336499049,
+          "hits": 14
+        },
+        {
+          "vote_id": "2024-06-09_de#1",
+          "score": 0.8861139687997097,
+          "hits": 5
+        },
+        {
+          "vote_id": "2021-11-28_de#1",
+          "score": 0.8836776217769373,
+          "hits": 3
+        },
+        {
+          "vote_id": "2024-11-24_de#4",
+          "score": 0.870408645282022,
+          "hits": 5
+        },
+        {
+          "vote_id": "2022-09-25_de#2",
+          "score": 0.8672530751596852,
+          "hits": 11
+        }
+      ]
+    },
+    {
+      "id": "dev-022",
+      "kind": null,
+      "gold": "2024-06-09_de#2",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2024-06-09_de#2",
+          "score": 0.8981555054597553,
+          "hits": 12
+        },
+        {
+          "vote_id": "2024-06-09_de#1",
+          "score": 0.8901896947699367,
+          "hits": 16
+        },
+        {
+          "vote_id": "2022-02-13_de#2",
+          "score": 0.877545819847408,
+          "hits": 1
+        },
+        {
+          "vote_id": "2021-09-26_de#1",
+          "score": 0.8726660504271428,
+          "hits": 1
+        },
+        {
+          "vote_id": "2024-11-24_de#4",
+          "score": 0.8715750969784096,
+          "hits": 9
+        }
+      ]
+    },
+    {
+      "id": "dev-023",
+      "kind": null,
+      "gold": "2024-09-22_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2024-09-22_de#1",
+          "score": 0.8848271746710642,
+          "hits": 12
+        },
+        {
+          "vote_id": "2026-03-08_de#3",
+          "score": 0.864383258303003,
+          "hits": 1
+        },
+        {
+          "vote_id": "2024-06-09_de#4",
+          "score": 0.8534010755898227,
+          "hits": 6
+        },
+        {
+          "vote_id": "2020-09-27_de#2",
+          "score": 0.8523150391494321,
+          "hits": 9
+        },
+        {
+          "vote_id": "2025-02-09_de#1",
+          "score": 0.8503119099853272,
+          "hits": 6
+        }
+      ]
+    },
+    {
+      "id": "dev-024",
+      "kind": null,
+      "gold": "2024-09-22_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2026-03-08_de#3",
+          "score": 0.8750263560797016,
+          "hits": 7
+        },
+        {
+          "vote_id": "2024-09-22_de#1",
+          "score": 0.8710380785524965,
+          "hits": 9
+        },
+        {
+          "vote_id": "2020-09-27_de#2",
+          "score": 0.8695890581963074,
+          "hits": 9
+        },
+        {
+          "vote_id": "2024-11-24_de#1",
+          "score": 0.8621223052594054,
+          "hits": 1
+        },
+        {
+          "vote_id": "2021-06-13_de#1",
+          "score": 0.8604322953329626,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-025",
+      "kind": null,
+      "gold": "2025-02-09_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2025-02-09_de#1",
+          "score": 0.9126676395681049,
+          "hits": 16
+        },
+        {
+          "vote_id": "2021-06-13_de#1",
+          "score": 0.887339791249008,
+          "hits": 2
+        },
+        {
+          "vote_id": "2026-09-27_de#2",
+          "score": 0.8854948145131074,
+          "hits": 4
+        },
+        {
+          "vote_id": "2021-06-13_de#2",
+          "score": 0.8758846796905638,
+          "hits": 3
+        },
+        {
+          "vote_id": "2021-06-13_de#4",
+          "score": 0.8749871359100454,
+          "hits": 6
+        }
+      ]
+    },
+    {
+      "id": "dev-026",
+      "kind": null,
+      "gold": "2025-02-09_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2025-02-09_de#1",
+          "score": 0.8708064154742087,
+          "hits": 9
+        },
+        {
+          "vote_id": "2021-06-13_de#4",
+          "score": 0.8680391919302617,
+          "hits": 13
+        },
+        {
+          "vote_id": "2021-09-26_de#1",
+          "score": 0.8623337264361467,
+          "hits": 2
+        },
+        {
+          "vote_id": "2026-03-08_de#3",
+          "score": 0.8602702822382864,
+          "hits": 6
+        },
+        {
+          "vote_id": "2021-06-13_de#2",
+          "score": 0.856896664591283,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-027",
+      "kind": null,
+      "gold": "2025-11-30_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2025-11-30_de#1",
+          "score": 0.8921936539454792,
+          "hits": 15
+        },
+        {
+          "vote_id": "2026-06-14_de#2",
+          "score": 0.8640641814673724,
+          "hits": 10
+        },
+        {
+          "vote_id": "2020-09-27_de#1",
+          "score": 0.8634625020569575,
+          "hits": 5
+        },
+        {
+          "vote_id": "2026-06-14_de#1",
+          "score": 0.8563909662549561,
+          "hits": 4
+        },
+        {
+          "vote_id": "2021-03-07_de#2",
+          "score": 0.8560600545047646,
+          "hits": 6
+        }
+      ]
+    },
+    {
+      "id": "dev-028",
+      "kind": null,
+      "gold": "2025-11-30_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2025-11-30_de#1",
+          "score": 0.8646807193640071,
+          "hits": 17
+        },
+        {
+          "vote_id": "2025-02-09_de#1",
+          "score": 0.837413028720676,
+          "hits": 2
+        },
+        {
+          "vote_id": "2026-06-14_de#2",
+          "score": 0.8315455124376162,
+          "hits": 5
+        },
+        {
+          "vote_id": "2026-06-14_de#1",
+          "score": 0.8291905886583768,
+          "hits": 2
+        },
+        {
+          "vote_id": "2022-05-15_de#1",
+          "score": 0.8284656874235246,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-029",
+      "kind": null,
+      "gold": "2026-06-14_de#2",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2026-06-14_de#2",
+          "score": 0.9020152856316599,
+          "hits": 23
+        },
+        {
+          "vote_id": "2025-11-30_de#1",
+          "score": 0.8698810935344294,
+          "hits": 12
+        },
+        {
+          "vote_id": "2026-06-14_de#1",
+          "score": 0.8561351865089197,
+          "hits": 6
+        },
+        {
+          "vote_id": "2024-03-03_de#1",
+          "score": 0.851152038837701,
+          "hits": 1
+        },
+        {
+          "vote_id": "2023-06-18_de#3",
+          "score": 0.8494678622722193,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-030",
+      "kind": null,
+      "gold": "2026-06-14_de#2",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2026-06-14_de#2",
+          "score": 0.8835396263221378,
+          "hits": 17
+        },
+        {
+          "vote_id": "2025-11-30_de#1",
+          "score": 0.880812741621388,
+          "hits": 9
+        },
+        {
+          "vote_id": "2022-05-15_de#1",
+          "score": 0.8666966414509218,
+          "hits": 1
+        },
+        {
+          "vote_id": "2024-06-09_de#2",
+          "score": 0.8640647866136233,
+          "hits": 1
+        },
+        {
+          "vote_id": "2026-03-08_de#4",
+          "score": 0.863476751528164,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "sdev-01",
+      "kind": "mehrdeutig",
+      "gold": "2024-11-24_de#2",
+      "ambiguous_with": [
+        "2024-11-24_de#3"
+      ],
+      "candidates": [
+        {
+          "vote_id": "2024-11-24_de#2",
+          "score": 0.8657486851022158,
+          "hits": 9
+        },
+        {
+          "vote_id": "2024-11-24_de#3",
+          "score": 0.8591922137153886,
+          "hits": 7
+        },
+        {
+          "vote_id": "2021-11-28_de#2",
+          "score": 0.8537029965679923,
+          "hits": 1
+        },
+        {
+          "vote_id": "2020-09-27_de#2",
+          "score": 0.8511098350409263,
+          "hits": 1
+        },
+        {
+          "vote_id": "2021-11-28_de#3",
+          "score": 0.8489843415115458,
+          "hits": 2
+        }
+      ]
+    },
+    {
+      "id": "sdev-02",
+      "kind": "mehrdeutig",
+      "gold": "2024-06-09_de#1",
+      "ambiguous_with": [
+        "2024-06-09_de#2"
+      ],
+      "candidates": [
+        {
+          "vote_id": "2024-06-09_de#1",
+          "score": 0.8599599970945924,
+          "hits": 13
+        },
+        {
+          "vote_id": "2024-06-09_de#3",
+          "score": 0.8580290976133202,
+          "hits": 1
+        },
+        {
+          "vote_id": "2026-11-29_de#2",
+          "score": 0.8560238078575417,
+          "hits": 1
+        },
+        {
+          "vote_id": "2026-03-08_de#2",
+          "score": 0.855541173318298,
+          "hits": 1
+        },
+        {
+          "vote_id": "2026-06-14_de#2",
+          "score": 0.8550478300141486,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "sdev-03",
+      "kind": "falscher_sprecher",
+      "gold": "2020-09-27_de#2",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2020-09-27_de#2",
+          "score": 0.8964925936431812,
+          "hits": 24
+        },
+        {
+          "vote_id": "2020-09-27_de#5",
+          "score": 0.8719536643763945,
+          "hits": 2
+        },
+        {
+          "vote_id": "2021-11-28_de#3",
+          "score": 0.8698000186749175,
+          "hits": 3
+        },
+        {
+          "vote_id": "2022-05-15_de#1",
+          "score": 0.8670276597603048,
+          "hits": 1
+        },
+        {
+          "vote_id": "2021-06-13_de#2",
+          "score": 0.8663136530656551,
+          "hits": 4
+        }
+      ]
+    },
+    {
+      "id": "sdev-04",
+      "kind": "zusammengesetzt",
+      "gold": "2022-05-15_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2022-05-15_de#1",
+          "score": 0.917387756000829,
+          "hits": 21
+        },
+        {
+          "vote_id": "2026-03-08_de#2",
+          "score": 0.8578475532742482,
+          "hits": 5
+        },
+        {
+          "vote_id": "2022-02-13_de#4",
+          "score": 0.8457092641887982,
+          "hits": 7
+        },
+        {
+          "vote_id": "2021-06-13_de#3",
+          "score": 0.8443212932223016,
+          "hits": 1
+        },
+        {
+          "vote_id": "2021-11-28_de#3",
+          "score": 0.844214055717702,
+          "hits": 4
+        }
+      ]
+    },
+    {
+      "id": "sdev-05",
+      "kind": "ohne_abstimmung",
+      "gold": null,
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2022-02-13_de#2",
+          "score": 0.8846033244577655,
+          "hits": 16
+        },
+        {
+          "vote_id": "2021-06-13_de#1",
+          "score": 0.8656254060851771,
+          "hits": 1
+        },
+        {
+          "vote_id": "2020-11-29_de#2",
+          "score": 0.8609601948563292,
+          "hits": 2
+        },
+        {
+          "vote_id": "2022-05-15_de#1",
+          "score": 0.8597844771933951,
+          "hits": 3
+        },
+        {
+          "vote_id": "2020-09-27_de#2",
+          "score": 0.858388497026547,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "sdev-06",
+      "kind": "api_ausfall",
+      "gold": "2020-11-29_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2020-11-29_de#1",
+          "score": 0.8862874485609444,
+          "hits": 13
+        },
+        {
+          "vote_id": "2021-11-28_de#3",
+          "score": 0.8525636705408655,
+          "hits": 1
+        },
+        {
+          "vote_id": "2020-11-29_de#2",
+          "score": 0.8490143029592797,
+          "hits": 5
+        },
+        {
+          "vote_id": "2024-11-24_de#4",
+          "score": 0.8483042532785361,
+          "hits": 1
+        },
+        {
+          "vote_id": "2023-06-18_de#2",
+          "score": 0.8474588293442111,
+          "hits": 1
+        }
+      ]
+    },
+    {
+      "id": "sdev-07",
+      "kind": "prompt_injection",
+      "gold": "2022-09-25_de#1",
+      "ambiguous_with": [],
+      "candidates": [
+        {
+          "vote_id": "2022-09-25_de#1",
+          "score": 0.9063019969755158,
+          "hits": 14
+        },
+        {
+          "vote_id": "2021-06-13_de#2",
+          "score": 0.8954360698364334,
+          "hits": 8
+        },
+        {
+          "vote_id": "2021-06-13_de#1",
+          "score": 0.884648831473922,
+          "hits": 4
+        },
+        {
+          "vote_id": "2020-11-29_de#1",
+          "score": 0.8828618060762006,
+          "hits": 3
+        },
+        {
+          "vote_id": "2026-09-27_de#2",
+          "score": 0.8801856196814037,
+          "hits": 12
+        }
+      ]
+    }
+  ],
+  "grid": [
+    {
+      "score_margin": 0.005,
+      "min_hits_ratio": 0.0,
+      "none_below": null,
+      "missed_ambiguous": 2,
+      "false_confidence": 2,
+      "unnecessary_questions": 3
+    },
+    {
+      "score_margin": 0.005,
+      "min_hits_ratio": 0.25,
+      "none_below": null,
+      "missed_ambiguous": 2,
+      "false_confidence": 2,
+      "unnecessary_questions": 3
+    },
+    {
+      "score_margin": 0.005,
+      "min_hits_ratio": 0.5,
+      "none_below": null,
+      "missed_ambiguous": 2,
+      "false_confidence": 3,
+      "unnecessary_questions": 3
+    },
+    {
+      "score_margin": 0.005,
+      "min_hits_ratio": 0.75,
+      "none_below": null,
+      "missed_ambiguous": 2,
+      "false_confidence": 3,
+      "unnecessary_questions": 2
+    },
+    {
+      "score_margin": 0.01,
+      "min_hits_ratio": 0.0,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 5
+    },
+    {
+      "score_margin": 0.01,
+      "min_hits_ratio": 0.25,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 5
+    },
+    {
+      "score_margin": 0.01,
+      "min_hits_ratio": 0.5,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 4
+    },
+    {
+      "score_margin": 0.01,
+      "min_hits_ratio": 0.75,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 3
+    },
+    {
+      "score_margin": 0.015,
+      "min_hits_ratio": 0.0,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 7
+    },
+    {
+      "score_margin": 0.015,
+      "min_hits_ratio": 0.25,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 6
+    },
+    {
+      "score_margin": 0.015,
+      "min_hits_ratio": 0.5,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 5
+    },
+    {
+      "score_margin": 0.015,
+      "min_hits_ratio": 0.75,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 3
+    },
+    {
+      "score_margin": 0.02,
+      "min_hits_ratio": 0.0,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 9
+    },
+    {
+      "score_margin": 0.02,
+      "min_hits_ratio": 0.25,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 8
+    },
+    {
+      "score_margin": 0.02,
+      "min_hits_ratio": 0.5,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 6
+    },
+    {
+      "score_margin": 0.02,
+      "min_hits_ratio": 0.75,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 4
+    },
+    {
+      "score_margin": 0.025,
+      "min_hits_ratio": 0.0,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 11
+    },
+    {
+      "score_margin": 0.025,
+      "min_hits_ratio": 0.25,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 8
+    },
+    {
+      "score_margin": 0.025,
+      "min_hits_ratio": 0.5,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 6
+    },
+    {
+      "score_margin": 0.025,
+      "min_hits_ratio": 0.75,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 4
+    },
+    {
+      "score_margin": 0.03,
+      "min_hits_ratio": 0.0,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 15
+    },
+    {
+      "score_margin": 0.03,
+      "min_hits_ratio": 0.25,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 11
+    },
+    {
+      "score_margin": 0.03,
+      "min_hits_ratio": 0.5,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 7
+    },
+    {
+      "score_margin": 0.03,
+      "min_hits_ratio": 0.75,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 4
+    },
+    {
+      "score_margin": 0.035,
+      "min_hits_ratio": 0.0,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 18
+    },
+    {
+      "score_margin": 0.035,
+      "min_hits_ratio": 0.25,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 15
+    },
+    {
+      "score_margin": 0.035,
+      "min_hits_ratio": 0.5,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 9
+    },
+    {
+      "score_margin": 0.035,
+      "min_hits_ratio": 0.75,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 5
+    },
+    {
+      "score_margin": 0.04,
+      "min_hits_ratio": 0.0,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 21
+    },
+    {
+      "score_margin": 0.04,
+      "min_hits_ratio": 0.25,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 18
+    },
+    {
+      "score_margin": 0.04,
+      "min_hits_ratio": 0.5,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 11
+    },
+    {
+      "score_margin": 0.04,
+      "min_hits_ratio": 0.75,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 5
+    },
+    {
+      "score_margin": 0.045,
+      "min_hits_ratio": 0.0,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 23
+    },
+    {
+      "score_margin": 0.045,
+      "min_hits_ratio": 0.25,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 19
+    },
+    {
+      "score_margin": 0.045,
+      "min_hits_ratio": 0.5,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 11
+    },
+    {
+      "score_margin": 0.045,
+      "min_hits_ratio": 0.75,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 5
+    },
+    {
+      "score_margin": 0.05,
+      "min_hits_ratio": 0.0,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 27
+    },
+    {
+      "score_margin": 0.05,
+      "min_hits_ratio": 0.25,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 0,
+      "unnecessary_questions": 22
+    },
+    {
+      "score_margin": 0.05,
+      "min_hits_ratio": 0.5,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 14
+    },
+    {
+      "score_margin": 0.05,
+      "min_hits_ratio": 0.75,
+      "none_below": null,
+      "missed_ambiguous": 1,
+      "false_confidence": 1,
+      "unnecessary_questions": 5
+    }
+  ],
+  "chosen": {
+    "score_margin": 0.01,
+    "min_hits_ratio": 0.0,
+    "none_below": null,
+    "missed_ambiguous": 1,
+    "false_confidence": 0,
+    "unnecessary_questions": 5
+  },
+  "rule": "Gewählt wird der Gitterpunkt mit dem kleinsten Tupel (verpasste Mehrdeutigkeiten, falsche Sicherheit, unnötige Rückfragen, Score-Abstand, Mindest-Trefferverhältnis). Eine verpasste Mehrdeutigkeit ist der schlimmste Fehler (der Agent rät eine Vorlage), dann folgt falsche Sicherheit (eindeutig, aber falsche Vorlage), dann die unnötige Rückfrage; bei Gleichstand gelten die kleinsten Werte.",
+  "provisional": {
+    "score_margin": 0.02,
+    "min_hits_ratio": 0.5,
+    "none_below": null,
+    "missed_ambiguous": 1,
+    "false_confidence": 1,
+    "unnecessary_questions": 6
+  },
+  "none_below_note": "none_below wird nicht kalibriert und bleibt None: Dev hat genau einen Fall ohne Abstimmung (ohne_abstimmung); aus einem einzelnen Fall lässt sich keine Schwelle ableiten. Sein Top-Score steht nur zur Information in ohne_abstimmung_top_scores.",
+  "ohne_abstimmung_top_scores": [
+    {
+      "id": "sdev-05",
+      "top_vote": "2022-02-13_de#2",
+      "top_score": 0.8846033244577655
+    }
+  ]
+}

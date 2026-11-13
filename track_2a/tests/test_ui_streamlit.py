@@ -105,7 +105,7 @@ def test_source_filters_no_hits_reset_and_examples_do_not_infer():
         assert any('Keine passende Quelle' in item.value for item in app.info)
         next(button for button in app.button if button.label == 'Quellenfilter zurücksetzen').click().run()
         assert not app.exception
-        assert len(app.selectbox(key='ballot').options) == 20
+        assert len(app.selectbox(key='ballot').options) == 22
         app.selectbox(key='source_year').set_value('2020').run()
         assert len(app.selectbox(key='ballot').options) == 3
         next(button for button in app.button if button.key.startswith('story_')).click().run()

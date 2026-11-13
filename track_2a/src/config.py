@@ -15,7 +15,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BASE_DIR.parent
 
 _explicit_env = os.getenv("FACT_ATTACK_ENV_FILE")
-if _explicit_env:
+if os.getenv("FACT_ATTACK_SKIP_DOTENV") == "1":
+    pass  # no .env file at all: the agent's MCP server process must not see any secret (src/agent/mcp_server.py)
+elif _explicit_env:
     _env_file = Path(_explicit_env).expanduser()
     if not _env_file.is_file():
         raise FileNotFoundError("FACT_ATTACK_ENV_FILE points to a missing configuration file")

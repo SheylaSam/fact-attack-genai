@@ -1,0 +1,173 @@
+{
+  "kind": "real_apertus_native_tool_calling_smoke_not_quality_study",
+  "complete": true,
+  "stopped_early": null,
+  "created_at": "2026-11-04T17:24:29.667057+00:00",
+  "model": "swiss-ai/Apertus-v1.5-70B-thinking",
+  "endpoint_host": "api.inference.cscs.ch",
+  "temperature": 0,
+  "max_requests": 4,
+  "requests_used": 4,
+  "budget_exceeded": false,
+  "llm_max_tokens": 1024,
+  "journal": "track_2a/results/genai/agent_native_smoke.journal.jsonl",
+  "script_sha256": "40bdd4a7a990fc1698cddd6eb186a0e7ca7175b2e512555cba2a1446c9218f42",
+  "prompt": "prompts.system_prompt() of the agent graph; request 1 appends decider.format_instruction(TOOL_SPECS), requests 2-4 pass the six TOOL_SPECS to bind_tools(tool_choice='required')",
+  "history_source": "Observations are real stage-3 AgentTools outputs over the real source index (offline, mock engine), hard-coded; suche_passagen without anfrage",
+  "situations": [
+    {
+      "id": "a_neue_behauptung",
+      "description": "Neue Behauptung, noch keine Suche",
+      "claim": "Die Mietrechtsvorlage stärkt die Vermieter.",
+      "expected_tool": "suche_vorlagen",
+      "history_tools": []
+    },
+    {
+      "id": "b_zwei_gleich_gute_vorlagen",
+      "description": "Beobachtung: zwei gleich gute Mietrecht-Vorlagen",
+      "claim": "Die Mietrechtsvorlage stärkt die Vermieter.",
+      "expected_tool": "rueckfrage",
+      "history_tools": [
+        "suche_vorlagen"
+      ]
+    },
+    {
+      "id": "c_passagen_gefunden",
+      "description": "Beobachtung: Passagen der richtigen Vorlage gefunden",
+      "claim": "Bei der Untermiete müssen Mieterinnen und Mieter künftig die schriftliche Zustimmung der Vermieterin oder des Vermieters einholen.",
+      "expected_tool": "pruefen",
+      "history_tools": [
+        "suche_vorlagen",
+        "suche_passagen"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "situation": "a_neue_behauptung",
+      "mode": "json",
+      "expected_tool": "suche_vorlagen",
+      "tool": "suche_vorlagen",
+      "tool_chosen": true,
+      "args_valid": true,
+      "valid_action": true,
+      "expected_tool_chosen": true,
+      "tokens_prompt": 1327,
+      "tokens_completion": 30,
+      "latency_ms": 769.7,
+      "error": null,
+      "raw": "{\"tool\": \"suche_vorlagen\", \"args\": {\"anfrage\": \"Mietrechtsvorlage stärkt Vermieter\"}}",
+      "args": {
+        "anfrage": "Mietrechtsvorlage stärkt Vermieter"
+      },
+      "http_status": 200,
+      "tool_choice": null,
+      "max_completion_tokens": 1024,
+      "body_keys": [
+        "max_completion_tokens",
+        "messages",
+        "model",
+        "stream",
+        "temperature"
+      ]
+    },
+    {
+      "situation": "a_neue_behauptung",
+      "mode": "native",
+      "expected_tool": "suche_vorlagen",
+      "tool": null,
+      "tool_chosen": false,
+      "args_valid": false,
+      "valid_action": false,
+      "expected_tool_chosen": false,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "latency_ms": 122.0,
+      "error": "OpenAIInvalidRequestError: Error code: 400 - tool_choice=\"required\" requires --tool-call-parser to be set",
+      "raw": "",
+      "http_status": 400,
+      "tool_choice": "required",
+      "max_completion_tokens": 1024,
+      "body_keys": [
+        "max_completion_tokens",
+        "messages",
+        "model",
+        "stream",
+        "temperature",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "situation": "b_zwei_gleich_gute_vorlagen",
+      "mode": "native",
+      "expected_tool": "rueckfrage",
+      "tool": null,
+      "tool_chosen": false,
+      "args_valid": false,
+      "valid_action": false,
+      "expected_tool_chosen": false,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "latency_ms": 30.7,
+      "error": "OpenAIInvalidRequestError: Error code: 400 - tool_choice=\"required\" requires --tool-call-parser to be set",
+      "raw": "",
+      "http_status": 400,
+      "tool_choice": "required",
+      "max_completion_tokens": 1024,
+      "body_keys": [
+        "max_completion_tokens",
+        "messages",
+        "model",
+        "stream",
+        "temperature",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "situation": "c_passagen_gefunden",
+      "mode": "native",
+      "expected_tool": "pruefen",
+      "tool": null,
+      "tool_chosen": false,
+      "args_valid": false,
+      "valid_action": false,
+      "expected_tool_chosen": false,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "latency_ms": 28.6,
+      "error": "OpenAIInvalidRequestError: Error code: 400 - tool_choice=\"required\" requires --tool-call-parser to be set",
+      "raw": "",
+      "http_status": 400,
+      "tool_choice": "required",
+      "max_completion_tokens": 1024,
+      "body_keys": [
+        "max_completion_tokens",
+        "messages",
+        "model",
+        "stream",
+        "temperature",
+        "tool_choice",
+        "tools"
+      ]
+    }
+  ],
+  "decision": {
+    "decision": "json",
+    "rule": "native wird Standard nur, wenn alle 3 nativen Anfragen mit tool_choice=required angenommen werden, 3 von 3 ein angebotenes Werkzeug mit gültigen Argumenten liefern und 3 von 3 das erwartete Werkzeug wählen; sonst bleibt json.",
+    "native_accepted": 0,
+    "native_valid": 0,
+    "native_expected_tool": 0,
+    "of": 3
+  },
+  "recommended_tool_mode": "json",
+  "completion_cap": {
+    "verdict": "angenommen",
+    "basis": "Anfrage 1 (JSON, Situation a): HTTP 200 und tokens_completion <= 1024 = angenommen; HTTP 400 = abgelehnt; sonst unklar"
+  },
+  "limitations": [
+    "One sample per request at temperature 0: a reliability smoke, not a quality measurement.",
+    "The rule needs all three native requests accepted, valid and expected; anything less keeps json."
+  ]
+}

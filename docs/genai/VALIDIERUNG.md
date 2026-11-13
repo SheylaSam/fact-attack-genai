@@ -133,3 +133,34 @@ keine Fehler. Ein echter Lauf mit Docker und `requirements-lock.txt` steht weite
 
 Ohne Qualitätsaussage: Es gibt noch kein gesperrtes Testset und keinen Vergleich mit dem
 bewährten Pfad. Details, Schrittlisten und Grenzen: [AGENT_STUFE1.md](AGENT_STUFE1.md).
+
+## Testset der Agentenschicht gesperrt
+
+Am 13.11.2026 gesperrt: 110 Fälle. 37 davon gehören zu Dev (30 Haupt-, 7 Spezialfälle), 73 zu Test (60 Haupt-,
+13 Spezialfälle).
+- `scripts/check_testset.py`: 110 Fälle, 0 Probleme.
+- **Sheylas Blindprüfung:** Das erste Urteil stimmte bei 82 von 110 Fällen mit dem Entwurf überein. Die 28
+  übrigen hat sie nach dem Aufdecken korrigiert.
+- **Codex als blinder Zweitprüfer:** Er stimmt bei 110 von 110 Fällen mit den Labels überein, auch bei diesen 28
+  (`results/genai/testset_label_check_codex.jsonl`).
+- **Zugriff:** `load_testset("dev")` liefert 37 Fälle; der Testteil bleibt bis zum Konfigurationsfreeze
+  gesperrt.
+
+Vollständige Suite auf dem Stand von Stufe 3 (Tasks 1–7 mit den Korrekturen des Gesamtreviews): **842 Tests
+bestanden**, 158 Subtests, dieselben 8 Warnungen.
+
+Details und Grenzen: [TESTSET.md](TESTSET.md), Abschnitt „Gesperrt“.
+
+## Agentenschicht Stufe 3
+
+13.11.2026: Wächter mit kalibrierten Schwellen (Dev-Teil des gesperrten Testsets), Nachsuche mit Budget 5 / 1 / 2 / 12,
+eigener MCP-Server und fünf gedeckelte echte Läufe.
+- Vollständige Suite: **850 Tests bestanden**, 158 Subtests, dieselben 8 Warnungen. Kein MCP-Server-Prozess blieb
+  zurück.
+- Echte Läufe: 5 Läufe, 17 Anfragen von höchstens 60 (Journalzeilen 2 / 5 / 4 / 4 / 2). 2 von 5 wie erwartet
+  (Nachsuche mit zweiter Prüfung, MCP mit echtem Apertus); in den anderen 3 fragte das Modell selbst zurück, bevor
+  der Wächter eingriff, zweimal unnötig.
+- Nativer Tool-Calling-Smoke (04.11.): `tool_choice="required"` HTTP 400 in 3 von 3, `json` bleibt Standard.
+
+Ohne Qualitätsaussage: Einzelläufe sind keine Messung; der Testteil des Testsets ist weiter gesperrt. Details,
+Befunde und offene Punkte: [AGENT_STUFE3.md](AGENT_STUFE3.md).

@@ -41,3 +41,15 @@ def test_report_keeps_failure_distinct_and_neutral_without_evidence():
     assert 'Prüfversuche: 2' in html
     assert 'Do not show this' not in html
     assert 'Im Abstimmungsbüchlein nicht geklärt' in html
+
+
+@pytest.mark.parametrize('url,linked', [
+    ('https://www.bk.admin.ch/dam/de/sd-web/x/2026-06-14_erlaeuterungen_des_bundesrates.pdf', True),
+    ('https://www.admin.ch/dam/de/sd-web/x/BAR_Erlaeuterungen_Nov26_DE_v10.pdf', True),
+    ('http://www.admin.ch/dam/de/x.pdf', False),
+    ('https://www.admin.ch.evil.example/x.pdf', False),
+    ('https://evil.example/www.admin.ch/x.pdf', False)])
+def test_report_links_only_official_https_sources(url, linked):
+    record = {'source_url': url, 'result': {'claim': 'Statement', 'label': 0, 'evidence_sources': []}}
+    html = render_check_report([record]).decode()
+    assert (f'<a href="{url}">Offizielle Originalquelle</a>' in html) is linked

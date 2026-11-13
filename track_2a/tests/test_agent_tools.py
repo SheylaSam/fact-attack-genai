@@ -7,6 +7,8 @@ import sys
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.agent import settings
+from src.agent import tools as tools_module
+from src.agent.search_backend import LocalBackend
 from src.agent.source_index import VoteCandidate, VoteRef
 from src.agent.tools import (ERROR_INVALID_ARGS, ERROR_TOOL_FAILURE, TERMINAL_TOOLS, TOOL_SPECS, AgentTools,
                              Observation, validate_args)
@@ -29,7 +31,10 @@ V3 = VoteRef('2026-06-14_de#1', '2026-06-14_de', '2026-06-14', 'de', 'Änderung 
 WRAPPED = VoteRef('2025-09-28_de#1', '2025-09-28_de', '2025-09-28', 'de',
                   'Volksinitiativ e «Mehr bezahlbare Wohnungen»', (2,))
 WHOLE = VoteRef('2030-01-01_de#0', '2030-01-01_de', '2030-01-01', 'de', 'Gesamtes Büchlein', (1, 2))  # no contents
+WIDE = VoteRef('2024-11-24_de#9', '2024-11-24_de', '2024-11-24', 'de', 'Vorlage über viele Seiten',
+               tuple(range(1, 31)))  # for tests whose fake passages are spread over many pages
 BAD_IDS = ('2024-11-24_de#7', '../../.env', 'https://x')
+CLAIM = 'Mieter brauchen für die Untermiete die schriftliche Zustimmung der Vermieterin.'
 
 
 def candidate(vote, score=0.873, hits=12, page=2):
@@ -46,9 +51,9 @@ def key(p):
 
 
 class FakeIndex:
-    def __init__(self, votes=(V1, V2, V3), candidates=None, passages=None, error=None):
+    def __init__(self, votes=(V1, V2, V3, WIDE), candidates=None, passages=None, error=None):
         self.votes = {vote.vote_id: vote for vote in votes}
-        self.candidates = [candidate(V1), candidate(V2, 0.861, 7, 4)] if candidates is None else candidates
+        self.candidates = [candidate(V1), candidate(V2, 0.868, 7, 4)] if candidates is None else candidates
         self.passages = passages if passages is not None else []
         self.error = error
         self.vote_calls, self.passage_calls = [], []
@@ -83,7 +88,7 @@ class FakeEngine:
 def make_tools(index=None, engine=None, **kwargs):
     index = index or FakeIndex()
     engine = engine or FakeEngine()
-    return AgentTools(index, engine, BOOKLETS, **kwargs), index, engine
+    return AgentTools(LocalBackend(index, engine, BOOKLETS), BOOKLETS, **kwargs), index, engine
 
 
 class SearchToolTests(unittest.TestCase):
@@ -104,12 +109,36 @@ class SearchToolTests(unittest.TestCase):
         obs = tools.run('suche_vorlagen', {'anfrage': 'Untermiete'})
         self.assertIn('Score 0.873', obs.text)
         self.assertIn('Treffer 12', obs.text)
-        self.assertIn('Score 0.861', obs.text)
+        self.assertIn('Score 0.868', obs.text)
         self.assertIn('Treffer 7', obs.text)
         self.assertLess(obs.text.index('2024-11-24_de#1'), obs.text.index('2024-11-24_de#2'))
         self.assertEqual([c['vote_id'] for c in obs.data['candidates']], [V1.vote_id, V2.vote_id])
         self.assertEqual(obs.data['candidates'][0]['score'], 0.873)
         self.assertEqual(obs.data['candidates'][0]['hits'], 12)
+
+    def test_suche_vorlagen_states_the_assessment_instead_of_the_score_hint(self):
+        tools, _, _ = make_tools()  # default candidates: .873/12 and .868/7, close and enough hits
+        obs = tools.run('suche_vorlagen', {'anfrage': 'Untermiete'})
+        self.assertIn('mehrdeutig', obs.text)
+        self.assertNotIn('eng beieinander', obs.text)
+        self.assertTrue(obs.text.endswith('beende mit rueckfrage und diesen Optionen.'))
+        self.assertEqual(obs.data['assessment']['kind'], 'mehrdeutig')
+        self.assertFalse(hasattr(tools_module, 'SCORE_HINT'))
+
+    def test_claim_assessment_searches_with_the_claim_once(self):
+        tools, index, _ = make_tools()
+        first = tools.claim_assessment(CLAIM)
+        second = tools.claim_assessment(CLAIM)
+        self.assertIs(first, second)
+        self.assertEqual(first.kind, 'mehrdeutig')
+        self.assertEqual(index.vote_calls, [(CLAIM, 5)])
+
+    def test_claim_assessment_passes_exceptions_on_and_does_not_cache_them(self):
+        tools, index, _ = make_tools(FakeIndex(error=RuntimeError('down')))
+        with self.assertRaises(RuntimeError):
+            tools.claim_assessment(CLAIM)
+        index.error = None
+        self.assertEqual(tools.claim_assessment(CLAIM).kind, 'mehrdeutig')
 
     def test_suche_vorlagen_shows_catalog_titles_as_they_are(self):
         tools, _, _ = make_tools(FakeIndex(votes=(WRAPPED,), candidates=[candidate(WRAPPED)]))
@@ -124,44 +153,94 @@ class SearchToolTests(unittest.TestCase):
         self.assertIn('Keine Vorlage', obs.text)
         self.assertEqual(obs.data['candidates'], [])
 
-    def test_suche_passagen_calls_proven_retrieval_with_vote_title(self):
+    def test_suche_passagen_runs_the_proven_search_with_the_claim(self):
         tools, _, engine = make_tools(engine=FakeEngine([passage(2), passage(3)]))
-        obs = tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'Mieter brauchen Zustimmung'})
+        obs = tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
         self.assertIsNone(obs.error)
         self.assertEqual(len(engine.calls), 1)
-        call = engine.calls[0]
-        self.assertEqual(call['claim'], 'Mieter brauchen Zustimmung')
+        call = engine.calls[-1]
+        self.assertEqual(call['claim'], CLAIM)
         self.assertEqual(call['vote'], V1.title)
         self.assertEqual(call['booklet_pdf'], BOOKLETS / '2024-11-24_de.pdf')
         self.assertEqual(call['booklet_language'], 'de')
         self.assertIn('Seite 2', obs.text)
         self.assertIn('Originaltext von Seite 3.', obs.text)
 
-    def test_suche_passagen_says_truthfully_that_it_searches_the_whole_booklet(self):
-        spec = next(spec for spec in TOOL_SPECS if spec['name'] == 'suche_passagen')
-        self.assertIn('ganzen Abstimmungsbüchlein der gewählten Vorlage', spec['description'])
-        self.assertIn('Titel der Vorlage', spec['description'])  # the proven search prioritises the vote's title
-        self.assertIn('anderer Vorlagen', spec['description'])  # and may return pages of other votes
-        self.assertNotIn('in einer gewählten Vorlage', spec['description'])
-        tools, _, _ = make_tools(engine=FakeEngine([passage(2)]))
-        head = tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'}).text.splitlines()[0]
-        self.assertIn('ganzen Büchlein 2024-11-24_de', head)
-        self.assertIn('Titel der Vorlage', head)
-        self.assertIn('anderer Vorlagen', head)
-        self.assertNotIn(f'Passagen aus {V1.vote_id}', head)
-        vector = make_tools(index=FakeIndex(passages=[passage(4)]))[0].run(
-            'suche_passagen_vektor', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'})
-        self.assertTrue(vector.text.startswith(f'Passagen aus {V1.vote_id} (Vektorsuche)'))  # filtered by vote
+    def test_suche_passagen_takes_no_model_query(self):
+        with self.assertRaises(ValueError) as caught:
+            validate_args('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'x'})
+        self.assertIn("'anfrage' ist kein Argument", str(caught.exception))
+        tools, _, engine = make_tools(engine=FakeEngine([passage(2)]))
+        obs = tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'x'}, claim=CLAIM)
+        self.assertEqual(obs.data['error_kind'], ERROR_INVALID_ARGS)
+        self.assertEqual(engine.calls, [])
 
-    def test_suche_passagen_for_the_whole_booklet_passes_no_vote_title(self):
-        tools, _, engine = make_tools(index=FakeIndex(votes=(V1, WHOLE)), engine=FakeEngine([passage(2)]))
-        obs = tools.run('suche_passagen', {'vorlage_id': WHOLE.vote_id, 'anfrage': 'Miete'})
+    def test_suche_passagen_without_claim_is_a_tool_failure(self):
+        tools, _, engine = make_tools(engine=FakeEngine([passage(2)]))
+        for claim in (None, '', '   '):
+            with self.subTest(claim=claim):
+                obs = tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=claim)
+                self.assertEqual(obs.data['error_kind'], ERROR_TOOL_FAILURE)
+                self.assertIn('Behauptung fehlt', obs.error)
+        self.assertEqual(engine.calls, [])
+        self.assertEqual(tools.passages_for(V1.vote_id), [])
+
+    def test_suche_passagen_describes_the_proven_search_with_the_claim(self):
+        spec = next(spec for spec in TOOL_SPECS if spec['name'] == 'suche_passagen')
+        self.assertIn('Wortlaut der Behauptung', spec['description'])
+        self.assertIn('nur Stellen von den Seiten dieser Vorlage', spec['description'])
+        self.assertIn('suche_passagen_vektor', spec['description'])
+        self.assertEqual(list(spec['parameters']['properties']), ['vorlage_id'])
+        tools, _, _ = make_tools(engine=FakeEngine([passage(2)]))
+        head = tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM).text.splitlines()[0]
+        self.assertIn(f'Passagen aus {V1.vote_id}', head)
+        self.assertIn('bewährte Suche mit der Behauptung', head)
+
+    def test_passages_outside_the_vote_pages_are_not_pooled(self):
+        tools, _, _ = make_tools(engine=FakeEngine([passage(2), passage(4)]))  # V1 has pages 2 and 3
+        obs = tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
+        self.assertEqual([p['page_number'] for p in tools.passages_for(V1.vote_id)], [2])
+        self.assertEqual((obs.data['found'], obs.data['new'], obs.data['outside']), (2, 1, 1))
+        self.assertIn('andere Vorlage, nicht aufgenommen', obs.text)
+        self.assertIn('1 Passagen von anderen Vorlagen', obs.text.splitlines()[0])
+        self.assertEqual([p['status'] for p in obs.data['passages']], ['neu', 'andere Vorlage, nicht aufgenommen'])
+
+    def test_the_page_filter_applies_to_the_vector_search_too(self):
+        tools, _, _ = make_tools(index=FakeIndex(passages=[passage(3), passage(5)]))
+        obs = tools.run('suche_passagen_vektor', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'})
+        self.assertEqual([p['page_number'] for p in tools.passages_for(V1.vote_id)], [3])
+        self.assertEqual(obs.data['outside'], 1)
+
+    def test_an_outside_passage_does_not_use_up_pool_room_or_the_seen_set(self):
+        tools, _, engine = make_tools(engine=FakeEngine([passage(4)]))
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
+        self.assertEqual(tools.passages_for(V1.vote_id), [])
+        obs = tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
+        self.assertEqual((obs.data['new'], obs.data['outside'], obs.data['pool_size']), (0, 1, 0))
+
+    def test_whole_booklet_vote_pools_every_page(self):
+        tools, _, engine = make_tools(index=FakeIndex(votes=(V1, WHOLE)),
+                                      engine=FakeEngine([passage(1), passage(2)]))
+        obs = tools.run('suche_passagen', {'vorlage_id': WHOLE.vote_id}, claim=CLAIM)
         self.assertIsNone(obs.error)
+        self.assertEqual(obs.data['outside'], 0)
+        self.assertEqual([p['page_number'] for p in tools.passages_for(WHOLE.vote_id)], [1, 2])
         self.assertIsNone(engine.calls[0]['vote'])  # "Gesamtes Büchlein" is a placeholder, not a vote of the booklet
         self.assertEqual(engine.calls[0]['booklet_pdf'], BOOKLETS / '2030-01-01_de.pdf')
-        self.assertNotIn('Titel der Vorlage', obs.text.splitlines()[0])
-        tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'})
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
         self.assertEqual(engine.calls[1]['vote'], V1.title)
+
+    def test_vector_head_names_the_vote_and_the_method(self):
+        vector = make_tools(index=FakeIndex(passages=[passage(3)]))[0].run(
+            'suche_passagen_vektor', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'})
+        self.assertTrue(vector.text.startswith(f'Passagen aus {V1.vote_id} (Vektorsuche)'))
+
+    def test_local_backend_specs_are_the_three_search_tools(self):
+        backend = make_tools()[0].backend
+        self.assertEqual([s['name'] for s in backend.tool_specs()],
+                         ['suche_vorlagen', 'suche_passagen', 'suche_passagen_vektor'])
+        self.assertEqual(backend.votes, make_tools()[0].votes)
+        backend.close()  # a no-op: index and engine belong to the CLI
 
     def test_suche_passagen_vektor_searches_the_index_for_that_vote(self):
         index = FakeIndex(passages=[passage(4), passage(5)])
@@ -174,11 +253,11 @@ class SearchToolTests(unittest.TestCase):
 
     def test_passage_observation_marks_new_and_known_passages(self):
         tools, _, engine = make_tools(engine=FakeEngine([passage(2), passage(3)]))
-        first = tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'a'})
+        first = tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
         self.assertEqual(first.data['found'], 2)
         self.assertEqual(first.data['new'], 2)
         engine.passages = [passage(3), passage(4)]
-        second = tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'b'})
+        second = tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
         self.assertEqual((second.data['found'], second.data['new'], second.data['pool_size']), (2, 1, 3))
         self.assertIn('schon im Pool', second.text)
         self.assertIn('neu', second.text)
@@ -186,7 +265,7 @@ class SearchToolTests(unittest.TestCase):
     def test_passage_observation_shortens_long_text_for_display_only(self):
         long_text = 'Wort ' * 200
         tools, _, _ = make_tools(engine=FakeEngine([passage(2, long_text)]))
-        obs = tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'a'})
+        obs = tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
         self.assertLess(len(obs.text), len(long_text))
         self.assertEqual(tools.passages_for(V1.vote_id)[0]['text'], long_text)
 
@@ -194,20 +273,85 @@ class SearchToolTests(unittest.TestCase):
 class PassagePoolTests(unittest.TestCase):
     def test_passages_are_pooled_deduplicated_and_capped(self):
         first = [passage(page) for page in range(1, 9)]  # pages 1-8
-        second = [passage(page) for page in range(5, 15)]  # pages 5-8 repeat, 9-14 are new
+        second = [passage(page) for page in range(5, 30)]  # pages 5-8 repeat, 9-29 are new
         tools, index, engine = make_tools(index=FakeIndex(passages=second), engine=FakeEngine(first))
-        tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'a'})
-        tools.run('suche_passagen_vektor', {'vorlage_id': V1.vote_id, 'anfrage': 'b'})
-        pooled = tools.passages_for(V1.vote_id)
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        tools.run('suche_passagen_vektor', {'vorlage_id': WIDE.vote_id, 'anfrage': 'b'})
+        stored = tools._pool[WIDE.vote_id]
+        self.assertEqual(len(stored), tools_module.POOL_LIMIT)  # the pool cap
+        self.assertEqual(len({key(p) for p in stored}), len(stored))
+        self.assertEqual([p['page_number'] for p in stored], list(range(1, tools_module.POOL_LIMIT + 1)))
+        pooled = tools.passages_for(WIDE.vote_id)
         self.assertEqual(len(pooled), settings.MAX_PASSAGES)
         self.assertEqual(len({key(p) for p in pooled}), len(pooled))
         self.assertEqual([p['page_number'] for p in pooled], list(range(1, 11)))  # first found first
         self.assertEqual(pooled[0]['text'], 'Originaltext von Seite 1.')  # the PDF text, untouched
 
+    def test_pool_stores_up_to_twice_the_check_size(self):
+        self.assertEqual(tools_module.POOL_LIMIT, 2 * settings.MAX_PASSAGES)
+        tools, _, _ = make_tools(engine=FakeEngine([passage(page) for page in range(1, 26)]))  # 25 passages
+        obs = tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        self.assertEqual((obs.data['found'], obs.data['new'], obs.data['dropped']), (25, 20, 5))
+        self.assertEqual(obs.data['pool_size'], tools_module.POOL_LIMIT)
+        self.assertEqual(len(tools._pool[WIDE.vote_id]), 20)
+        self.assertEqual([p['page_number'] for p in tools.passages_for(WIDE.vote_id)], list(range(1, 11)))
+
+    def test_recheck_puts_unchecked_passages_first(self):
+        tools, _, engine = make_tools(engine=FakeEngine([passage(page) for page in range(1, 11)]))
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        checked = tools.passages_for(WIDE.vote_id)  # the ten that went into the first check
+        engine.passages = [passage(page) for page in (21, 22, 23)]
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        again = tools.recheck_passages(WIDE.vote_id, checked)
+        self.assertEqual([p['page_number'] for p in again], [21, 22, 23] + list(range(1, 8)))  # new first, capped
+        self.assertEqual(len(again), settings.MAX_PASSAGES)
+        again[0]['text'] = 'verändert'
+        self.assertEqual(tools.recheck_passages(WIDE.vote_id, checked)[0]['text'], 'Originaltext von Seite 21.')
+
+    def test_research_passages_are_admitted_past_the_full_pool_and_rechecked_first(self):
+        limit = tools_module.POOL_LIMIT
+        tools, index, engine = make_tools(engine=FakeEngine([passage(page) for page in range(1, limit + 1)]))
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)  # the pool is full now
+        checked = tools.passages_for(WIDE.vote_id)  # pages 1-10
+        index.passages = [passage(page) for page in (25, 26, 27)]
+        research = tools.run('suche_passagen_vektor', {'vorlage_id': WIDE.vote_id, 'anfrage': 'b'}, research=True)
+        self.assertEqual((research.data['new'], research.data['dropped']), (3, 0))
+        self.assertNotIn('nicht aufgenommen', research.text)
+        self.assertEqual(len(tools._pool[WIDE.vote_id]), limit + 3)
+        again = tools.recheck_passages(WIDE.vote_id, checked)
+        # the Nachsuche's passages first, then the other unchecked ones (pages 11-20), capped
+        self.assertEqual([p['page_number'] for p in again], [25, 26, 27] + list(range(11, 18)))
+        self.assertEqual(len(again), settings.MAX_PASSAGES)
+
+    def test_a_full_pool_still_drops_new_passages_outside_the_research_phase(self):
+        limit = tools_module.POOL_LIMIT
+        tools, index, _ = make_tools(engine=FakeEngine([passage(page) for page in range(1, limit + 1)]))
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        index.passages = [passage(25)]
+        obs = tools.run('suche_passagen_vektor', {'vorlage_id': WIDE.vote_id, 'anfrage': 'b'})
+        self.assertEqual((obs.data['new'], obs.data['dropped']), (0, 1))
+        self.assertEqual(len(tools._pool[WIDE.vote_id]), limit)
+
+    def test_recheck_orders_the_new_passages_by_discovery(self):
+        tools, _, engine = make_tools(engine=FakeEngine([passage(2), passage(3)]))
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        checked = tools.passages_for(WIDE.vote_id)
+        engine.passages = [passage(9), passage(5)]
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        self.assertEqual([p['page_number'] for p in tools.recheck_passages(WIDE.vote_id, checked)], [9, 5, 2, 3])
+
+    def test_recheck_without_unchecked_passages_is_empty(self):
+        tools, _, engine = make_tools(engine=FakeEngine([passage(2), passage(3)]))
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
+        checked = tools.passages_for(V1.vote_id)
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)  # the same passages again
+        self.assertEqual(tools.recheck_passages(V1.vote_id, checked), [])
+        self.assertEqual(tools.recheck_passages(V2.vote_id, []), [])  # nothing pooled for this vote
+
     def test_overlap_alone_adds_nothing(self):
         same = [passage(2), passage(3)]
         tools, _, _ = make_tools(index=FakeIndex(passages=same), engine=FakeEngine(same))
-        tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'a'})
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
         obs = tools.run('suche_passagen_vektor', {'vorlage_id': V1.vote_id, 'anfrage': 'a'})
         self.assertEqual(len(tools.passages_for(V1.vote_id)), 2)
         self.assertEqual(obs.data['new'], 0)
@@ -217,34 +361,38 @@ class PassagePoolTests(unittest.TestCase):
                  passage(2, 'Anderer Text.'),  # same page, other text: distinct
                  passage(2, 'Gleicher Text.')]  # exact repeat: dropped
         tools, _, _ = make_tools(engine=FakeEngine(found))
-        tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'a'})
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
         self.assertEqual([key(p) for p in tools.passages_for(V1.vote_id)], [key(p) for p in found[:3]])
 
     def test_pool_is_kept_per_vote(self):
         tools, _, engine = make_tools(engine=FakeEngine([passage(2)]))
-        tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'a'})
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
         engine.passages = [passage(4)]
-        tools.run('suche_passagen', {'vorlage_id': V2.vote_id, 'anfrage': 'a'})
+        tools.run('suche_passagen', {'vorlage_id': V2.vote_id}, claim=CLAIM)
         self.assertEqual([p['page_number'] for p in tools.passages_for(V1.vote_id)], [2])
         self.assertEqual([p['page_number'] for p in tools.passages_for(V2.vote_id)], [4])
         self.assertEqual(tools.passages_for(V3.vote_id), [])
 
     def test_passages_for_returns_copies(self):
         tools, _, _ = make_tools(engine=FakeEngine([passage(2)]))
-        tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'a'})
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
         tools.passages_for(V1.vote_id)[0]['text'] = 'verändert'
         tools.passages_for(V1.vote_id).clear()
         self.assertEqual(tools.passages_for(V1.vote_id)[0]['text'], 'Originaltext von Seite 2.')
 
     def test_full_pool_says_so_and_drops_the_rest(self):
-        tools, _, engine = make_tools(engine=FakeEngine([passage(page) for page in range(1, 9)]))
-        tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'a'})
-        engine.passages = [passage(page) for page in range(9, 15)]
-        obs = tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'b'})
+        limit = tools_module.POOL_LIMIT
+        tools, _, engine = make_tools(engine=FakeEngine([passage(page) for page in range(1, limit - 1)]))
+        tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
+        engine.passages = [passage(page) for page in range(limit - 1, limit + 5)]
+        obs = tools.run('suche_passagen', {'vorlage_id': WIDE.vote_id}, claim=CLAIM)
         self.assertEqual((obs.data['found'], obs.data['new'], obs.data['dropped']), (6, 2, 4))
-        self.assertEqual(obs.data['pool_size'], settings.MAX_PASSAGES)
-        self.assertIn(f'{settings.MAX_PASSAGES} von höchstens {settings.MAX_PASSAGES}', obs.text)
-        self.assertEqual([p['page_number'] for p in tools.passages_for(V1.vote_id)], list(range(1, 11)))
+        self.assertEqual(obs.data['pool_size'], limit)
+        self.assertIn(f'Pool dieser Vorlage: {limit} Passagen; geprüft werden höchstens {settings.MAX_PASSAGES}.',
+                      obs.text)
+        self.assertEqual(len(tools._pool[WIDE.vote_id]), limit)
+        self.assertEqual([p['page_number'] for p in tools.passages_for(WIDE.vote_id)],
+                         list(range(1, settings.MAX_PASSAGES + 1)))
 
 
 class VoteIdTests(unittest.TestCase):
@@ -255,7 +403,8 @@ class VoteIdTests(unittest.TestCase):
                     tools, index, engine = make_tools(index=FakeIndex(passages=[passage(2)]),
                                                       engine=FakeEngine([passage(2)]))
                     tools.run('suche_vorlagen', {'anfrage': 'Miete'})
-                    obs = tools.run(tool, {'vorlage_id': bad, 'anfrage': 'Miete'})
+                    args = {'vorlage_id': bad} if tool == 'suche_passagen' else {'vorlage_id': bad, 'anfrage': 'Miete'}
+                    obs = tools.run(tool, args, claim=CLAIM)
                     self.assertIsInstance(obs, Observation)
                     self.assertTrue(obs.error)
                     self.assertIn('Fehler', obs.text)
@@ -294,14 +443,14 @@ class VoteIdTests(unittest.TestCase):
         hidden = tools.run('suche_vorlagen', {'anfrage': 'Miete'})
         self.assertTrue(hidden.error)
         self.assertEqual(index.vote_calls, [])
-        other = tools.run('suche_passagen', {'vorlage_id': V2.vote_id, 'anfrage': 'Miete'})
+        other = tools.run('suche_passagen', {'vorlage_id': V2.vote_id}, claim=CLAIM)
         self.assertTrue(other.error)
         self.assertIn(V1.vote_id, other.error)
         self.assertEqual(engine.calls, [])
         with self.assertRaises(ValueError):
             tools.check_vote_id(V2.vote_id)
         self.assertEqual(tools.check_vote_id(V1.vote_id), V1)
-        self.assertIsNone(tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'}).error)
+        self.assertIsNone(tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM).error)
         self.assertEqual(len(engine.calls), 1)
 
     def test_fixed_vote_must_exist_in_the_index(self):
@@ -317,7 +466,7 @@ class VoteIdTests(unittest.TestCase):
 
 class ArgumentValidationTests(unittest.TestCase):
     def test_anfrage_length_validated(self):
-        for tool, extra in (('suche_vorlagen', {}), ('suche_passagen', {'vorlage_id': V1.vote_id}),
+        for tool, extra in (('suche_vorlagen', {}),
                             ('suche_passagen_vektor', {'vorlage_id': V1.vote_id})):
             for bad in ('', '   ', 'a' * 501):
                 with self.subTest(tool=tool, length=len(bad)):
@@ -334,7 +483,7 @@ class ArgumentValidationTests(unittest.TestCase):
 
     def test_missing_wrong_type_and_extra_arguments_are_rejected_in_german(self):
         cases = (
-            ('suche_passagen', {'anfrage': 'Miete'}, 'vorlage_id'),  # missing
+            ('suche_passagen', {}, 'vorlage_id'),  # missing
             ('suche_vorlagen', {'anfrage': 7}, 'Text'),  # wrong type
             ('suche_vorlagen', {'anfrage': 'Miete', 'datei': '../.env'}, 'datei'),  # not an argument of the tool
             ('suche_vorlagen', 'Miete', 'Objekt'),  # not an object
@@ -354,7 +503,7 @@ class ArgumentValidationTests(unittest.TestCase):
                          {'vorlage_id': '2024-11-24_de#1'})
         self.assertEqual(validate_args('quelle_fehlt', {'begruendung': 'Euro steht in keinem Büchlein.'}),
                          {'begruendung': 'Euro steht in keinem Büchlein.'})
-        self.assertEqual(validate_args('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'}),
+        self.assertEqual(validate_args('suche_passagen_vektor', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'}),
                          {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'})
 
     def test_vote_id_must_be_non_empty_short_text(self):
@@ -400,7 +549,7 @@ class RunTests(unittest.TestCase):
     def test_engine_and_index_exceptions_become_observation_errors(self):
         secret = '/Users/sheyla/booklets/2024-11-24_de.pdf'
         tools, _, _ = make_tools(engine=FakeEngine(error=FileNotFoundError(secret)))
-        obs = tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'})
+        obs = tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
         self.assertIn('FileNotFoundError', obs.error)
         self.assertIn('FileNotFoundError', obs.text)
         self.assertNotIn(secret, obs.text)  # what the LLM sees carries no local paths
@@ -416,7 +565,7 @@ class RunTests(unittest.TestCase):
 
     def test_rejected_calls_are_marked_as_invalid_not_as_failures(self):
         tools, _, _ = make_tools()
-        obs = tools.run('suche_passagen', {'vorlage_id': BAD_IDS[1], 'anfrage': 'Miete'})
+        obs = tools.run('suche_passagen', {'vorlage_id': BAD_IDS[1]}, claim=CLAIM)
         self.assertEqual(obs.data['error_kind'], ERROR_INVALID_ARGS)
         self.assertEqual(tools.run('suche_vorlagen', {'anfrage': ''}).data['error_kind'], ERROR_INVALID_ARGS)
 
@@ -426,11 +575,11 @@ class RunTests(unittest.TestCase):
     def test_a_failed_search_leaves_the_pool_and_recent_ids_untouched(self):
         tools, index, engine = make_tools(engine=FakeEngine([passage(2)]))
         tools.run('suche_vorlagen', {'anfrage': 'Miete'})
-        tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'a'})
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
         index.error = RuntimeError('weg')
         engine.error = RuntimeError('weg')
         tools.run('suche_vorlagen', {'anfrage': 'b'})
-        tools.run('suche_passagen', {'vorlage_id': V1.vote_id, 'anfrage': 'b'})
+        tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM)
         self.assertEqual([p['page_number'] for p in tools.passages_for(V1.vote_id)], [2])
         with self.assertRaises(ValueError) as caught:
             tools.check_vote_id('nope')
@@ -439,7 +588,7 @@ class RunTests(unittest.TestCase):
 
 class ToolSpecTests(unittest.TestCase):
     EXPECTED = {
-        'suche_vorlagen': ['anfrage'], 'suche_passagen': ['vorlage_id', 'anfrage'],
+        'suche_vorlagen': ['anfrage'], 'suche_passagen': ['vorlage_id'],
         'suche_passagen_vektor': ['vorlage_id', 'anfrage'], 'pruefen': ['vorlage_id'],
         'rueckfrage': ['frage', 'optionen'], 'quelle_fehlt': ['begruendung'],
     }
@@ -460,7 +609,7 @@ class ToolSpecTests(unittest.TestCase):
 
     def test_schema_limits_match_the_validation(self):
         by_name = {spec['name']: spec['parameters']['properties'] for spec in TOOL_SPECS}
-        for tool in ('suche_vorlagen', 'suche_passagen', 'suche_passagen_vektor'):
+        for tool in ('suche_vorlagen', 'suche_passagen_vektor'):
             self.assertEqual(by_name[tool]['anfrage']['minLength'], 1)
             self.assertEqual(by_name[tool]['anfrage']['maxLength'], 500)
         options = by_name['rueckfrage']['optionen']

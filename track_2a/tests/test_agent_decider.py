@@ -81,10 +81,12 @@ class StubChat:
     def __init__(self, reply):
         self.reply = reply
         self.bound_tools = None
+        self.bind_kwargs = None
         self.calls = []
 
-    def bind_tools(self, tools):
+    def bind_tools(self, tools, **kwargs):
         self.bound_tools = tools
+        self.bind_kwargs = kwargs
         return self
 
     def invoke(self, messages):
@@ -244,6 +246,28 @@ class NativeToolDeciderTests(unittest.TestCase):
         self.assertEqual(assistant, {'role': 'assistant', 'content': 'kaputt'})
         self.assertEqual(user, {'role': 'user', 'content': 'Ergebnis von suche_vorlagen: Fehler: Keine Werkzeugwahl'})
 
+    def test_native_decider_requires_a_tool_call(self):
+        chat = StubChat(self.reply(('suche_vorlagen', {'anfrage': 'Miete'}, 'call_a')))
+        NativeToolDecider(chat).decide(MESSAGES, TOOL_SPECS, [])
+        self.assertEqual(chat.bind_kwargs, {'tool_choice': 'required'})
+
+    def test_native_request_body_has_required_and_completion_cap(self):
+        sent = []
+
+        def handler(request):
+            sent.append(json.loads(request.content))
+            return httpx.Response(200, json={
+                'id': 'x', 'object': 'chat.completion', 'created': 1, 'model': 'm',
+                'choices': [{'index': 0, 'finish_reason': 'tool_calls', 'message': {
+                    'role': 'assistant', 'content': None, 'tool_calls': [
+                        {'id': 'call_1', 'type': 'function',
+                         'function': {'name': 'suche_vorlagen', 'arguments': json.dumps({'anfrage': 'Miete'})}}]}}]})
+
+        NativeToolDecider(self.chat_model(RequestBudget(limit=1), handler)).decide(MESSAGES, TOOL_SPECS, [])
+        (body,) = sent
+        self.assertEqual(body['tool_choice'], 'required')
+        self.assertEqual(body['max_completion_tokens'], settings.LLM_MAX_TOKENS)
+
     def test_native_decider_with_real_chat_model_sends_tools_and_reads_the_call(self):
         sent = []
 
@@ -353,29 +377,28 @@ class ScriptedDeciderTests(unittest.TestCase):
         self.assertEqual((action.tool, action.args, action.error), ('suche_vorlagen', {'anfrage': CLAIM}, None))
         self.assertEqual(json.loads(action.raw), {'tool': 'suche_vorlagen', 'args': {'anfrage': CLAIM}})
 
-    def test_scripted_asks_when_top_two_close(self):
+    def test_scripted_takes_rank_one_and_leaves_the_question_to_the_guard(self):
         history = [votes_observation(vote_candidate(V1, 0.873, 'Untermiete', '2024-11-24'),
-                                     vote_candidate(V2, 0.861, 'Eigenbedarf', '2024-11-24'),
-                                     vote_candidate('2026-06-14_de#1', 0.80))]
+                                     vote_candidate(V2, 0.868, 'Eigenbedarf', '2024-11-24'))]
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, history)
-        self.assertEqual(action.tool, 'rueckfrage')
-        self.assertEqual(action.args['optionen'], [V1, V2])
-        for part in ('Untermiete', 'Eigenbedarf', '24.11.2024'):
-            self.assertIn(part, action.args['frage'])
-        self.assertEqual(validate_args('rueckfrage', action.args), action.args)
+        self.assertEqual((action.tool, action.args), ('suche_passagen', {'vorlage_id': V1}))
+        self.assertFalse(hasattr(ScriptedDecider(), 'margin'))
 
     def test_scripted_checks_when_clear(self):
         decider = ScriptedDecider()
         votes = [votes_observation(vote_candidate(V1, 0.90), vote_candidate(V2, 0.85))]
         search = decider.decide(MESSAGES, TOOL_SPECS, votes)
-        self.assertEqual((search.tool, search.args), ('suche_passagen', {'vorlage_id': V1, 'anfrage': CLAIM}))
+        self.assertEqual((search.tool, search.args), ('suche_passagen', {'vorlage_id': V1}))
         check = decider.decide(MESSAGES, TOOL_SPECS, votes + [passages_observation(V1)])
         self.assertEqual((check.tool, check.args), ('pruefen', {'vorlage_id': V1}))
 
-    def test_scripted_margin_is_a_strict_lower_bound(self):
-        votes = [votes_observation(vote_candidate(V1, 0.75), vote_candidate(V2, 0.5))]
-        self.assertEqual(ScriptedDecider(margin=0.25).decide(MESSAGES, TOOL_SPECS, votes).tool, 'suche_passagen')
-        self.assertEqual(ScriptedDecider(margin=0.3).decide(MESSAGES, TOOL_SPECS, votes).tool, 'rueckfrage')
+    def test_scripted_searches_passages_with_the_vote_only(self):
+        votes = [votes_observation(vote_candidate(V1, 0.90), vote_candidate(V2, 0.85))]
+        action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, votes)
+        self.assertEqual(action.args, {'vorlage_id': '2024-11-24_de#1'})  # the claim goes in through the graph
+        self.assertIsNone(action.error)
+        fixed = ScriptedDecider(fixed_vote_id=V2).decide(MESSAGES, fixed_vote_specs(), [])
+        self.assertEqual(fixed.args, {'vorlage_id': V2})
 
     def test_scripted_single_candidate_needs_no_question(self):
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, [votes_observation(vote_candidate(V1, 0.5))])
@@ -390,13 +413,25 @@ class ScriptedDeciderTests(unittest.TestCase):
         decider = ScriptedDecider(fixed_vote_id=V2)
         specs = fixed_vote_specs()
         search = decider.decide(MESSAGES, specs, [])
-        self.assertEqual((search.tool, search.args), ('suche_passagen', {'vorlage_id': V2, 'anfrage': CLAIM}))
+        self.assertEqual((search.tool, search.args), ('suche_passagen', {'vorlage_id': V2}))
         check = decider.decide(MESSAGES, specs, [passages_observation(V2)])
         self.assertEqual((check.tool, check.args), ('pruefen', {'vorlage_id': V2}))
 
     def test_scripted_passages_by_vector_search_are_checked_too(self):
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, [passages_observation(V1, tool='suche_passagen_vektor')])
         self.assertEqual((action.tool, action.args), ('pruefen', {'vorlage_id': V1}))
+
+    def test_scripted_nachsuche_uses_the_vector_search(self):
+        history = [votes_observation(vote_candidate(V1, 0.9)), passages_observation(V2)]
+        specs = [spec for spec in TOOL_SPECS if spec['name'] == 'suche_passagen_vektor']
+        action = ScriptedDecider().decide(MESSAGES, specs, history)
+        self.assertEqual((action.tool, action.args), ('suche_passagen_vektor', {'vorlage_id': V2, 'anfrage': CLAIM}))
+        # a rejected step after the passage search does not hide the vote of the last passage search
+        rejected = Observation('pruefen', 'Fehler', {'error_kind': ERROR_INVALID_ARGS}, 'Keine Passagen')
+        action = ScriptedDecider().decide(MESSAGES, specs, history + [rejected])
+        self.assertEqual((action.tool, action.args['vorlage_id']), ('suche_passagen_vektor', V2))
+        # without a passage search there is no vote to search in: an invalid step, not a guess
+        self.assertIsNone(ScriptedDecider().decide(MESSAGES, specs, history[:1]).tool)
 
     def test_scripted_empty_pool_means_source_missing(self):
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, [passages_observation(V1, pool_size=0)])

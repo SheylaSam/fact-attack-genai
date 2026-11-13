@@ -9,6 +9,8 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -81,6 +83,32 @@ class FormatStepsTests(unittest.TestCase):
         self.assertNotIn('?', rows['suche_vorlagen'])
         self.assertNotIn('✗', rows['rueckfrage'])
         self.assertIn('Ungültige Argumente', text)
+
+    def test_format_steps_marks_the_question_step(self):
+        events = [
+            event(1, 'decide', 'suche_passagen', 'suche_passagen gewählt'),
+            event(1, 'act', 'suche_passagen', 'Wächter: mehrdeutig, Aktion nicht ausgeführt'),
+            event(1, 'ask', 'rueckfrage', 'Rückfrage mit 2 Optionen: a, b', args={'optionen': ['a', 'b']}),
+            event(1, 'finish', None, 'Ergebnis: rueckfrage, 2 Optionen'),
+        ]
+        rows = numbered(cli_format.format_steps(events))
+        self.assertIn('?', rows['Rückfrage'])
+        self.assertIn('✓', rows['suche_passagen'])
+        self.assertEqual(cli_format.NODE_LABELS['ask'], 'Rückfrage')
+
+    def test_format_steps_names_the_nachsuche(self):
+        events = [
+            event(2, 'verify', 'pruefen', 'Label 1 (nicht_belegt), 0 Zitate'),
+            event(2, 'check_evidence', None, 'Nicht belegt: kein Zitat zu prüfen'),
+            event(2, 'nachsuche', None, 'Nachsuche: nicht belegt, ein weiterer Suchschritt'),
+            event(3, 'decide', 'suche_passagen_vektor', 'suche_passagen_vektor gewählt'),
+            event(3, 'act', 'suche_passagen_vektor', 'Passagen aus a (Vektorsuche): 3 gefunden'),
+            event(3, 'finish', None, 'Ergebnis: nicht_belegt'),
+        ]
+        rows = numbered(cli_format.format_steps(events))
+        self.assertIn('✓', rows['Nachsuche'])
+        self.assertIn('suche_passagen_vektor', rows)
+        self.assertEqual(cli_format.NODE_LABELS['nachsuche'], 'Nachsuche')
 
     def test_format_steps_numbers_each_step_once(self):
         events = [
@@ -171,6 +199,29 @@ class FormatResultTests(unittest.TestCase):
             self.assertIn(expected, text)
         self.assertNotIn('S. ', text)
 
+    def test_answer_commands_quote_the_claim(self):
+        lines = cli_format.answer_commands('Er sagt "nein" & geht', [V2], ['--mock'])
+        self.assertEqual(lines, [f"python -m src.agent {shlex.quote('Er sagt \"nein\" & geht')} "
+                                 f"--quelle {V2.vote_id} --mock"])
+        self.assertEqual(cli_format.answer_commands(CLAIM, [V1, V2]),
+                         [f"python -m src.agent {shlex.quote(CLAIM)} --quelle {V1.vote_id}",
+                          f"python -m src.agent {shlex.quote(CLAIM)} --quelle {V2.vote_id}"])
+
+    def test_format_result_rueckfrage_shows_the_answer_commands(self):
+        result = AgentResult(outcome='rueckfrage', question='Welche?', options=[V1, V2], asked_by='guard')
+        text = cli_format.format_result(result, claim=CLAIM, answer_args=['--mock'])
+        self.assertIn('Antworten mit einer neuen Prüfung:', text)
+        for line in cli_format.answer_commands(CLAIM, [V1, V2], ['--mock']):
+            self.assertIn(line, text)
+        self.assertNotIn('Antworten mit einer neuen Prüfung:', cli_format.format_result(result))  # no claim: none
+        done = AgentResult(outcome='gestuetzt', vote=V1)
+        self.assertNotIn('--quelle', cli_format.format_result(done, claim=CLAIM))
+
+    def test_result_json_has_asked_by(self):
+        data = cli_format.result_to_dict(AgentResult(outcome='rueckfrage', options=[V1, V2], asked_by='guard'))
+        self.assertEqual(data['asked_by'], 'guard')
+        self.assertIsNone(cli_format.result_to_dict(AgentResult(outcome='quelle_fehlt'))['asked_by'])
+
     def test_format_result_technical_error_and_note(self):
         failed = AgentResult(outcome='technischer_fehler', reasoning='Abgebrochen.', error='Anfrage-Budget erschöpft')
         self.assertIn('technischer_fehler', cli_format.format_result(failed))
@@ -198,6 +249,8 @@ class FormatResultTests(unittest.TestCase):
         self.assertEqual(data['events'][0]['args'], {'vorlage_id': V1.vote_id})
         self.assertEqual(data['events'][1]['data'], {'candidates': [{'vote_id': V1.vote_id}]})
         self.assertEqual(data['steps'], 2)
+        self.assertEqual(data['checks'], 0)
+        self.assertEqual(cli_format.result_to_dict(AgentResult(outcome='nicht_belegt', checks=2))['checks'], 2)
         self.assertIsNone(data['error'])
         empty = cli_format.result_to_dict(AgentResult(outcome='quelle_fehlt'))
         self.assertIsNone(empty['vote'])
@@ -324,12 +377,17 @@ class MainTests(unittest.TestCase):
         self.assertIn('rueckfrage', out)
         self.assertIn(V1.vote_id, out)
         self.assertIn(V2.vote_id, out)
+        self.assertIn('Rückfrage', numbered(out.split('Ergebnis:')[0]))  # its own step, from the guard
+        for vote in (V1, V2):
+            self.assertIn(f"{shlex.quote(CLAIM)} --quelle {vote.vote_id} --mock", out)
         self.assertEqual([client.kwargs for client in FakeClient.instances], [{'mock': True}])
         self.assertTrue(self.index.closed)
         self.assertTrue(self.engines[0].closed)
         traces = list(self.trace_dir.glob('*.trace.jsonl'))
         self.assertEqual(len(traces), 1)
         self.assertEqual(json.loads(traces[0].read_text(encoding='utf-8').splitlines()[0])['node'], 'decide')
+        nodes = [json.loads(line)['node'] for line in traces[0].read_text(encoding='utf-8').splitlines()]
+        self.assertEqual(nodes[-2:], ['ask', 'finish'])
         self.assertEqual(list(self.trace_dir.glob('*.requests.jsonl')), [])
 
     def test_main_json_output_is_the_result_and_question_exits_zero(self):
@@ -348,6 +406,93 @@ class MainTests(unittest.TestCase):
         self.assertIn('gestuetzt', out)
         self.assertIn('S. 2', out)
         self.assertIn(QUOTE, out)
+
+    def mcp_main(self, command, *argv):
+        """Runs `--werkzeuge mcp` with the MCP server replaced by `command`; opening the local index is a failure."""
+        with mock.patch('src.agent.mcp_server.server_command', return_value=command), \
+                mock.patch.object(agent_cli, 'SourceIndex', side_effect=AssertionError('index opened')):
+            return self.run_main(CLAIM, '--mock', '--werkzeuge', 'mcp', '--trace-dir', str(self.trace_dir), *argv)
+
+    @unittest.skipUnless(installed('mcp', 'langchain_mcp_adapters'), 'Install requirements-agent.txt')
+    def test_mcp_start_failure_is_technical_error_without_fallback(self):
+        command = [sys.executable, '-c', "import sys; sys.stderr.write('kaputt'); sys.exit(3)"]
+        code, out, err = self.mcp_main(command, '--json')
+        self.assertEqual(code, 2, err)
+        data = json.loads(out)
+        self.assertEqual(data['outcome'], 'technischer_fehler')
+        self.assertIn('MCP-Server', data['error'])
+        self.assertIn('kaputt', data['error'])
+        self.assertEqual([(e['node'], e['summary']) for e in data['events']], [('start', 'Werkzeuge nicht verfügbar')])
+        self.assertEqual(FakeClient.instances[0].kwargs, {'mock': True})  # no request path was built or used
+        self.assertTrue(self.engines[0].closed)
+
+    @unittest.skipUnless(installed('mcp', 'langchain_mcp_adapters'), 'Install requirements-agent.txt')
+    def test_mcp_mock_run_uses_the_server_tools(self):
+        fixture = Path(__file__).resolve().parent / 'fixtures' / 'mcp_fake_server.py'
+        code, out, err = self.mcp_main([sys.executable, str(fixture), '--leer'])
+        self.assertEqual(code, 0, err)
+        self.assertIn('suche_vorlagen', out)
+        self.assertIn('quelle_fehlt', out)
+        self.assertIn('Keine Vorlage gefunden', out)  # the observation came from the server's empty result
+
+    @unittest.skipUnless(installed('mcp', 'langchain_mcp_adapters'), 'Install requirements-agent.txt')
+    def test_answer_commands_repeat_an_explicit_werkzeuge(self):
+        fixture = Path(__file__).resolve().parent / 'fixtures' / 'mcp_fake_server.py'
+        code, out, err = self.mcp_main([sys.executable, str(fixture)])  # two close votes: the guard asks back
+        self.assertEqual(code, 0, err)
+        self.assertIn('rueckfrage', out)
+        for vote in (V1, V2):
+            self.assertIn(f"{shlex.quote(CLAIM)} --quelle {vote.vote_id} --mock --werkzeuge mcp", out)
+
+    def test_default_werkzeuge_is_local_and_not_repeated_in_answers(self):
+        code, out, err = self.run_main(CLAIM, '--mock', '--trace-dir', str(self.trace_dir))
+        self.assertEqual(code, 0, err)
+        self.assertNotIn('--werkzeuge', out)
+        for option in ('--index-dir', '--modus', '--max-requests'):
+            self.assertNotIn(option, out)  # only what was given on the command line is repeated
+
+    def test_answer_commands_repeat_explicit_index_dir_modus_and_max_requests(self):
+        index_dir = Path(self.tmp.name) / 'index mit Leerzeichen'
+        code, out, err = self.run_main(CLAIM, '--mock', '--modus', 'scripted', '--max-requests', '7',
+                                       '--index-dir', str(index_dir), '--trace-dir', str(self.trace_dir))
+        self.assertEqual(code, 0, err)
+        tail = f"--mock --modus scripted --index-dir {shlex.quote(str(index_dir))} --max-requests 7"
+        for vote in (V1, V2):
+            self.assertIn(f"{shlex.quote(CLAIM)} --quelle {vote.vote_id} {tail}", out)
+
+    def test_answer_args_follow_the_given_options(self):
+        parser = agent_cli.build_parser()
+        self.assertEqual(agent_cli._answer_args(parser.parse_args([CLAIM, '--mock'])), ['--mock'])
+        self.assertEqual(agent_cli._answer_args(parser.parse_args([CLAIM, '--max-requests', '12'])),
+                         ['--max-requests', '12'])  # explicit, even if it equals the default
+        self.assertEqual(agent_cli._answer_args(parser.parse_args([CLAIM, '--modus', 'json', '--werkzeuge', 'lokal'])),
+                         ['--modus', 'json', '--werkzeuge', 'lokal'])
+
+    def test_the_cli_module_does_not_import_the_mcp_server_at_the_top(self):
+        code = ("import sys\n"
+                "import src.agent.__main__\n"
+                "bad = [m for m in ('mcp', 'src.agent.mcp_server', 'src.agent.mcp_client') if m in sys.modules]\n"
+                "sys.exit(1 if bad else 0)\n")
+        result = subprocess.run([sys.executable, '-c', code], cwd=str(Path(__file__).resolve().parents[1]),
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_missing_mcp_gives_the_german_hint_and_local_tools_still_run(self):
+        with mock.patch.dict(sys.modules, {'src.agent.mcp_server': None, 'src.agent.mcp_client': None}):
+            code, out, err = self.run_main(CLAIM, '--mock', '--werkzeuge', 'mcp', '--trace-dir', str(self.trace_dir))
+            self.assertEqual(code, 1)
+            self.assertIn('Die MCP-Anbindung ist nicht installiert', err)
+            self.assertIn('requirements-agent.txt', err)
+            code, out, err = self.run_main(CLAIM, '--mock', '--werkzeuge', 'lokal', '--trace-dir',
+                                           str(self.trace_dir))
+            self.assertEqual(code, 0, err)  # the local path never needs mcp
+
+    def test_werkzeuge_rejects_other_values(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as stop:
+            agent_cli.main([CLAIM, '--mock', '--werkzeuge', 'xml'])
+        self.assertEqual(stop.exception.code, 1)
+        self.assertIn('--werkzeuge', err.getvalue())
 
     def test_main_exit_code_is_two_for_technical_error(self):
         self.engine_options = {'verify_error': RuntimeError('Modell nicht erreichbar')}

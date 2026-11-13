@@ -15,7 +15,6 @@ Exceptions of the chat model (timeouts, a spent request budget) are not caught h
 `make_chat_model` is the only place that builds the LLM client: sync only, one HTTP request per call, counted on the
 check's `RequestBudget`, at most `settings.LLM_MAX_TOKENS` output tokens per answer.
 """
-import datetime
 import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, Tuple
@@ -32,13 +31,11 @@ if TYPE_CHECKING:  # langchain-openai is optional (requirements-agent.txt); make
     from langchain_openai import ChatOpenAI
 
 MODES = ("native", "json", "scripted")
-DEFAULT_MARGIN = 0.02  # top-1 must lead top-2 by at least this much, or the scripted policy asks
 RAW_CHARS = 2000  # cap on a model answer that parsed to nothing; it goes into the history again
 THINKING_START, THINKING_END = "<|inner_prefix|>", "<|inner_suffix|>"  # Apertus thinking markers
 CUT_OFF_RAW = "(Antwort im Denkanteil abgebrochen; der Denktext wird nicht übernommen.)"  # history entry for it
 CUT_OFF_ERROR = ("Denkanteil abgeschnitten: Die Antwort endete, bevor das Nachdenken abgeschlossen war. Es wurde keine "
                  "Aktion ausgeführt. Antworte knapp mit genau einem JSON-Objekt.")
-TITLE_CHARS = 90  # a vote title inside the scripted question
 CONNECT_TIMEOUT_S = 10.0
 FORMAT_INSTRUCTION = (
     'Antworte ausschließlich mit genau einem JSON-Objekt der Form {"tool": "<Werkzeugname>", "args": {<Argumente>}}. '
@@ -120,7 +117,8 @@ class NativeToolDecider:
         self.chat_model = chat_model
 
     def decide(self, messages: List[dict], tools: List[dict], history: List[Observation]) -> AgentAction:
-        reply = self.chat_model.bind_tools(tools).invoke(messages)
+        # "required": the endpoint must answer with a tool call, plain text is no action
+        reply = self.chat_model.bind_tools(tools, tool_choice="required").invoke(messages)
         tokens_prompt, tokens_completion = _usage(reply)
         usage = {"tokens_prompt": tokens_prompt, "tokens_completion": tokens_completion}
         calls = list(getattr(reply, "tool_calls", None) or [])
@@ -229,27 +227,17 @@ def _claim(messages: List[dict]) -> Optional[str]:
     return None
 
 
-def _german_date(iso_date: Any) -> str:
-    try:
-        return datetime.date.fromisoformat(str(iso_date)).strftime("%d.%m.%Y")
-    except ValueError:
-        return str(iso_date)
-
-
-def _short(title: Any) -> str:
-    title = " ".join(str(title).split())
-    return title if len(title) <= TITLE_CHARS else title[:TITLE_CHARS].rstrip() + "…"
-
-
 class ScriptedDecider:
-    """Deterministic policy, no network: find the vote, ask when the two best votes are too close to call, search the
-    best vote's passages, check. Reads only the last observation (`history[-1].data`) and the claim.
+    """Deterministic policy, no network: find the vote, take rank 1 like the model in run 1 of stage 1, search its
+    passages, check. It never asks back: the guard in the graph catches an ambiguous claim, so there is a single
+    source of ambiguity. Reads only the last observation (`history[-1].data`) and the claim.
 
-    With `fixed_vote_id` the vote is given: the policy goes straight to `suche_passagen(fixed vote, claim)`.
+    With `fixed_vote_id` the vote is given: the policy goes straight to `suche_passagen(fixed vote)`; the graph
+    searches with the claim. In the Nachsuche only `suche_passagen_vektor` is offered: the policy runs it for the
+    vote of the latest passage search with the claim as the query.
     """
 
-    def __init__(self, margin: float = DEFAULT_MARGIN, fixed_vote_id: Optional[str] = None):
-        self.margin = margin
+    def __init__(self, fixed_vote_id: Optional[str] = None):
         self.fixed_vote_id = fixed_vote_id
 
     def decide(self, messages: List[dict], tools: List[dict], history: List[Observation]) -> AgentAction:
@@ -260,30 +248,34 @@ class ScriptedDecider:
         offered = _offered(tools)
         if not history:
             if self.fixed_vote_id is not None:
-                return self._act("suche_passagen", {"vorlage_id": self.fixed_vote_id, "anfrage": query}, offered)
+                return self._act("suche_passagen", {"vorlage_id": self.fixed_vote_id}, offered)
             return self._act("suche_vorlagen", {"anfrage": query}, offered)
+        if offered == ["suche_passagen_vektor"]:
+            return self._research(query, history, offered)
         last = history[-1]
         if last.error:
             return AgentAction(error=f"Das Werkzeug {last.tool} ist fehlgeschlagen: {last.error}")
         if last.tool == "suche_vorlagen":
-            return self._after_vote_search(last.data, query, offered)
+            return self._after_vote_search(last.data, offered)
         if last.tool in ("suche_passagen", "suche_passagen_vektor"):
             return self._after_passage_search(last.data, offered)
         return AgentAction(error=f"Keine Regel für das Ergebnis von {last.tool}.")
 
-    def _after_vote_search(self, data: dict, query: str, offered: List[str]) -> AgentAction:
+    def _research(self, query: str, history: List[Observation], offered: List[str]) -> AgentAction:
+        """The Nachsuche: the vector search in the vote of the latest passage search, with the claim as the query."""
+        vote_id = next((item.data.get("vote_id") for item in reversed(history)
+                        if item.tool in ("suche_passagen", "suche_passagen_vektor") and not item.error), None)
+        if vote_id is None:
+            return AgentAction(error="Keine Passagensuche gefunden, deren Vorlage die Nachsuche durchsuchen soll.")
+        return self._act("suche_passagen_vektor", {"vorlage_id": vote_id, "anfrage": query}, offered)
+
+    def _after_vote_search(self, data: dict, offered: List[str]) -> AgentAction:
         candidates = data.get("candidates") or []
         if not candidates:
             return self._act("quelle_fehlt", {"begruendung": "Keine Vorlage der Büchlein passt zur Behauptung."},
                              offered)
         top = candidates[0]
-        if len(candidates) > 1 and top["score"] - candidates[1]["score"] < self.margin:
-            first, second = candidates[:2]
-            question = (f"Welche Vorlage ist gemeint: «{_short(first['title'])}» ({_german_date(first['date'])}) "
-                        f"oder «{_short(second['title'])}» ({_german_date(second['date'])})?")
-            return self._act("rueckfrage", {"frage": question, "optionen": [first["vote_id"], second["vote_id"]]},
-                             offered)
-        return self._act("suche_passagen", {"vorlage_id": top["vote_id"], "anfrage": query}, offered)
+        return self._act("suche_passagen", {"vorlage_id": top["vote_id"]}, offered)
 
     def _after_passage_search(self, data: dict, offered: List[str]) -> AgentAction:
         if not data.get("pool_size"):
@@ -313,18 +305,19 @@ class _SyncOnlyTransport(httpx.AsyncBaseTransport):
                            "Anfrage-Budget umgehen.")
 
 
-def make_chat_model(budget: RequestBudget) -> "ChatOpenAI":
+def make_chat_model(budget: RequestBudget, *, transport: Optional[httpx.BaseTransport] = None) -> "ChatOpenAI":
     """The agent's LLM client: every HTTP request is counted on `budget` and none is retried by the SDK.
 
     `timeout` is passed on because the SDK hands its own (by default: no) timeout to every request, which would
     override the one of the httpx client. An unreachable host fails after `CONNECT_TIMEOUT_S`, a silent one after
     `settings.LLM_TIMEOUT_S`. `max_tokens` caps every answer (langchain-openai sends it as `max_completion_tokens`).
+    `transport` replaces the network transport beneath the budget (tests, the recording of the native smoke).
     """
     from langchain_openai import ChatOpenAI
     return ChatOpenAI(model=config.LLM_NAME, base_url=config.LLM_BASE_URL, api_key=config.LLM_API_KEY, temperature=0,
                       max_retries=0, max_tokens=settings.LLM_MAX_TOKENS,
                       timeout=httpx.Timeout(settings.LLM_TIMEOUT_S, connect=CONNECT_TIMEOUT_S),
-                      http_client=budget_http_client(budget),
+                      http_client=budget_http_client(budget, **({"transport": transport} if transport else {})),
                       http_async_client=httpx.AsyncClient(transport=_SyncOnlyTransport()))
 
 

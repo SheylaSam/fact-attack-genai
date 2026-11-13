@@ -6,8 +6,8 @@
   "languages": [
     "de"
   ],
-  "votes": 58,
-  "sources_indexed": 20,
+  "votes": 64,
+  "sources_indexed": 22,
   "skipped": [],
   "votes_per_source": {
     "2020-02-09_de": 2,
@@ -29,20 +29,22 @@
     "2025-09-28_de": 2,
     "2025-11-30_de": 2,
     "2026-03-08_de": 4,
-    "2026-06-14_de": 2
+    "2026-06-14_de": 2,
+    "2026-09-27_de": 2,
+    "2026-11-29_de": 4
   },
   "whole_booklet_sources": [],
   "votes_without_catalog_title": [],
   "votes_without_pages": [],
-  "model_load_seconds": 25.4,
-  "build_seconds": 96.4,
+  "model_load_seconds": 9.4,
+  "build_seconds": 33.0,
   "metadata": {
     "schema": 1,
-    "index_fingerprint": "90d9ee322ccead0afc988e897364cf422f9420313fe3bd8712e75e0d9adb0c58",
+    "index_fingerprint": "c83b51d190a19a3d23c1d28c25278c73631ddf4a1136af7ac73fd1a4b9216229",
     "languages": [
       "de"
     ],
-    "sources": 20,
+    "sources": 22,
     "encoder": {
       "model": "intfloat/multilingual-e5-small",
       "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
@@ -59,8 +61,8 @@
       "overlap": 64
     },
     "index_reused": false,
-    "chunks": 1443,
-    "votes": 58
+    "chunks": 1572,
+    "votes": 64
   },
   "control_queries": [
     {

@@ -1,0 +1,402 @@
+{
+  "outcome": "gestuetzt",
+  "vote": {
+    "vote_id": "2024-11-24_de#2",
+    "source_id": "2024-11-24_de",
+    "date": "2024-11-24",
+    "language": "de",
+    "title": "Änderung des Obligationenrechts (Mietrecht: Untermiete)",
+    "pages": [
+      6,
+      7,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33
+    ]
+  },
+  "evidence": [
+    {
+      "page": 30,
+      "quote": "30                     Zweite Vorlage: Untermiete\n\nArgumente  Bundesrat und Parlament\n\n\n                     Für viele Mieterinnen und Mieter ist es wichtig, dass sie Räu­\n              me untervermieten können. Das kann auch im Interesse der\n                    Vermieterinnen und Vermieter sein. Die angespannte Lage auf\n               dem Mietwohnungsmarkt und die Verbreitung von Online­\n                    plattformen begünstigen jedoch Missbräuche bei der Unter­\n                     miete. Deshalb braucht es klarere Regeln. Bundesrat und\n                   Parlament befürworten die Vorlage insbesondere aus folgen­\n                 den Gründen:\n\nMissbräuche             Die Änderungen dienen dazu, Missbräuche bei der Unter­\nverhindern          miete zu verhindern. Sie sollen darüber hinaus sicherstellen,\n                     dass eine Vermieterin oder ein Vermieter weiss, wer die Wohn-\n                   oder Geschäftsräume tatsächlich gebraucht. Die Möglichkeit,\n                     die Untermiete auf zwei Jahre zu begrenzen, verhindert\n                       in vielen Fällen, dass die Mieterin oder der Mieter durch eine\n                    längere Untermiete einen missbräuchlichen Gewinn erzielt.\n\nVorteile bleiben          Mieterinnen und Mieter können die Vorteile der Unter­\n                   miete weiterhin nutzen. Sie dürfen eine Wohnung, ein Ge­\n                      schäftslokal oder einzelne Räume auch künftig untervermie­\n                      ten. Die neuen Regeln erschweren aber Missbrauch, zum\n                       Beispiel überrissene Untermietzinse. Davon profitieren auch\n                     die Untermieterinnen und Untermieter.\n\nVerbesserte              Die Untermiete wird an klare Voraussetzungen geknüpft:\nRechtssicherheit     Die Mieterin oder der Mieter muss das Gesuch schriftlich stel­\n                     len und braucht die schriftliche Zustimmung der Vermieterin\n                   oder des Vermieters. Zudem ist für die Mieterinnen und Mieter\n                        klarer, welche Pflichten für sie bei der Untermiete gelten.\n\nKlare                       Bereits heute kann die Vermieterin oder der Vermieter\nKündigungsregel    das Mietverhältnis wegen einer unzulässigen Untervermietung\n                    kündigen. Künftig soll dies ausdrücklich im Gesetz stehen.\n                   Das schafft Klarheit. Die Mieterinnen und Mieter bleiben\n                     geschützt: Die Vermieterin oder der Vermieter darf erst nach\n                      erfolgloser schriftlicher Mahnung kündigen."
+    },
+    {
+      "page": 31,
+      "quote": "                                                                                     31\n\n\n\nRaum für                Vermieterinnen und Vermieter dürfen ihren Mieterinnen\nindividuelle        und Mietern im Mietvertrag oder im Einzelfall weiterhin zu­\nVereinbarungen      sätzliche Möglichkeiten der Untermiete einräumen. Auf diese\n                   Weise können sie die jeweiligen Interessen berücksichtigen.\n                      Beispielsweise können sie eine Untermietdauer von mehreren\n                    Jahren ermöglichen oder mit der Mieterin die Bedingungen für\n                     eine Untervermietung über Onlineplattformen vereinbaren.\n\nEmpfehlung von         Aus all diesen Gründen empfehlen Bundesrat und Parla­\nBundesrat und      ment, die Änderung des Obligationenrechts (Mietrecht: Unter­\nParlament           miete) anzunehmen.\n         Ja\n\n                           admin.ch/untermiete"
+    },
+    {
+      "page": 31,
+      "quote": "Aus all diesen Gründen empfehlen Bundesrat und Parla­\nment, die Änderung des Obligationenrechts (Mietrecht: Unter­\nmiete) anzunehmen.\n"
+    },
+    {
+      "page": 30,
+      "quote": "Die Änderungen dienen dazu, Missbräuche bei der Unter­\nmiete zu verhindern. Sie sollen darüber hinaus sicherstellen, \ndass eine Vermieterin oder ein Vermieter weiss, wer die Wohn- \noder Geschäftsräume tatsächlich gebraucht. Die Möglichkeit, \ndie Untermiete auf zwei Jahre zu begrenzen, verhindert \nin vielen Fällen, dass die Mieterin oder der Mieter durch eine \nlängere Untermiete einen missbräuchlichen Gewinn erzielt. \n"
+    },
+    {
+      "page": 30,
+      "quote": "Für viele Mieterinnen und Mieter ist es wichtig, dass sie Räu­\nme untervermieten können. Das kann auch im Interesse der \nVermieterinnen und Vermieter sein. Die angespannte Lage auf \ndem Mietwohnungsmarkt und die Verbreitung von Online­\nplattformen begünstigen jedoch Missbräuche bei der Unter­\nmiete. Deshalb braucht es klarere Regeln. Bundesrat und \nParlament befürworten die Vorlage insbesondere aus folgen­\nden Gründen:\n"
+    }
+  ],
+  "question": null,
+  "options": [],
+  "reasoning": "Parsed via regex fallback",
+  "note": null,
+  "error": null,
+  "prediction": {
+    "id": "case-0001",
+    "claim": "Die Mietrechtsvorlage stärkt die Vermieter.",
+    "label": 0,
+    "label_name": "Entailment",
+    "reasoning": "Parsed via regex fallback",
+    "evidence": [
+      "30                     Zweite Vorlage: Untermiete\n\nArgumente  Bundesrat und Parlament\n\n\n                     Für viele Mieterinnen und Mieter ist es wichtig, dass sie Räu­\n              me untervermieten können. Das kann auch im Interesse der\n                    Vermieterinnen und Vermieter sein. Die angespannte Lage auf\n               dem Mietwohnungsmarkt und die Verbreitung von Online­\n                    plattformen begünstigen jedoch Missbräuche bei der Unter­\n                     miete. Deshalb braucht es klarere Regeln. Bundesrat und\n                   Parlament befürworten die Vorlage insbesondere aus folgen­\n                 den Gründen:\n\nMissbräuche             Die Änderungen dienen dazu, Missbräuche bei der Unter­\nverhindern          miete zu verhindern. Sie sollen darüber hinaus sicherstellen,\n                     dass eine Vermieterin oder ein Vermieter weiss, wer die Wohn-\n                   oder Geschäftsräume tatsächlich gebraucht. Die Möglichkeit,\n                     die Untermiete auf zwei Jahre zu begrenzen, verhindert\n                       in vielen Fällen, dass die Mieterin oder der Mieter durch eine\n                    längere Untermiete einen missbräuchlichen Gewinn erzielt.\n\nVorteile bleiben          Mieterinnen und Mieter können die Vorteile der Unter­\n                   miete weiterhin nutzen. Sie dürfen eine Wohnung, ein Ge­\n                      schäftslokal oder einzelne Räume auch künftig untervermie­\n                      ten. Die neuen Regeln erschweren aber Missbrauch, zum\n                       Beispiel überrissene Untermietzinse. Davon profitieren auch\n                     die Untermieterinnen und Untermieter.\n\nVerbesserte              Die Untermiete wird an klare Voraussetzungen geknüpft:\nRechtssicherheit     Die Mieterin oder der Mieter muss das Gesuch schriftlich stel­\n                     len und braucht die schriftliche Zustimmung der Vermieterin\n                   oder des Vermieters. Zudem ist für die Mieterinnen und Mieter\n                        klarer, welche Pflichten für sie bei der Untermiete gelten.\n\nKlare                       Bereits heute kann die Vermieterin oder der Vermieter\nKündigungsregel    das Mietverhältnis wegen einer unzulässigen Untervermietung\n                    kündigen. Künftig soll dies ausdrücklich im Gesetz stehen.\n                   Das schafft Klarheit. Die Mieterinnen und Mieter bleiben\n                     geschützt: Die Vermieterin oder der Vermieter darf erst nach\n                      erfolgloser schriftlicher Mahnung kündigen.",
+      "                                                                                     31\n\n\n\nRaum für                Vermieterinnen und Vermieter dürfen ihren Mieterinnen\nindividuelle        und Mietern im Mietvertrag oder im Einzelfall weiterhin zu­\nVereinbarungen      sätzliche Möglichkeiten der Untermiete einräumen. Auf diese\n                   Weise können sie die jeweiligen Interessen berücksichtigen.\n                      Beispielsweise können sie eine Untermietdauer von mehreren\n                    Jahren ermöglichen oder mit der Mieterin die Bedingungen für\n                     eine Untervermietung über Onlineplattformen vereinbaren.\n\nEmpfehlung von         Aus all diesen Gründen empfehlen Bundesrat und Parla­\nBundesrat und      ment, die Änderung des Obligationenrechts (Mietrecht: Unter­\nParlament           miete) anzunehmen.\n         Ja\n\n                           admin.ch/untermiete",
+      "Aus all diesen Gründen empfehlen Bundesrat und Parla­\nment, die Änderung des Obligationenrechts (Mietrecht: Unter­\nmiete) anzunehmen.\n",
+      "Die Änderungen dienen dazu, Missbräuche bei der Unter­\nmiete zu verhindern. Sie sollen darüber hinaus sicherstellen, \ndass eine Vermieterin oder ein Vermieter weiss, wer die Wohn- \noder Geschäftsräume tatsächlich gebraucht. Die Möglichkeit, \ndie Untermiete auf zwei Jahre zu begrenzen, verhindert \nin vielen Fällen, dass die Mieterin oder der Mieter durch eine \nlängere Untermiete einen missbräuchlichen Gewinn erzielt. \n",
+      "Für viele Mieterinnen und Mieter ist es wichtig, dass sie Räu­\nme untervermieten können. Das kann auch im Interesse der \nVermieterinnen und Vermieter sein. Die angespannte Lage auf \ndem Mietwohnungsmarkt und die Verbreitung von Online­\nplattformen begünstigen jedoch Missbräuche bei der Unter­\nmiete. Deshalb braucht es klarere Regeln. Bundesrat und \nParlament befürworten die Vorlage insbesondere aus folgen­\nden Gründen:\n"
+    ],
+    "evidence_sources": [
+      {
+        "quote": "30                     Zweite Vorlage: Untermiete\n\nArgumente  Bundesrat und Parlament\n\n\n                     Für viele Mieterinnen und Mieter ist es wichtig, dass sie Räu­\n              me untervermieten können. Das kann auch im Interesse der\n                    Vermieterinnen und Vermieter sein. Die angespannte Lage auf\n               dem Mietwohnungsmarkt und die Verbreitung von Online­\n                    plattformen begünstigen jedoch Missbräuche bei der Unter­\n                     miete. Deshalb braucht es klarere Regeln. Bundesrat und\n                   Parlament befürworten die Vorlage insbesondere aus folgen­\n                 den Gründen:\n\nMissbräuche             Die Änderungen dienen dazu, Missbräuche bei der Unter­\nverhindern          miete zu verhindern. Sie sollen darüber hinaus sicherstellen,\n                     dass eine Vermieterin oder ein Vermieter weiss, wer die Wohn-\n                   oder Geschäftsräume tatsächlich gebraucht. Die Möglichkeit,\n                     die Untermiete auf zwei Jahre zu begrenzen, verhindert\n                       in vielen Fällen, dass die Mieterin oder der Mieter durch eine\n                    längere Untermiete einen missbräuchlichen Gewinn erzielt.\n\nVorteile bleiben          Mieterinnen und Mieter können die Vorteile der Unter­\n                   miete weiterhin nutzen. Sie dürfen eine Wohnung, ein Ge­\n                      schäftslokal oder einzelne Räume auch künftig untervermie­\n                      ten. Die neuen Regeln erschweren aber Missbrauch, zum\n                       Beispiel überrissene Untermietzinse. Davon profitieren auch\n                     die Untermieterinnen und Untermieter.\n\nVerbesserte              Die Untermiete wird an klare Voraussetzungen geknüpft:\nRechtssicherheit     Die Mieterin oder der Mieter muss das Gesuch schriftlich stel­\n                     len und braucht die schriftliche Zustimmung der Vermieterin\n                   oder des Vermieters. Zudem ist für die Mieterinnen und Mieter\n                        klarer, welche Pflichten für sie bei der Untermiete gelten.\n\nKlare                       Bereits heute kann die Vermieterin oder der Vermieter\nKündigungsregel    das Mietverhältnis wegen einer unzulässigen Untervermietung\n                    kündigen. Künftig soll dies ausdrücklich im Gesetz stehen.\n                   Das schafft Klarheit. Die Mieterinnen und Mieter bleiben\n                     geschützt: Die Vermieterin oder der Vermieter darf erst nach\n                      erfolgloser schriftlicher Mahnung kündigen.",
+        "page_number": 30,
+        "proposal_id": null
+      },
+      {
+        "quote": "                                                                                     31\n\n\n\nRaum für                Vermieterinnen und Vermieter dürfen ihren Mieterinnen\nindividuelle        und Mietern im Mietvertrag oder im Einzelfall weiterhin zu­\nVereinbarungen      sätzliche Möglichkeiten der Untermiete einräumen. Auf diese\n                   Weise können sie die jeweiligen Interessen berücksichtigen.\n                      Beispielsweise können sie eine Untermietdauer von mehreren\n                    Jahren ermöglichen oder mit der Mieterin die Bedingungen für\n                     eine Untervermietung über Onlineplattformen vereinbaren.\n\nEmpfehlung von         Aus all diesen Gründen empfehlen Bundesrat und Parla­\nBundesrat und      ment, die Änderung des Obligationenrechts (Mietrecht: Unter­\nParlament           miete) anzunehmen.\n         Ja\n\n                           admin.ch/untermiete",
+        "page_number": 31,
+        "proposal_id": 2
+      },
+      {
+        "quote": "Aus all diesen Gründen empfehlen Bundesrat und Parla­\nment, die Änderung des Obligationenrechts (Mietrecht: Unter­\nmiete) anzunehmen.\n",
+        "page_number": 31,
+        "proposal_id": 2
+      },
+      {
+        "quote": "Die Änderungen dienen dazu, Missbräuche bei der Unter­\nmiete zu verhindern. Sie sollen darüber hinaus sicherstellen, \ndass eine Vermieterin oder ein Vermieter weiss, wer die Wohn- \noder Geschäftsräume tatsächlich gebraucht. Die Möglichkeit, \ndie Untermiete auf zwei Jahre zu begrenzen, verhindert \nin vielen Fällen, dass die Mieterin oder der Mieter durch eine \nlängere Untermiete einen missbräuchlichen Gewinn erzielt. \n",
+        "page_number": 30,
+        "proposal_id": null
+      },
+      {
+        "quote": "Für viele Mieterinnen und Mieter ist es wichtig, dass sie Räu­\nme untervermieten können. Das kann auch im Interesse der \nVermieterinnen und Vermieter sein. Die angespannte Lage auf \ndem Mietwohnungsmarkt und die Verbreitung von Online­\nplattformen begünstigen jedoch Missbräuche bei der Unter­\nmiete. Deshalb braucht es klarere Regeln. Bundesrat und \nParlament befürworten die Vorlage insbesondere aus folgen­\nden Gründen:\n",
+        "page_number": 30,
+        "proposal_id": null
+      }
+    ],
+    "numerical_conflict": null,
+    "p_entail": 0.8,
+    "p_neutral": 0.2,
+    "p_contra": 0.0,
+    "fuzzy_rule": "Decision-Rule 2: Direct support dominant (p_entail >= 0.60)",
+    "decision_rule": "Decision-Rule 2: Direct support dominant (p_entail >= 0.60)",
+    "strategy": "agent",
+    "booklet_path": "/Users/sheyla/Documents/ChatGPT/GenAI/work/fact-attack-stufe3/track_2a/data/booklets/2024-11-24_de.pdf",
+    "tokens_prompt": 4585,
+    "tokens_completion": 60,
+    "tokens_total": 4645,
+    "latency_ms": 1386.08,
+    "error": null,
+    "context_pages": [
+      29,
+      30,
+      28,
+      32,
+      33,
+      6,
+      31
+    ],
+    "retrieval_query_metadata": {}
+  },
+  "events": [
+    {
+      "step": 1,
+      "node": "decide",
+      "tool": "suche_passagen",
+      "args": {
+        "vorlage_id": "2024-11-24_de#2"
+      },
+      "summary": "suche_passagen gewählt",
+      "duration_ms": 896.9712909965892,
+      "tokens_prompt": 1091,
+      "tokens_completion": 33,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 1,
+      "node": "act",
+      "tool": "suche_passagen",
+      "args": {
+        "vorlage_id": "2024-11-24_de#2"
+      },
+      "summary": "Passagen aus 2024-11-24_de#2 (bewährte Suche mit der Behauptung): 12 gefunden, 8 neu im Pool. Pool dieser Vorlage: 8 Passagen; geprüft werden höchstens 10. 4 Passagen von anderen Vorlagen wurden nicht…",
+      "duration_ms": 19.802499999059364,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "error": null,
+      "data": {
+        "vote_id": "2024-11-24_de#2",
+        "found": 12,
+        "new": 8,
+        "dropped": 0,
+        "outside": 4,
+        "pool_size": 8,
+        "passages": [
+          {
+            "page_number": 6,
+            "section": null,
+            "status": "neu"
+          },
+          {
+            "page_number": 31,
+            "section": "Arguments of the Federal Council and Parliament",
+            "status": "neu"
+          },
+          {
+            "page_number": 1,
+            "section": null,
+            "status": "andere Vorlage, nicht aufgenommen"
+          },
+          {
+            "page_number": 72,
+            "section": "Voting text (legal text)",
+            "status": "andere Vorlage, nicht aufgenommen"
+          },
+          {
+            "page_number": 3,
+            "section": null,
+            "status": "andere Vorlage, nicht aufgenommen"
+          },
+          {
+            "page_number": 32,
+            "section": "Voting text (legal text)",
+            "status": "neu"
+          },
+          {
+            "page_number": 7,
+            "section": null,
+            "status": "neu"
+          },
+          {
+            "page_number": 33,
+            "section": "Voting text (legal text)",
+            "status": "neu"
+          },
+          {
+            "page_number": 24,
+            "section": "Official explanation in detail",
+            "status": "neu"
+          },
+          {
+            "page_number": 26,
+            "section": "Official explanation in detail",
+            "status": "neu"
+          },
+          {
+            "page_number": 41,
+            "section": "Arguments of the Federal Council and Parliament",
+            "status": "andere Vorlage, nicht aufgenommen"
+          },
+          {
+            "page_number": 27,
+            "section": "Official explanation in detail",
+            "status": "neu"
+          }
+        ]
+      }
+    },
+    {
+      "step": 2,
+      "node": "decide",
+      "tool": "pruefen",
+      "args": {
+        "vorlage_id": "2024-11-24_de#2"
+      },
+      "summary": "pruefen gewählt",
+      "duration_ms": 697.375750001811,
+      "tokens_prompt": 2058,
+      "tokens_completion": 32,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 2,
+      "node": "act",
+      "tool": "pruefen",
+      "args": {
+        "vorlage_id": "2024-11-24_de#2"
+      },
+      "summary": "Prüfung mit 8 Passagen aus 2024-11-24_de#2",
+      "duration_ms": 0.05395799962570891,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 2,
+      "node": "verify",
+      "tool": "pruefen",
+      "args": {
+        "vorlage_id": "2024-11-24_de#2",
+        "passagen": 8
+      },
+      "summary": "Label 1 (nicht_belegt), 0 Zitate",
+      "duration_ms": 2789.1682919944287,
+      "tokens_prompt": 4225,
+      "tokens_completion": 160,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 2,
+      "node": "check_evidence",
+      "tool": null,
+      "args": {},
+      "summary": "Nicht belegt: kein Zitat zu prüfen",
+      "duration_ms": 0.0035420016502030194,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 2,
+      "node": "nachsuche",
+      "tool": null,
+      "args": {},
+      "summary": "Nachsuche: nicht belegt, ein weiterer Suchschritt in 2024-11-24_de#2",
+      "duration_ms": 0.0007499984349124134,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 3,
+      "node": "decide",
+      "tool": "suche_passagen_vektor",
+      "args": {
+        "vorlage_id": "2024-11-24_de#2",
+        "anfrage": "Vermieterrechte, Vorteile für Vermieter, Stärkung der Vermieterposition"
+      },
+      "summary": "suche_passagen_vektor gewählt",
+      "duration_ms": 1057.3618339985842,
+      "tokens_prompt": 1794,
+      "tokens_completion": 62,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 3,
+      "node": "act",
+      "tool": "suche_passagen_vektor",
+      "args": {
+        "vorlage_id": "2024-11-24_de#2",
+        "anfrage": "Vermieterrechte, Vorteile für Vermieter, Stärkung der Vermieterposition"
+      },
+      "summary": "Passagen aus 2024-11-24_de#2 (Vektorsuche): 8 gefunden, 7 neu im Pool. Pool dieser Vorlage: 15 Passagen; geprüft werden höchstens 10. Zweite Prüfung mit 10 Passagen",
+      "duration_ms": 50.67899999994552,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "error": null,
+      "data": {
+        "vote_id": "2024-11-24_de#2",
+        "found": 8,
+        "new": 7,
+        "dropped": 0,
+        "outside": 0,
+        "pool_size": 15,
+        "passages": [
+          {
+            "page_number": 29,
+            "section": "Arguments of the initiative/referendum committee",
+            "status": "neu"
+          },
+          {
+            "page_number": 30,
+            "section": "Arguments of the Federal Council and Parliament",
+            "status": "neu"
+          },
+          {
+            "page_number": 7,
+            "section": null,
+            "status": "schon im Pool"
+          },
+          {
+            "page_number": 28,
+            "section": "Arguments of the initiative/referendum committee",
+            "status": "neu"
+          },
+          {
+            "page_number": 32,
+            "section": "Voting text (legal text)",
+            "status": "neu"
+          },
+          {
+            "page_number": 33,
+            "section": "Voting text (legal text)",
+            "status": "neu"
+          },
+          {
+            "page_number": 30,
+            "section": "Arguments of the Federal Council and Parliament",
+            "status": "neu"
+          },
+          {
+            "page_number": 33,
+            "section": "Voting text (legal text)",
+            "status": "neu"
+          }
+        ]
+      }
+    },
+    {
+      "step": 3,
+      "node": "verify",
+      "tool": "pruefen",
+      "args": {
+        "vorlage_id": "2024-11-24_de#2",
+        "passagen": 10
+      },
+      "summary": "Label 0 (gestuetzt), 5 Zitate",
+      "duration_ms": 1391.3977089978289,
+      "tokens_prompt": 4585,
+      "tokens_completion": 60,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 3,
+      "node": "check_evidence",
+      "tool": null,
+      "args": {},
+      "summary": "5 gültige Belege aus 5 Zitaten: gestuetzt",
+      "duration_ms": 1.2887499979115091,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "error": null,
+      "data": {}
+    },
+    {
+      "step": 3,
+      "node": "finish",
+      "tool": null,
+      "args": {},
+      "summary": "Ergebnis: gestuetzt, 5 Belege",
+      "duration_ms": 0.002125001628883183,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "error": null,
+      "data": {}
+    }
+  ],
+  "steps": 3,
+  "asked_by": null,
+  "checks": 2
+}
