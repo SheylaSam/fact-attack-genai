@@ -96,7 +96,8 @@ Die CLI druckt zu jeder Option einen Befehl mit `--quelle <Vorlagen-ID>` (und de
 `--modus`, `--werkzeuge`, `--max-requests`). Die Antwort ist eine **neue Prüfung** mit eigenem Anfrage-Deckel
 von höchstens 12; der alte Lauf bleibt, wie er war. Mit `--quelle` entfällt die Vorlagensuche und der Wächter.
 Ausblick Stufe 4: Dort ersetzt `interrupt` das Ende bei `ask`, und der Lauf wird mit der gewählten Vorlage
-fortgesetzt, statt neu zu beginnen.
+fortgesetzt, statt neu zu beginnen. **Erledigt in [AGENT_STUFE4.md](AGENT_STUFE4.md)** (nur mit Checkpointer, die
+CLI behält die neue Prüfung mit `--quelle`).
 
 ## Regel für `quelle_fehlt`
 
@@ -167,6 +168,8 @@ Seiten pro Vorlage. Er würde die Suche auf reine Vektorsuche über rohe Chunks 
 pro Sitzung (zum Beispiel mit `st.cache_resource`) erzeugen und aus dem synchronen Skript benutzen, ohne dass die
 Oberfläche eine eigene Ereignisschleife braucht. Zu klären bleibt, wer `close()` aufruft (Prozessende), und dass
 die Schleife beim Schließen geschlossen wird (seit den Korrekturen des Gesamtreviews der Fall).
+*Entschieden in Stufe 4:* Die Oberfläche nutzt die lokalen Werkzeuge (`LocalBackend`, ein `SourceIndex` per
+`st.cache_resource`); MCP bleibt der CLI vorbehalten (siehe [AGENT_STUFE4.md](AGENT_STUFE4.md), Grenzen).
 
 ## Pakete
 
@@ -283,7 +286,9 @@ Einzelläufe, keine Messung. Sie zeigen, **wo der Aufbau etwas anderes tut als g
    Aktion, die als Schritt zählt. Lauf 2 zeigt Nachsuche und zweite Prüfung mit gültigen Belegen. Lauf 4 bestätigt
    MCP mit echtem Apertus: Suche über den Server, Prüfung im Agentenprozess, kein Server-Prozess blieb zurück.
 
-**Offene Punkte für Stufe 4 und 5** (nicht behoben):
+**Offene Punkte für Stufe 4 und 5.** Die Punkte für Stufe 4 sind erledigt (Oberfläche, Rückfrage mit `interrupt`,
+bereinigte Schrittliste, siehe [AGENT_STUFE4.md](AGENT_STUFE4.md)); was unten nicht durchgestrichen ist, bleibt für
+Stufe 5 offen und steht dort in der Liste der offenen Punkte (Nr. 11):
 - ~~Der Wächter sollte auch eine Modell-`rueckfrage` prüfen, und/oder der Hinweis sollte die Bewertung der
   Behauptung zeigen.~~ Umgesetzt, offline getestet. Lauf 3 („Euro“) bleibt: Die Rangliste der Behauptung ist
   `mehrdeutig`, der Wächter lässt die Frage deshalb durch. Das ändert nur eine „keine“-Schwelle.
@@ -305,8 +310,9 @@ Einzelläufe, keine Messung. Sie zeigen, **wo der Aufbau etwas anderes tut als g
 - **Nur deutsche Behauptungen** (`LANGUAGES = ("de",)`); die Sprache der Behauptung geht nicht an die Suche
   (Stufe 5).
 - **Die Belegkontrolle prüft nur, dass ein Zitat im PDF steht**, nicht, ob es zur Behauptung passt.
-- Die Schrittliste zeigt bei einer Rückfrage zwei Zeilen mit `?` (Aktion und `ask`); die Oberfläche der Stufe 4
-  sollte das bereinigen.
+- ~~Die Schrittliste zeigt bei einer Rückfrage zwei Zeilen mit `?` (Aktion und `ask`); die Oberfläche der Stufe 4
+  sollte das bereinigen.~~ Erledigt in Stufe 4: `step_rows` macht daraus eine Zeile (siehe
+  [AGENT_STUFE4.md](AGENT_STUFE4.md)). Das Ereignisprotokoll der Spur hat weiter beide Einträge.
 
 ## Tests
 
