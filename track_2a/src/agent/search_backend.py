@@ -32,26 +32,32 @@ class SearchBackend(Protocol):
 class LocalBackend:
     """Index and engine in this process. `close` is a no-op: the CLI owns both and closes them.
 
-    `add_vote` registers an own PDF upload for this backend (one per check). The index is shared by every session
-    of the app, so the upload is kept here and never added to `index.votes`."""
+    `add_vote` registers a session-local whole-booklet vote for this backend (one per check): an own PDF upload, or
+    a catalog booklet the index has no "#0" for. The index is shared by every session of the app, so the vote is
+    kept here and never added to `index.votes`."""
 
     def __init__(self, index: SourceIndex, engine, booklets_dir: Path):
         self.index = index
         self.engine = engine
         self.booklets_dir = Path(booklets_dir)
-        self._uploads: Dict[str, VoteRef] = {}
+        self._session_votes: Dict[str, VoteRef] = {}
 
     @property
     def votes(self) -> Dict[str, VoteRef]:
-        return {**self.index.votes, **self._uploads} if self._uploads else self.index.votes
+        return {**self.index.votes, **self._session_votes} if self._session_votes else self.index.votes
 
     def add_vote(self, vote: VoteRef) -> None:
-        """Makes an uploaded booklet's whole-booklet vote ("custom_<hash>#0") known to this backend. ValueError for
-        anything else: a catalog vote, a part of a booklet, a vote without pages or an id that is not exactly the
-        upload's own (`booklets_dir / f"{source_id}.pdf"` must stay inside the directory)."""
-        if (not is_upload_source(vote.source_id) or vote.vote_id != f"{vote.source_id}#0" or not vote.pages):
-            raise ValueError(f"Nur eigene PDFs können als Vorlage ergänzt werden, nicht {vote.vote_id!r}.")
-        self._uploads[vote.vote_id] = vote
+        """Makes a whole-booklet vote ("<source_id>#0" with pages) known to this backend, for an upload
+        ("custom_<hash>") or a source the index knows. ValueError for anything else: a part of a booklet, a vote
+        without pages, an id that is not exactly the source's own, a source the index does not know (no free path:
+        `booklets_dir / f"{source_id}.pdf"` must stay inside the directory) and an id the index already has (a
+        catalog vote is never shadowed)."""
+        known = is_upload_source(vote.source_id) or any(
+            ref.source_id == vote.source_id for ref in self.index.votes.values())
+        if (not known or vote.vote_id != f"{vote.source_id}#0" or not vote.pages
+                or vote.vote_id in self.index.votes):
+            raise ValueError(f"Nur ein ganzes Büchlein kann als Vorlage ergänzt werden, nicht {vote.vote_id!r}.")
+        self._session_votes[vote.vote_id] = vote
 
     def tool_specs(self) -> List[dict]:
         return [copy.deepcopy(spec) for spec in TOOL_SPECS if spec["name"] not in TERMINAL_TOOLS]
@@ -66,7 +72,7 @@ class LocalBackend:
             booklet_language=vote.language)
 
     def vector_passages(self, vote_id: str, query: str, k: int = 8) -> List[Dict[str, Any]]:
-        if vote_id in self._uploads:  # the index does not know uploads: the Nachsuche ends without new passages
+        if vote_id in self._session_votes:  # not in the index: the Nachsuche ends without new passages
             return []
         return self.index.search_passages(vote_id, query, k=k)
 

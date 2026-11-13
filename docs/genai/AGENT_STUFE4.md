@@ -19,11 +19,11 @@ funktioniert. Die Urteile der Mock-Läufe („gestützt“ usw.) kommen vom Mock
 | Feste Vorlage nach der Antwort | `src/agent/tools.py` | `AgentTools.fix_vote`; `_plain` macht gepoolte Passagen zu reinen Python-Werten; `MAX_ID_CHARS` 80. |
 | Sitzung | `src/agent/session.py` | `AgentSession` (`start`, `answer`, `pending`, `events`), `Pending`, `Turn`. |
 | Live-Hook | `src/agent/trace.py` | `Tracer(on_event=...)`: läuft nach dem Schreiben der Zeile, jedes Ereignis genau einmal. |
-| Darstellung | `src/agent_ui.py` | Reines Modul ohne Streamlit: `step_rows`, `outcome_view`, `prediction_for_card`, `vote_for_selection`, `stream`, `options_with_last`. |
-| Verdrahtung | `src/agent_app.py`, `app.py` | `agent_available`, `get_agent_index`, `make_agent_session`, `AgentCheck`; im Tab die Schrittliste, die Knöpfe, die Ergebniskarte. |
-| Uploads | `src/agent/uploads.py`, `src/agent/search_backend.py` | `upload_vote`, `LocalBackend.add_vote`. |
+| Darstellung | `src/agent_ui.py` | Modul ohne Streamlit: `step_rows`, `outcome_view`, `prediction_for_card`, `vote_for_selection`, `stream`, `options_with_last`. Nur `vote_for_selection` liest eine Datei (die Seitenzahl eines Büchleins, Task 8). |
+| Verdrahtung | `src/agent_app.py`, `app.py` | `agent_available`, `get_agent_index`, `make_agent_session(..., session_vote=)`, `AgentCheck`; im Tab die Schrittliste, die Knöpfe, die Ergebniskarte. |
+| Uploads und ganzes Büchlein | `src/agent/uploads.py`, `src/agent/search_backend.py` | `upload_vote`, `whole_booklet_vote`, `LocalBackend.add_vote`. |
 | Übersetzungen | `src/ui_i18n.py` | 33 neue Zeilen DE/FR/IT (Platzhalter gleich, ein AST-Test prüft jeden Text von `agent_ui.py`). |
-| Tests | `tests/test_agent_graph.py`, `test_agent_session.py`, `test_agent_ui.py`, `test_agent_uploads.py`, `test_ui_agent_streamlit.py` | 99 neue Tests, siehe Abschnitt Tests. |
+| Tests | `tests/test_agent_graph.py`, `test_agent_decider.py`, `test_agent_session.py`, `test_agent_ui.py`, `test_agent_uploads.py`, `test_ui_agent_streamlit.py` | 108 neue Tests (9 davon aus Task 8), siehe Abschnitt Tests. |
 
 B0 ist unverändert: `src/inference.py`, `src/apertus_client.py`, `src/http_chat.py`, die Wettbewerbs-CLI und
 `requirements.txt`. Die Schwellen des Wächters bleiben 0.01 / 0.0 / `None`, `TOOL_MODE` bleibt `json`, das gesperrte
@@ -137,15 +137,31 @@ Ein hochgeladenes PDF geht jetzt auch über den Agenten (Stufe 3 hätte es nur i
 - `upload_vote(path, language)` macht `custom_<sha256>#0` zur Vorlage der Sitzung: Titel „Eigenes PDF“, alle Seiten,
   Datum leer (die UI zeigt und speichert `None`). Eine leere, passwortgeschützte, beschädigte oder falsch benannte Datei
   ist ein deutscher `ValueError` ohne Pfad und ohne Bibliothekstext; die UI zeigt eine übersetzte Meldung.
-- `LocalBackend.add_vote` nimmt nur `custom_`-Vorlagen (Zeichen `[A-Za-z0-9]` nach dem Präfix, `vote_id == source_id#0`,
-  Seiten nicht leer). Pfade wie `../x`, Katalog-IDs und andere Vorlagen werden abgelehnt. Die Vorlage liegt im
-  Backend **dieser** Sitzung; der geteilte `SourceIndex` wird nie verändert, andere Sitzungen sehen den Upload nicht.
+- `LocalBackend.add_vote` nimmt nur Ganzbüchlein-Vorlagen (`vote_id == source_id#0`, Seiten nicht leer): eine
+  `custom_`-Vorlage (Zeichen `[A-Za-z0-9]` nach dem Präfix) oder, seit Task 8, `<source_id>#0` einer Quelle, die der
+  Index kennt (siehe „Ganzes Büchlein“ unten). Pfade wie `../x` oder `x/<bekannte Quelle>`, unbekannte Quellen, Teile
+  eines Büchleins (`#1`) und IDs, die der Index schon hat, werden abgelehnt. Die Vorlage liegt im Backend **dieser**
+  Sitzung; der geteilte `SourceIndex` wird nie verändert, andere Sitzungen sehen sie nicht.
 - Der Upload ist die feste Vorlage der Prüfung: kein Vorlagensuchschritt, keine Frage.
 - `LocalBackend.vector_passages` liefert für einen Upload `[]` (kein Index): Die Nachsuche endet mit „Nachsuche ohne
   neue Passagen“ und das erste Ergebnis gilt.
 - `MAX_ID_CHARS` stieg von 64 auf 80: `custom_` + 64 Hex-Zeichen + `#0` sind 73 Zeichen, mit 64 wäre jede Upload-ID als
   Werkzeugargument zu lang gewesen (das Schema des MCP-Servers liest dieselbe Konstante).
 - Ein gescanntes PDF ohne Textebene wird angenommen und endet als „nicht belegt“ ohne Passagen; es gibt keine OCR-Prüfung.
+
+### Ganzes Büchlein („Quelle selbst wählen“ mit „Automatisch erkennen“, Task 8)
+
+Der echte Index hat `<source_id>#0` nur für Büchlein ohne lesbares Inhaltsverzeichnis, heute für keines. Wählt die
+Person ein Büchlein ohne Vorlage, baut `vote_for_selection` darum eine **sitzungslokale Ganzbüchlein-Vorlage**
+(`uploads.whole_booklet_vote`): ID `<source_id>#0`, Titel „Gesamtes Büchlein“ (`WHOLE_BOOKLET_TITLE`), Datum und
+Sprache aus einer Indexvorlage desselben Büchleins, Seiten = **alle** Seiten des PDFs `booklets_dir/<source_id>.pdf`.
+Der Dateiname kommt aus dem Index, nie aus einer Eingabe; die Seitenzahl liest dieselbe Funktion wie beim Upload
+(`uploads._all_pages`). Die App reicht die Vorlage wie einen Upload an `make_agent_session(..., session_vote=)`, das
+Backend registriert sie über `add_vote`. `engine_vote` macht aus `#0` `None`: Die Engine erkennt die Vorlage im
+Büchlein selbst, wie im alten Ablauf. Liefert der Index die Vorlage schon (ein `#0` im Index oder eine gewählte
+Vorlage), gilt sie; `add_vote` lehnt eine gleichnamige Sitzungsvorlage ab. Eine gewählte Vorlage, die das Büchlein
+nicht hat, bleibt die Meldung „Der Agent kann die gewählte Quelle nicht prüfen“ (kein stiller Rückfall auf das ganze
+Büchlein).
 
 ## Entscheidungen des Plans
 
@@ -173,12 +189,17 @@ Entscheidungen während der Umsetzung (Rulings des Ablaufprotokolls):
 | Doppelklick-Schutz | Sperre in `AgentCheck` statt eines Flags im Session-State | der Worker überlebt den abgebrochenen Skriptlauf; ein Flag würde von dessen `finally` zu früh gelöscht |
 | Fehlerbild in Task 2 | `tools._plain`: numpy-Werte der echten Engine (BM25-Score als `numpy.float64`) werden zu Python-Werten | der Checkpointer lehnte sie ab; jeder echte interaktive Lauf endete als technischer Fehler, nur Fakes und die CLI (ohne Checkpointer) sahen es nicht |
 | Letzte Vorlage außerhalb der Optionen | zusätzlicher Knopf, Antwort erlaubt (genau diese eine ID) | die Person meint vielleicht dieselbe Vorlage wie zuletzt, auch wenn der Wächter andere nennt |
+| Mock-Entscheider nach der Antwort (Task 8) | `ScriptedDecider` liest die gewählte Vorlage aus der Systemnachricht (`prompts.fixed_vote_id_in`, Gegenstück zu `system_prompt(vote)`), nicht aus einem neuen Kanal; eine Passagensuche zählt nur, wenn sie diese Vorlage durchsucht hat | dieselbe Information, die das echte Modell sieht; die Behauptung (User-Nachricht) wird dafür nie gelesen |
+| „Automatisch erkennen“ mit gewählter Quelle (Task 8) | sitzungslokale Ganzbüchlein-Vorlage über `add_vote`, siehe „Ganzes Büchlein“ | entspricht der Engine-Erkennung des alten Ablaufs; kein freier Pfad, keine Änderung am geteilten Index |
+| Quellenbereich nach „Quelle fehlt“ (Task 8) | nach einem neuen Ergebnis `quelle_fehlt` ein `st.rerun()` | die linke Spalte wird vor dem Ergebnis gezeichnet; ohne Rerun öffnete sich „Quelle selbst wählen“ erst beim nächsten Klick |
 
 ## Grenzen
 
 - **Nur lokale Werkzeuge in der UI.** `McpBackend` bleibt der CLI vorbehalten; das `cache_resource`-Muster aus
   AGENT_STUFE3 ist der Weg, falls es nötig wird.
-- **Upload ohne Vektor-Nachsuche** (kein Index für Uploads); gescannte PDFs ohne OCR.
+- **Upload und ganzes Büchlein ohne Vektor-Nachsuche** (der Index hat für beide keine Abschnitte); gescannte PDFs ohne
+  OCR. Ergebniskarte und Verlauf nennen beim ganzen Büchlein die Vorlage „Gesamtes Büchlein“, nicht die Vorlage, die
+  die Engine darin erkannt hat.
 - **Die Strategie-Auswahl („Kontext für Apertus“) gilt nur im alten Ablauf und in der Mehrfachprüfung**, nicht im
   Agentenpfad. Mehrfachprüfung und alter Ablauf prüfen Uploads weiter über die Engine.
 - **Der Verlauf speichert nur Urteile**, keine Rückfragen und keine technischen Fehler.
@@ -195,8 +216,9 @@ Entscheidungen während der Umsetzung (Rulings des Ablaufprotokolls):
 
 ## Offene Punkte für Stufe 5
 
-Nicht behoben. Die ersten sechs standen im Ablaufprotokoll als bewusst zurückgestellt und sind hier benannt; die
-Punkte 1 und 2 zählen, sobald echte Apertus-Läufe aus der Oberfläche erlaubt sind.
+Nicht behoben, außer den Punkten 8 und 9 und dem Fehlertext in Punkt 10 (Task 8, jeweils markiert). Die ersten sechs
+standen im Ablaufprotokoll als bewusst zurückgestellt und sind hier benannt; die Punkte 1 und 2 zählen, sobald echte
+Apertus-Läufe aus der Oberfläche erlaubt sind.
 
 1. **Ein verwaister Worker läuft nach einer Eingabeänderung weiter.** Ändert die Person Behauptung oder Quelle,
    während ein Lauf arbeitet, wird die Prüfung verworfen, der Worker-Thread aber nicht abgebrochen. Er läuft bis zum
@@ -217,20 +239,33 @@ Punkte 1 und 2 zählen, sobald echte Apertus-Läufe aus der Oberfläche erlaubt 
 7. **Die alte Hinweiszeile bleibt im Verlauf stehen**, wenn die Antwort eine andere Vorlage als die letzte wählt
    („Zuletzt gewählte Vorlage …“ in der User-Nachricht). Antwort-Prompt und Systemprompt nennen die feste Vorlage;
    ein echter Lauf müsste zeigen, ob das Modell sich davon irritieren lässt.
-8. **Der Mock-Entscheider kann eine beantwortete Frage nicht zu Ende führen** (Befund der Handprobe, unten):
-   `ScriptedDecider` liest nach der Fortsetzung weiter das letzte Ergebnis der Vorlagensuche und sucht in Rang 1,
-   nicht in der gewählten Vorlage. Die Prüfung endet im Mock als roter technischer Fehler („Schrittgrenze“). Offen
-   ist, ob der echte Entscheider davon betroffen ist (er liest die Nachrichten, nicht nur den Verlauf); das ist ohne
-   echten Lauf ungeprüft. Die AppTests laufen mit einem vorgegebenen Entscheider und sehen es nicht.
-9. **Die Quellenauswahl mit „Automatische Erkennung“ ist mit dem echten Index meist unbrauchbar.** Der Index kennt
-   die Vorlage „ganzes Büchlein“ (`#0`) nur für Büchlein ohne lesbares Inhaltsverzeichnis. Bei allen anderen endet
-   „Quelle vorgeben“ ohne gewählte Vorlage in „Der Agent kann die gewählte Quelle nicht prüfen“; erst mit einer
-   gewählten Vorlage läuft die Prüfung (Handprobe, unten). Die UI sollte das erklären oder die Vorlage verlangen.
+8. **Behoben in Task 8: Der Mock-Entscheider führte eine beantwortete Frage nicht zu Ende.** `ScriptedDecider` las
+   nach der Fortsetzung das alte Ergebnis der Vorlagensuche und suchte in Rang 1 statt in der gewählten Vorlage; die
+   Prüfung endete als „Schrittgrenze“. Jetzt liest er die gewählte Vorlage aus dem neuen Systemprompt (siehe
+   Entscheidungen). Tests: `test_scripted_decider_uses_the_vote_the_person_chose_after_the_answer`,
+   `test_the_scripted_decider_finishes_the_check_with_the_answered_vote` (Sitzung) und der AppTest
+   `test_clicking_an_option_in_mock_mode_ends_with_a_verdict_not_a_technical_error` (echte Verdrahtung mit
+   `FACT_ATTACK_AGENT_MOCK=1`, nur der Index ist ein Fake, kein Netz). **Weiter offen:** ob der echte JSON-Entscheider
+   nach der Antwort richtig weitermacht. Ohne Apertus-Lauf ist nur belegt, was er zu sehen bekommt: Der Test baut die
+   Nachrichten wie der `ask`-Knoten; die Systemnachricht nennt „Vorgegebene Quelle: Vorlage <gewählte ID>“, die letzte
+   User-Nachricht „Antwort der Person auf die Rückfrage: Gemeint ist die Vorlage <gewählte ID> …“, und
+   `suche_vorlagen`/`rueckfrage` werden nicht mehr angeboten.
+9. **Behoben in Task 8: „Quelle selbst wählen“ mit „Automatisch erkennen“ war mit dem echten Index unbrauchbar.** Jetzt
+   prüft der Agent das ganze Büchlein (siehe Uploads, „Ganzes Büchlein“). Tests:
+   `test_add_vote_accepts_a_known_sources_whole_booklet_and_nothing_else`,
+   `test_vote_for_selection_returns_a_whole_booklet_vote_for_a_source_without_a_title`,
+   `test_a_catalog_vote_is_never_shadowed_by_the_whole_booklet_vote` und der AppTest
+   `test_picking_a_source_with_automatic_object_runs_the_agent_with_a_whole_booklet_vote` (echte Verdrahtung, Mock).
+   FR/IT-Büchlein bleiben unbrauchbar (Punkt 3): Der Index kennt ihre Quelle nicht, also gibt es auch kein ganzes
+   Büchlein.
 10. **Kleinere zurückgestellte Befunde der Reviews:** Der Speicher des `MemorySaver` behält verworfene Threads (für eine
-    Sitzung unerheblich); `start`/`answer` selbst sind nicht threadsicher (die Sperre sitzt in `AgentCheck`); Fehlertexte
-    verschachteln „Das Werkzeug Werkzeugwahl ist fehlgeschlagen“ mehrfach; `OUTCOME_LABELS` in `agent_ui.py`
-    doppelt `graph.LABEL_OUTCOMES` ohne Pin-Test; die Hinweiszeile wird im `ScriptedDecider` am Präfix abgestreift;
-    `cli_format` zeigt für Uploads ein leeres Datum (die CLI kennt keine Uploads).
+    Sitzung unerheblich); `start`/`answer` selbst sind nicht threadsicher (die Sperre sitzt in `AgentCheck`);
+    `OUTCOME_LABELS` in `agent_ui.py` doppelt `graph.LABEL_OUTCOMES` ohne Pin-Test; die Hinweiszeile wird im
+    `ScriptedDecider` am Präfix abgestreift; `cli_format` zeigt für Uploads ein leeres Datum (die CLI kennt keine
+    Uploads). Behoben in Task 8: Der Mock-Entscheider verschachtelt „Das Werkzeug Werkzeugwahl ist fehlgeschlagen“
+    nicht mehr (`test_scripted_repeats_its_own_invalid_step_without_nesting_it`); der Bereich „Quelle selbst wählen“
+    öffnet sich mit der Bitte um eine Quelle sofort (`test_the_source_expander_opens_with_the_request_to_pick_the_source`).
+    Der Katalogtitel „Volksinitiativ e“ (Silbentrennung im Quelltext) bleibt.
 11. **Aus Stufe 3 geblieben:** keine „keine“-Schwelle und kein Trefferkriterium (zu wenig Dev-Daten), Behauptungen mit
     ausdrücklichem Vorlagennamen verlieren gegen Embedding-Scores, zusammengesetzte Behauptungen (Safeguarding) und die
     Evaluation B0/B1/B2 gehören in Stufe 5. Ob das Modell mit dem neuen Hinweis (Einschätzung der Behauptung) anders
@@ -284,12 +319,12 @@ beendet. Keine Apertus-Anfrage, der Verlauf war abgeschaltet (Häkchen entfernt)
 |---|---|
 | Eindeutige Behauptung (Zivildienst, 150 Diensttage) | Schrittliste füllt sich, fünf Zeilen mit Häkchen, Karte „Vom Abstimmungsbüchlein gestützt“ (Mock-Urteil). |
 | Mehrdeutige Behauptung („Die Mietrechtsvorlage stärkt die Vermieter.“) | Eine `?`-Zeile des Wächters, die Frage und drei Knöpfe in der Zeile, keine zweite `?`-Zeile. |
-| Klick auf eine Option | Die Prüfung läuft im selben Lauf weiter, **endet aber im Mock als roter technischer Fehler** („Schrittgrenze“, kein Urteil, kein Verlaufseintrag): siehe offener Punkt 8. |
+| Klick auf eine Option | Die Prüfung lief im selben Lauf weiter, **endete aber im Mock als roter technischer Fehler** („Schrittgrenze“, kein Urteil, kein Verlaufseintrag): offener Punkt 8, in Task 8 behoben und nachgeprüft (unten). |
 | Zweite Rückfrage nach einer beantworteten | Zusätzlich der Knopf „wie zuletzt: …“ (die Vorlage des ersten Klicks), nichts vorausgewählt. |
 | Sprachwechsel DE → FR bei offener Frage | Frage, Knöpfe („comme la dernière fois : …“), Datum („24 novembre 2024“) und Überschriften übersetzt, die Frage blieb offen. Die Detailzeile der `?`-Zeile blieb deutsch (Grenze). |
 | Quelle ändern bei offener Frage | Die Frage verschwindet, der rechte Bereich zeigt wieder den leeren Platz. |
 | „Quelle selbst wählen“, Datum 14. Juni 2026, Vorlage „Änderung des Zivildienstgesetzes“ | Keine Frage; Passagensuche in der festen Vorlage, erste Prüfung, Nachsuche, zweite Prüfung, Karte mit Beleg. |
-| „Quelle selbst wählen“ mit „Automatische Erkennung“ | „Der Agent kann die gewählte Quelle nicht prüfen“, kein Lauf: siehe offener Punkt 9. |
+| „Quelle selbst wählen“ mit „Automatische Erkennung“ | „Der Agent kann die gewählte Quelle nicht prüfen“, kein Lauf: offener Punkt 9, in Task 8 behoben und nachgeprüft (unten). |
 | Upload eines einseitigen Test-PDFs (selbst erzeugt, 1 kB) | Wird angenommen (die UI stand damals auf Französisch: „Source active : PDF personnel“), keine Frage, vier Schritte, Karte; die Vorlage heißt `custom_<sha256>#0`, die lange ID steht in den Schritten. |
 | Französische Behauptung ohne Quelle | „Quelle selbst wählen“ im rechten Bereich statt leerem Platz. |
 
@@ -301,12 +336,26 @@ beendet. Keine Apertus-Anfrage, der Verlauf war abgeschaltet (Häkchen entfernt)
 nach der Antwort im Browser, ein echtes Modell, zwei gleichzeitige Browser-Sitzungen, Italienisch, Mobilansicht,
 Mehrfachprüfung und Verlauf im Browser, Speichern in den Verlauf (war abgeschaltet), gescannte PDFs, eine
 französische Behauptung mit gewählter Quelle, ein Rückfall bei fehlendem Agentenindex. Beim Test blieb der Bereich
-„Quelle selbst wählen“ nach der Bitte um eine Quelle zugeklappt (er sollte sich nach dem Plan von selbst öffnen); ob er
-sich erst bei einem weiteren Rerun öffnet, wurde nicht untersucht.
+„Quelle selbst wählen“ nach der Bitte um eine Quelle zugeklappt (in Task 8 untersucht und behoben, unten).
+
+### Nachprobe nach Task 8
+
+13.11.2026, gleicher Aufbau (Mock, Port 8597, eingebauter Browser, Verlauf abgeschaltet, Server danach beendet, keine
+Apertus-Anfrage, kein Upload):
+
+| Fall | Ergebnis |
+|---|---|
+| „Die Mietrechtsvorlage stärkt die Vermieter.“, Klick auf die dritte Option (2024-11-24_de#2, Untermiete; Rang 1 wäre #3) | Passagensuche in #2, Prüfung, Nachsuche (Vektor) in #2, zweite Prüfung, Karte „Im Abstimmungsbüchlein nicht geklärt“ (Mock-Urteil), „Geprüfte Vorlage: … (Mietrecht: Untermiete)“. Kein roter Schritt. |
+| „Quelle selbst wählen“, 14. Juni 2026, DE, „Automatisch erkennen“, Zivildienst-Behauptung | Keine Frage; Passagensuche in `2026-06-14_de#0`, Prüfung, Karte „Vom Abstimmungsbüchlein gestützt“ mit Beleg auf Seite 26 und vier weiteren, „Geprüfte Vorlage: Gesamtes Büchlein“. |
+| Französische Behauptung ohne Quelle | Die Bitte „Quelle selbst wählen“ rechts, der Bereich „Quelle selbst wählen“ links ist im selben Klick offen (vorher erst nach einem weiteren Rerun, im Browser nachgestellt). |
+
+Nicht nachgeprüft: die übrigen Fälle der Handprobe oben (die AppTests decken sie weiter ab), eine andere Sprache des
+Büchleins mit „Automatisch erkennen“, ein echtes Modell.
 
 ## Tests
 
-Vollständige Suite auf dem Stand dieser Stufe: **958 Tests bestanden**, 187 Subtests, 8 bekannte Warnungen (fünf
-PDF-Deprecation-Warnungen und drei Warnungen des Fork-Pools; Stand vor Stufe 4: 859 bestanden, 99 neue Tests). Die
+Vollständige Suite auf dem Stand dieser Stufe: **967 Tests bestanden**, 196 Subtests, 8 bekannte Warnungen (fünf
+PDF-Deprecation-Warnungen und drei Warnungen des Fork-Pools; Stand vor Stufe 4: 859 bestanden, 108 neue Tests, davon 9
+aus Task 8; vor Task 8: 958). Die
 AppTests laufen mit `default_timeout=50` und sperren jede echte HTTP-Anfrage. Nach der Suite blieb kein Server-Prozess
 zurück.

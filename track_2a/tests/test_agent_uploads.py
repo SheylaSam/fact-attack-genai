@@ -12,7 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.agent.search_backend import LocalBackend
-from src.agent.source_index import VoteRef
+from src.agent.source_index import WHOLE_BOOKLET_TITLE, VoteRef
 from src.agent.tools import AgentTools, validate_args
 from src.agent.trace import Tracer
 from src.agent.uploads import UPLOAD_TITLE, upload_vote
@@ -116,6 +116,47 @@ class AddVoteTests(unittest.TestCase):
                     self.backend.add_vote(vote)
         self.assertEqual(self.backend.votes, before)
 
+    def test_add_vote_accepts_a_known_sources_whole_booklet_and_nothing_else(self):
+        whole = VoteRef('2024-11-24_de#0', '2024-11-24_de', '2024-11-24', 'de', WHOLE_BOOKLET_TITLE, (1, 2, 3, 4, 5))
+        accepting = LocalBackend(self.index, FakeEngine(), self.dir)
+        accepting.add_vote(whole)
+        self.assertEqual(accepting.votes[whole.vote_id], whole)
+        self.assertNotIn(whole.vote_id, self.index.votes)  # the shared index is never touched
+        self.assertNotIn(whole.vote_id, LocalBackend(self.index, FakeEngine(), self.dir).votes)
+
+        def like_whole(vote_id, source_id, pages=whole.pages):
+            return VoteRef(vote_id, source_id, '2024-11-24', 'de', WHOLE_BOOKLET_TITLE, pages)
+        refused = {
+            'unknown source': like_whole('2099-01-01_de#0', '2099-01-01_de'),
+            'part of a known booklet': like_whole('2024-11-24_de#3', '2024-11-24_de'),
+            'catalog vote': V1,
+            'no pages': like_whole('2024-11-24_de#0', '2024-11-24_de', ()),
+            'id and source differ': like_whole('2099-01-01_de#0', '2024-11-24_de'),
+            'path before a known source': like_whole('../2024-11-24_de#0', '../2024-11-24_de'),
+            'folder before a known source': like_whole('x/2024-11-24_de#0', 'x/2024-11-24_de'),
+            'absolute path': like_whole('/booklets/2024-11-24_de#0', '/booklets/2024-11-24_de'),
+            'path in the id': like_whole('../x#0', '../x'),
+        }
+        before = dict(self.backend.votes)
+        for name, vote in refused.items():
+            with self.subTest(name):
+                with self.assertRaises(ValueError):
+                    self.backend.add_vote(vote)
+        self.assertEqual(self.backend.votes, before)
+
+    def test_a_catalog_vote_is_never_shadowed_by_the_whole_booklet_vote(self):
+        from src import agent_ui
+        catalog = VoteRef('2024-11-24_de#0', '2024-11-24_de', '2024-11-24', 'de', WHOLE_BOOKLET_TITLE, (2, 3, 4, 5))
+        index = FakeIndex(votes=(catalog, V1))
+        stored_pdf(self.dir).rename(self.dir / '2024-11-24_de.pdf')  # three pages, other than the catalog's
+        chosen = agent_ui.vote_for_selection(index.votes, '2024-11-24_de', None, booklets_dir=self.dir)
+        self.assertIs(chosen, catalog)  # the index's own whole-booklet vote, not one built from the PDF
+        backend = LocalBackend(index, FakeEngine(), self.dir)
+        with self.assertRaises(ValueError):  # a session vote with the id of a catalog vote is refused
+            backend.add_vote(VoteRef(catalog.vote_id, catalog.source_id, catalog.date, catalog.language,
+                                     WHOLE_BOOKLET_TITLE, (1, 2, 3)))
+        self.assertIs(backend.votes[catalog.vote_id], catalog)
+
     def test_proven_search_of_an_upload_reads_its_stored_file(self):
         path = stored_pdf(self.dir)
         vote = upload_vote(path, 'de')
@@ -194,7 +235,7 @@ class MakeAgentSessionTests(unittest.TestCase):
              patch('src.config.BOOKLETS_DIR', Path(tmp)), \
              patch('src.agent_app.get_agent_index', return_value=FakeIndex()):
             vote = upload_vote(stored_pdf(tmp), 'de')
-            session = agent_app.make_agent_session(None, lambda event: None, upload=vote)
+            session = agent_app.make_agent_session(None, lambda event: None, session_vote=vote)
             self.assertEqual(session._tools.fixed_vote_id, vote.vote_id)
             self.assertEqual(session._tools.votes[vote.vote_id], vote)
             plain = agent_app.make_agent_session(None, lambda event: None)  # without an upload nothing changes

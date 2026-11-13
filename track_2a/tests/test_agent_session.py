@@ -61,6 +61,14 @@ class AgentSessionTests(unittest.TestCase):
         self.assertEqual((result.outcome, result.vote), ('gestuetzt', V1))
         self.assertIsNone(clear.pending)
 
+    def test_the_scripted_decider_finishes_the_check_with_the_answered_vote(self):
+        session, _, engine = make_session(ScriptedDecider())
+        self.assertIsInstance(session.start(CLAIM), Pending)
+        result = session.answer(V2.vote_id)
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual((result.outcome, result.vote, result.error), ('gestuetzt', V2, None))
+        self.assertTrue(engine.verify_calls)
+
     def test_pending_is_a_frozen_value(self):
         session, _, _ = make_session()
         turn = session.start(CLAIM)

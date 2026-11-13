@@ -12,9 +12,11 @@ import pytest
 pytest.importorskip('streamlit')
 from streamlit.testing.v1 import AppTest
 
+from src.agent.source_index import VoteRef
+from src.config import BOOKLETS_DIR
 from tests.test_agent_graph import (BOOKLETS, CLAIM, CLEAR, CLOSE, FRENCH_CLAIM, HAS_LANGGRAPH, NOT_FOUND, V1, V2,
-                                    FakeEngine, FakeIndex, PresetDecider, act, make_prediction, search_passages,
-                                    search_votes, v2_engine)
+                                    FakeEngine, FakeIndex, PresetDecider, act, candidate, make_prediction,
+                                    search_passages, search_votes, v2_engine)
 from tests.test_agent_session import V3
 
 pytestmark = pytest.mark.skipif(not HAS_LANGGRAPH, reason='Install requirements-agent.txt')
@@ -46,18 +48,18 @@ class Fakes:
         self.sessions = []  # (fixed_vote_id, session)
         self.deciders = []  # the decider of every session
         self.answers = []  # every vote id given to a session's `answer`
-        self.uploads = []  # every upload vote given to `make`
+        self.session_votes = []  # every session vote (an upload) given to `make`
 
-    def make(self, fixed_vote_id, on_event, upload=None):
+    def make(self, fixed_vote_id, on_event, session_vote=None):
         from src.agent.search_backend import LocalBackend
         from src.agent.session import AgentSession
         from src.agent.tools import AgentTools
         from src.agent.trace import Tracer
         backend = LocalBackend(self.index, self.engine, BOOKLETS)
-        if upload is not None:  # like make_agent_session: the upload is registered and fixed
-            self.uploads.append(upload)
-            backend.add_vote(upload)
-            fixed_vote_id = upload.vote_id
+        if session_vote is not None:  # like make_agent_session: the vote is registered and fixed
+            self.session_votes.append(session_vote)
+            backend.add_vote(session_vote)
+            fixed_vote_id = session_vote.vote_id
         tools = AgentTools(backend, BOOKLETS, fixed_vote_id=fixed_vote_id)
         decider = PresetDecider(*self.actions)
         self.deciders.append(decider)
@@ -207,6 +209,17 @@ def test_french_claim_without_source_asks_to_pick_the_source():
         assert fakes.index.vote_calls == [] and fakes.engine.verify_calls == []
 
 
+def test_the_source_expander_opens_with_the_request_to_pick_the_source():
+    fakes = clear_fakes()
+    with agent_app(fakes) as app:
+        source_box = next(expander for expander in app.expander if expander.label == 'Quelle selbst wählen')
+        assert not source_box.proto.expanded
+        check(app, FRENCH_CLAIM)
+        assert any('nur für deutsche Behauptungen' in item.value for item in app.warning)
+        source_box = next(expander for expander in app.expander if expander.label == 'Quelle selbst wählen')
+        assert source_box.proto.expanded  # in the same click, not only after the next rerun
+
+
 def pick_source(app, vote_title=V1.title):
     app.selectbox(key='ballot').set_value('24. November 2024').run()
     app.radio(key='booklet_lang').set_value('DE').run()
@@ -227,6 +240,70 @@ def test_picking_the_source_yourself_runs_with_the_fixed_vote_and_has_no_questio
         assert not options(app)
         assert not any('Rückfrage' in value for value in step_texts(app))
         assert has_verdict(app)
+
+
+# --- the app's own wiring in mock mode: scripted decider, mock Apertus client, real engine ------------------------
+RENT_PDF = BOOKLETS_DIR / '2024-11-24_de.pdf'
+UNTERMIETE = VoteRef('2024-11-24_de#2', '2024-11-24_de', '2024-11-24', 'de',
+                     'Änderung des Obligationenrechts (Mietrecht: Untermiete)', (6, 7, *range(24, 34)))
+EIGENBEDARF = VoteRef('2024-11-24_de#3', '2024-11-24_de', '2024-11-24', 'de',
+                      'Änderung des Obligationenrechts (Mietrecht: Kündigung wegen Eigenbedarfs)',
+                      (8, 9, *range(34, 44)))  # both as in the real index: no "#0" for this booklet
+needs_rent_booklet = pytest.mark.skipif(not RENT_PDF.exists(), reason=f'Needs {RENT_PDF}')
+
+
+def rent_index():
+    """The two rent votes of the real index, on par for the guard."""
+    return FakeIndex([candidate(UNTERMIETE, 0.873), candidate(EIGENBEDARF, 0.869)], votes=(UNTERMIETE, EIGENBEDARF))
+
+
+@contextmanager
+def mock_mode_app(index, trace_dir):
+    """The app with `FACT_ATTACK_AGENT_MOCK=1` and the real `make_agent_session`; only the source index is `index`.
+    No request leaves the machine."""
+    with patch.dict('os.environ', {'FACT_ATTACK_AGENT_MOCK': '1'}), \
+         patch('src.agent.settings.TRACE_DIR', trace_dir), \
+         patch('src.agent_app.agent_available', return_value=True), \
+         patch('src.agent_app.get_agent_index', return_value=index), \
+         patch('src.agent_app.agent_votes', return_value=index.votes), \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')) as remote:
+        yield AppTest.from_file(APP, default_timeout=50).run()
+        remote.assert_not_called()
+
+
+@needs_rent_booklet
+def test_clicking_an_option_in_mock_mode_ends_with_a_verdict_not_a_technical_error(tmp_path):
+    index = rent_index()
+    with mock_mode_app(index, tmp_path) as app:
+        check(app)
+        assert [button.label.split(' · ')[0] for button in options(app)] == [UNTERMIETE.title, EIGENBEDARF.title]
+        next(button for button in options(app) if button.label.startswith(EIGENBEDARF.title)).click().run()
+        assert not app.exception
+        assert not [item.value for item in app.error]
+        assert has_verdict(app)
+        turn = app.session_state['agent_turn']
+        assert (turn.vote, turn.error) == (EIGENBEDARF, None)
+        steps = '\n'.join(step_texts(app))
+        assert 'Rückfrage' in steps and 'Belege prüfen' in steps and 'agent-step-error' not in steps
+
+
+@needs_rent_booklet
+def test_picking_a_source_with_automatic_object_runs_the_agent_with_a_whole_booklet_vote(tmp_path):
+    import fitz
+    from src.agent.source_index import WHOLE_BOOKLET_TITLE
+    with fitz.open(RENT_PDF) as document:
+        pages = tuple(range(1, document.page_count + 1))
+    index = rent_index()
+    with mock_mode_app(index, tmp_path) as app:
+        pick_source(app, 'Automatisch erkennen')
+        check(app)
+        assert not [item.value for item in app.error]  # no "Der Agent kann die gewählte Quelle nicht prüfen"
+        assert has_verdict(app)
+        turn = app.session_state['agent_turn']
+        assert turn.vote == VoteRef('2024-11-24_de#0', '2024-11-24_de', '2024-11-24', 'de', WHOLE_BOOKLET_TITLE, pages)
+        assert index.vote_calls == [] and index.vector_calls == []  # a given source; no index passages for "#0"
+        assert '2024-11-24_de#0' not in index.votes  # registered in the check's own backend only
+        assert not options(app) and not any('Rückfrage' in value for value in step_texts(app))
 
 
 def test_technical_error_is_red_in_its_step_and_there_is_no_verdict(isolated_history):
@@ -403,7 +480,7 @@ def test_uploaded_pdf_check_has_the_same_steps_and_card(isolated_history):
         assert not any(item.key == 'agent_own_source' for item in app.checkbox)  # the upload is the source
         app.radio(key='booklet_lang').set_value('FR').run()
         check(app)
-        [upload] = fakes.uploads
+        [upload] = fakes.session_votes
         assert upload.vote_id == f'{stored.stem}#0' and (upload.title, upload.language) == ('Eigenes PDF', 'fr')
         assert upload.pages == (1, 2, 3)
         assert fakes.sessions[0][0] == upload.vote_id

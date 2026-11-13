@@ -52,12 +52,13 @@ def agent_votes() -> Mapping[str, Any]:
 
 
 def make_agent_session(fixed_vote_id: Optional[str], on_event: Callable[[TraceEvent], None],
-                       upload: Optional[Any] = None):
+                       session_vote: Optional[Any] = None):
     """A new AgentSession for one check, wired like the CLI (`python -m src.agent`): new tools (an answered check
     leaves its vote fixed in them), a request budget of `settings.MAX_REQUESTS` and a trace in `settings.TRACE_DIR`.
 
-    With `upload` (the `VoteRef` of an own PDF, see `src.agent.uploads.upload_vote`) the session's backend knows that
-    booklet too and it is the check's fixed vote, whatever `fixed_vote_id` says; the shared index never learns it.
+    With `session_vote` (a whole-booklet `VoteRef` the index does not hold: an own PDF, `uploads.upload_vote`, or a
+    booklet chosen without a vote, `uploads.whole_booklet_vote`) the session's backend knows that vote too and it is
+    the check's fixed vote, whatever `fixed_vote_id` says; the shared index never learns it.
 
     The check gets its own engine and Apertus client: the budget is installed on that client only, so the app's shared
     engine (`get_engine()`, used by the old flow and the multi-check) is never patched and one check's count never
@@ -82,9 +83,9 @@ def make_agent_session(fixed_vote_id: Optional[str], on_event: Callable[[TraceEv
     if not mock:
         install_on_apertus(engine.client, budget)  # the NLI client; the agent LLM is counted in make_decider
     backend = LocalBackend(get_agent_index(), engine, config.BOOKLETS_DIR)
-    if upload is not None:
-        backend.add_vote(upload)
-        fixed_vote_id = upload.vote_id
+    if session_vote is not None:
+        backend.add_vote(session_vote)
+        fixed_vote_id = session_vote.vote_id
     tools = AgentTools(backend, config.BOOKLETS_DIR, fixed_vote_id=fixed_vote_id)
     decider = make_decider("scripted" if mock else settings.TOOL_MODE, budget, fixed_vote_id=fixed_vote_id)
     tracer = Tracer(settings.TRACE_DIR / f"{run_id}.trace.jsonl", on_event=on_event)

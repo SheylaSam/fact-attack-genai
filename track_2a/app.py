@@ -1403,29 +1403,35 @@ def _vote_date(iso_date: str) -> str:
 
 def _new_agent_check(own_source: bool, pdf_path: Path, vote: Optional[str], upload_language: Optional[str] = None):
     """A new AgentCheck for the tab's selection, or None after a shown message. With `own_source` the chosen
-    booklet (and vote) is the fixed vote; a selection the agent's index does not hold is a translated message.
-    With `upload_language` the stored upload at `pdf_path` is the fixed vote: the session registers it itself; an
-    unreadable file is a translated message, never the library's text."""
+    booklet (and vote) is the fixed vote; a booklet chosen without a vote is checked as a whole when the index has
+    no whole-booklet vote for it (the session registers that vote itself); a selection the agent's index does not
+    hold is a translated message. With `upload_language` the stored upload at `pdf_path` is the fixed vote, also
+    registered by the session; an unreadable file is a translated message, never the library's text."""
     try:
         with st.spinner(t("Der Agent wird vorbereitet …")):
-            fixed_vote_id = None
+            fixed_vote_id, session_vote = None, None
             if upload_language is not None:
                 from src.agent.uploads import upload_vote  # the agent layer is imported on the agent path only
                 try:
-                    upload = upload_vote(pdf_path, upload_language)
+                    session_vote = upload_vote(pdf_path, upload_language)
                 except ValueError:
                     st.error(t(AGENT_BAD_UPLOAD))
                     return None
-                return agent_app.AgentCheck(
-                    lambda fixed, on_event: agent_app.make_agent_session(fixed, on_event, upload=upload),
-                    upload.vote_id)
-            if own_source:
+            elif own_source:
                 votes = agent_app.agent_votes()
                 try:
-                    fixed_vote_id = agent_ui.vote_for_selection(votes, pdf_path.stem, vote).vote_id
+                    chosen = agent_ui.vote_for_selection(votes, pdf_path.stem, vote, booklets_dir=config.BOOKLETS_DIR)
                 except ValueError:
                     st.error(t(AGENT_UNKNOWN_SOURCE))
                     return None
+                if chosen.vote_id in votes:
+                    fixed_vote_id = chosen.vote_id
+                else:  # the whole booklet, unknown to the shared index
+                    session_vote = chosen
+            if session_vote is not None:
+                return agent_app.AgentCheck(
+                    lambda fixed, on_event: agent_app.make_agent_session(fixed, on_event, session_vote=session_vote),
+                    session_vote.vote_id)
             return agent_app.AgentCheck(agent_app.make_agent_session, fixed_vote_id)
     except Exception as exc:  # no API key, no index: the check cannot start
         st.error(t('Die Prüfung konnte nicht abgeschlossen werden ({v0}).').format(v0=exc))
@@ -1490,6 +1496,8 @@ def _adopt_agent_turn(check, save_history: bool) -> None:
     kind, turn = done
     st.session_state["agent_events"] = list(check.session.events)
     st.session_state["agent_turn"] = turn  # an exception of start/answer is shown as an error
+    if kind == "turn" and getattr(turn, "outcome", None) == "quelle_fehlt":
+        st.rerun()  # the source expander was drawn before this turn existed; it opens for "pick the source" now
     if kind != "turn" or agent_app.is_question(turn) or turn.prediction is None:
         return
     if agent_ui.outcome_view(turn).kind != "verdict":

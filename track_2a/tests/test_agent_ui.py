@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 import queue
 import sys
+import tempfile
 import threading
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -223,23 +224,54 @@ class CardInputTests(unittest.TestCase):
                     agent_ui.prediction_for_card(result)
 
 
+def write_pdf(path, pages):
+    import fitz
+    with fitz.open() as document:
+        for number in range(1, pages + 1):
+            document.new_page().insert_text((72, 72), f'Seite {number}')
+        document.save(path)
+
+
 class VoteForSelectionTests(unittest.TestCase):
     votes = {vote.vote_id: vote for vote in (V1, V2, WHOLE, OTHER)}
 
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)  # empty unless a test writes a booklet: these selections read no PDF
+
+    def select(self, votes, source_id, title):
+        return agent_ui.vote_for_selection(votes, source_id, title, booklets_dir=self.dir)
+
     def test_vote_for_selection_by_title_and_whole_booklet(self):
-        self.assertIs(agent_ui.vote_for_selection(self.votes, '2024-11-24_de', 'Mietrecht: Kündigung'), V2)
-        self.assertIs(agent_ui.vote_for_selection(self.votes, '2024-11-24_de', 'Mietrecht: Untermiete'), V1)
-        self.assertIs(agent_ui.vote_for_selection(self.votes, '2024-11-24_de', None), WHOLE)
-        self.assertIs(agent_ui.vote_for_selection(self.votes, '2024-11-24_de', 'Ganzes Büchlein'), WHOLE)
-        self.assertIs(agent_ui.vote_for_selection(self.votes, '2025-09-28_de', 'Eigenmietwert'), OTHER)
+        self.assertIs(self.select(self.votes, '2024-11-24_de', 'Mietrecht: Kündigung'), V2)
+        self.assertIs(self.select(self.votes, '2024-11-24_de', 'Mietrecht: Untermiete'), V1)
+        self.assertIs(self.select(self.votes, '2024-11-24_de', None), WHOLE)
+        self.assertIs(self.select(self.votes, '2024-11-24_de', 'Ganzes Büchlein'), WHOLE)
+        self.assertIs(self.select(self.votes, '2025-09-28_de', 'Eigenmietwert'), OTHER)
 
     def test_a_title_of_another_booklet_does_not_match(self):
         with self.assertRaises(ValueError):
-            agent_ui.vote_for_selection(self.votes, '2025-09-28_de', 'Mietrecht: Untermiete')  # no whole-booklet vote
+            self.select(self.votes, '2025-09-28_de', 'Mietrecht: Untermiete')  # no whole-booklet vote
 
     def test_an_unknown_booklet_is_an_error(self):
+        write_pdf(self.dir / '1999-01-01_de.pdf', 2)  # a PDF alone makes no source known
         with self.assertRaises(ValueError):
-            agent_ui.vote_for_selection(self.votes, '1999-01-01_de', None)
+            self.select(self.votes, '1999-01-01_de', None)
+
+    def test_vote_for_selection_returns_a_whole_booklet_vote_for_a_source_without_a_title(self):
+        from src.agent.source_index import WHOLE_BOOKLET_TITLE
+        votes = {vote.vote_id: vote for vote in (V1, V2, OTHER)}  # like the real index: no "#0" for this booklet
+        write_pdf(self.dir / '2024-11-24_de.pdf', 7)
+        whole = self.select(votes, '2024-11-24_de', None)
+        self.assertEqual(whole, VoteRef('2024-11-24_de#0', '2024-11-24_de', '2024-11-24', 'de', WHOLE_BOOKLET_TITLE,
+                                        (1, 2, 3, 4, 5, 6, 7)))  # every page of the booklet, not only the votes' pages
+        self.assertNotIn(whole.vote_id, votes)  # nothing is added to the index's votes
+        self.assertIs(self.select(votes, '2024-11-24_de', 'Mietrecht: Kündigung'), V2)  # a chosen vote stays first
+        with self.assertRaises(ValueError):  # a title that names no vote is no request for the whole booklet
+            self.select(votes, '2024-11-24_de', 'Eigenmietwert')
+        with self.assertRaises(ValueError):  # the booklet's PDF is missing: no vote, never an empty page list
+            self.select(votes, '2025-09-28_de', None)
 
 
 class OptionsWithLastTests(unittest.TestCase):

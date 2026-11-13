@@ -1,5 +1,5 @@
-"""View data of the agent check for the app: step rows, outcome view, card input, the live stream. Pure functions, no
-Streamlit; the app draws what they return.
+"""View data of the agent check for the app: step rows, outcome view, card input, the live stream. Pure functions
+(except `vote_for_selection`, which may read a booklet's page count), no Streamlit; the app draws what they return.
 
 Every German text of this module is a module-level constant (or a value of one) and is listed in `TEXT_KEYS`, so the
 app translates it with `t(...)` and `tests/test_ui_i18n.py` can check that each one has a French and an Italian row.
@@ -9,6 +9,7 @@ and are shown unchanged.
 The agent layer (langgraph) is only imported for type hints: this module loads without it.
 """
 from dataclasses import dataclass
+from pathlib import Path
 import queue
 import threading
 from typing import (TYPE_CHECKING, Any, Callable, Iterator, List, Literal, Mapping, Optional, Sequence, Tuple, Union)
@@ -207,17 +208,26 @@ def prediction_for_card(result: "AgentResult") -> PredictionResult:
     return result.prediction.model_copy(update=update)
 
 
-def vote_for_selection(votes: Mapping[str, "VoteRef"], source_id: str, title: Optional[str]) -> "VoteRef":
+def vote_for_selection(votes: Mapping[str, "VoteRef"], source_id: str, title: Optional[str], *,
+                       booklets_dir: Path) -> "VoteRef":
     """The vote that the app's source selection (a booklet and optionally one vote title) means: the booklet's vote
-    with that title, otherwise its whole-booklet vote (`#0`). ValueError if the booklet has neither."""
+    with that title, otherwise its whole-booklet vote (`#0`) from `votes`. Without a title ("Automatisch erkennen")
+    and without a `#0` in `votes` it is a new whole-booklet vote of that booklet (`uploads.whole_booklet_vote`, all
+    pages of its PDF in `booklets_dir`), which the check's backend has to register (`LocalBackend.add_vote`); the
+    only function of this module that reads a file. ValueError if the booklet is not in `votes`, a title names none
+    of its votes or its PDF cannot be read."""
     if title is not None:
         for vote in votes.values():
             if vote.source_id == source_id and vote.title == title:
                 return vote
     whole = votes.get(f"{source_id}#0")
-    if whole is None:
+    if whole is not None:
+        return whole
+    known = next((vote for vote in votes.values() if vote.source_id == source_id), None)
+    if title is not None or known is None:
         raise ValueError(f"Für die Quelle {source_id} gibt es keine passende Vorlage.")
-    return whole
+    from src.agent.uploads import whole_booklet_vote  # reads the PDF (PyMuPDF), only when it is needed
+    return whole_booklet_vote(booklets_dir, known)
 
 
 # --- answer buttons ------------------------------------------------------------------------------------------------
