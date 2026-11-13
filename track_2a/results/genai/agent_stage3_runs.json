@@ -92,8 +92,8 @@
       "chosen_offline": {
         "vote_id": "2026-06-14_de#2",
         "pages": "S. 6–7, 24–39 (scripts/check_testset.py --show 2026-06-14_de#2)",
-        "reason": "Die Seiten der Vorlage nennen keine Kosten oder Einsparungen in Franken; die einzige Zahl zu den Folgen ist die Erwartung des Komitees von 40 Prozent weniger Zulassungen (S. 30). Die Behauptung ist im Büchlein weder belegt noch widerlegt.",
-        "not_in_testset": "Keine Behauptung in data/genai/testset/cases.jsonl erwähnt den Zivildienst."
+        "reason": "Die Seiten der Vorlage nennen keine Kosten oder Einsparungen in Franken; die einzige Zahl zu den Folgen sind die 40 Prozent weniger Zulassungen, mit denen laut Referendumskomitee der Bundesrat rechnet (S. 30). Die Behauptung ist im Büchlein weder belegt noch widerlegt.",
+        "not_in_testset": "Die Behauptung ist kein Fall aus data/genai/testset/cases.jsonl. Korrektur nach dem Lauf: Die vorab notierte Aussage, kein Fall erwähne den Zivildienst, war falsch; dev-029 und dev-030 gehören zur selben Vorlage, dev-030 ist fast ein Zwilling (3 Millionen Franken Verwaltungskosten, nicht_belegt). Dev ist nach dem Sperren frei."
       },
       "result": {
         "outcome": "rueckfrage",

@@ -24,7 +24,7 @@ Schalter (`FACT_ATTACK_SKIP_DOTENV`, siehe MCP).
 | Werkzeuge | `tools.py` | Hinweis nach `suche_vorlagen`, Regel für `quelle_fehlt`, Passagenpool nur aus den Seiten der Vorlage. |
 | Suche | `search_backend.py` | `SearchBackend` mit `LocalBackend`; die Werkzeugfunktionen sind einmal implementiert. |
 | MCP-Server und -Client | `mcp_server.py`, `mcp_client.py` | Eigener Server (stdio) mit den drei Suchwerkzeugen, synchrone Fassade `McpBackend`. |
-| Anfrage-Deckel | `budget.py` | Hart pro Prüfung, Journal mit fsync (aus Stufe 1, jetzt auch für die zweite Prüfung). |
+| Anfrage-Deckel | `budget.py` | Hart pro Lauf, Journal mit fsync (aus Stufe 1, jetzt auch für die zweite Prüfung). |
 | CLI | `__main__.py`, `cli_format.py` | `--quelle`, `--werkzeuge lokal\|mcp`, `checks` in `--json`, Antwortbefehle. |
 | Einstellungen | `settings.py` | Schwellen, `MAX_CHECKS`, `MAX_RESEARCH_STEPS`, MCP-Timeouts. |
 
@@ -44,7 +44,7 @@ einem ersten „nicht belegt“ (auch nach einem verworfenen Urteil) und erlaubt
 ## Wächter
 
 **Regel.** Der Wächter schaut auf die Rangliste von `suche_vorlagen` für den Wortlaut der Behauptung. Ein
-Kandidat zählt als nah, wenn er höchstens `GUARD_SCORE_MARGIN` hinter Rang 1 liegt und mindestens
+Kandidat zählt als nah, wenn er weniger als `GUARD_SCORE_MARGIN` hinter Rang 1 liegt und mindestens
 `GUARD_MIN_HITS_RATIO` mal dessen Treffer hat (höchstens vier Ränge). Zwei oder mehr nahe Vorlagen heißen
 `mehrdeutig`, eine `eindeutig`. `keine` gilt ohne jeden Kandidaten oder unter `GUARD_NONE_BELOW`.
 
@@ -109,9 +109,10 @@ Passagen, endet der Lauf mit dem ersten Ergebnis und einem Hinweis, ohne zweite 
 | Suchschritte | 5 | `MAX_STEPS` | Ungültige Schritte zählen mit. Danach bekommt der Entscheider nur die drei Endwerkzeuge; endet es auch dann nicht, ist es ein `technischer_fehler` („Schrittgrenze“). |
 | Suchschritt der Nachsuche | 1 | `MAX_RESEARCH_STEPS` | Zählt nicht zu den fünf, die Nachsuche bleibt also auch nach ausgeschöpften Schritten möglich. Alles außer der erlaubten Suche ist ein `technischer_fehler`, nie `nicht_belegt`. |
 | Prüfungen (Belegprüfungen) | 2 | `MAX_CHECKS` | Die erste und die nach der Nachsuche; die zweite ist endgültig, es gibt keine dritte. `checks` steht in `--json`. |
-| HTTP-Anfragen | 12 | `MAX_REQUESTS`, `--max-requests` | Hart pro Prüfung: Wiederholungen, Übersetzung und Kaskade zählen mit, jede Anfrage steht vor dem Senden im Journal. Die 13. wird nicht gesendet; der Lauf endet als `technischer_fehler`, nie als `nicht_belegt`. |
+| HTTP-Anfragen | 12 | `MAX_REQUESTS`, `--max-requests` | Hart pro Lauf (beide Prüfungen und alle Entscheidungen zusammen): Wiederholungen, Übersetzung und Kaskade zählen mit, jede Anfrage steht vor dem Senden im Journal. Die 13. wird nicht gesendet; der Lauf endet als `technischer_fehler`, nie als `nicht_belegt`. |
 
-Der Passagenpool speichert höchstens 20 Passagen pro Vorlage (`POOL_LIMIT`), die erste Prüfung bekommt 10.
+Der Passagenpool speichert höchstens 20 Passagen pro Vorlage (`POOL_LIMIT`; nur die Passagen der Nachsuche dürfen
+darüber hinaus), die erste Prüfung bekommt 10.
 
 **Behauptung statt Anfrage bei der bewährten Suche.** `suche_passagen` läuft mit dem Wortlaut der Behauptung; den
 setzt der Graph, nicht das Modell (das Werkzeug hat kein Argument dafür). Gleiche Begründung wie beim Wächter:
@@ -173,9 +174,9 @@ die Schleife beim Schließen geschlossen wird (seit den Korrekturen des Gesamtre
 | `langchain-mcp-adapters` | 0.3.2 | Kursversion |
 
 - **Abweichungen von den Kursversionen:** keine. Beide Kursversionen lösten auf.
-- **Gelockerte Pins:** keine. Der Lock bekam neun neue Pakete (die Abhängigkeiten von `mcp`, darunter `httpx-sse`,
-  `sse-starlette`, `starlette`, `uvicorn`, `pydantic-settings`, `python-multipart`, `pyjwt`, `jsonschema`), alle
-  bestehenden Pins blieben.
+- **Gelockerte Pins:** keine. Der Lock bekam neun neue Pins: `mcp` 1.30.0 und `langchain-mcp-adapters` 0.3.2 selbst sowie
+  `cffi` 2.1.1, `cryptography` 50.0.2, `httpx-sse` 0.4.3, `pycparser` 3.12, `pydantic-settings` 2.16.2, `pyjwt`
+  2.15.1 und `sse-starlette` 3.6.0. Alle bestehenden Pins blieben (`starlette`, `uvicorn` usw. waren schon da).
 - Für `additionalProperties: false` im Werkzeugschema nutzt `mcp_server.py` eine private FastMCP-Schnittstelle
   (`_tool_manager`, `fn_metadata`). Das ist bewusst: `mcp` ist gepinnt, eine Umbenennung scheitert laut beim Aufbau
   des Servers, und ein Test über stdio fängt unbekannte Argumente.
@@ -213,9 +214,12 @@ Protokolle und Journale unter `track_2a/results/genai/agent_stage3_traces/<Nr>_<
 verhielten sich wie erwartet.
 
 Lauf 5: Behauptung, Seiten und Begründung wurden vorher offline notiert (`2026-06-14_de#2`, S. 6–7 und 24–39: Die
-Seiten nennen keine Kosten oder Einsparungen in Franken, die einzige Zahl zu den Folgen ist die Erwartung des
-Komitees von 40 Prozent weniger Zulassungen auf S. 30; die Behauptung ist weder belegt noch widerlegt). Kein
-Fall aus `cases.jsonl` erwähnt den Zivildienst.
+Seiten nennen keine Kosten oder Einsparungen in Franken, die einzige Zahl zu den Folgen sind die 40 Prozent weniger
+Zulassungen, mit denen laut Referendumskomitee der Bundesrat rechnet, S. 30; die Behauptung ist weder belegt noch
+widerlegt). Die Behauptung ist kein Fall aus `cases.jsonl`. Die Notiz vor dem Lauf, kein Fall erwähne den
+Zivildienst, war falsch: Die Dev-Fälle `dev-029` und `dev-030` gehören zur selben Vorlage, `dev-030` (zusätzliche
+Verwaltungskosten von rund 3 Millionen Franken, erwartet `nicht_belegt`) ist fast ein Zwilling von Lauf 5. Das
+Testset war beim Lauf gesperrt und Dev ist frei; der Testteil ist nicht berührt.
 
 Die Schrittlisten sind gekürzt (Knoten `decide`/`act`/`verify`/`check_evidence`, Argumente abgeschnitten):
 
@@ -257,7 +261,7 @@ Einzelläufe, keine Messung. Sie zeigen, **wo der Aufbau etwas anderes tut als g
    bewusst zurückgestellte Punkt (Minor 1). Folge: Lauf 1 erfüllt die Erwartung „vom Wächter“ nicht, obwohl die
    Rückfrage inhaltlich richtig ist.
 2. **Lauf 3: keine „keine“-Schwelle.** Mit `GUARD_NONE_BELOW = None` und Trefferverhältnis 0.0 zählen Kandidaten mit
-   einem Treffer innerhalb von 0.01 als nah. Eine Behauptung ohne Vorlage („Euro“) wird so als `mehrdeutig` mit vier
+   sehr wenigen Treffern (in Lauf 3: 1, 4 und 4 gegenüber 16 für Rang 1) innerhalb von 0.01 als nah. Eine Behauptung ohne Vorlage („Euro“) wird so als `mehrdeutig` mit vier
    Vorlagen gezeigt, statt zu `quelle_fehlt` zu führen. Erwartet: `quelle_fehlt`; bekommen: eine unnötige Frage.
 3. **Lauf 5: Die Behauptung nennt das Zivildienstgesetz, trotzdem liegt Service-citoyen vorn** (Abstand 0.004
    zugunsten von Service-citoyen). Die Rangliste folgt Embedding-Scores und nicht dem ausdrücklichen Namen. Die Frage
