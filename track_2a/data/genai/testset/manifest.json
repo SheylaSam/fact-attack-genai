@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "locked_at": "2026-11-13T08:21:25Z",
+  "git_commit": "48b39e5237500507ac731a503c69271c0fa3c46a",
+  "git_dirty": false,
+  "cases_sha256": "9d356dd19cda156197a2cb0e02d7cb879377466983666bf16d99bae4c89f4e09",
+  "review_sha256": "29eed437bdf22c0f91fa10caf09b31e4db3d5693c7aa1709c6066a5db60bd5aa",
+  "counts": {
+    "split_group": {
+      "dev/haupt": 30,
+      "dev/spezial": 7,
+      "test/haupt": 60,
+      "test/spezial": 13
+    },
+    "kind": {
+      "api_ausfall": 2,
+      "falscher_sprecher": 3,
+      "keine": 90,
+      "mehrdeutig": 6,
+      "ohne_abstimmung": 3,
+      "prompt_injection": 3,
+      "zusammengesetzt": 3
+    },
+    "novelty": {
+      "bekannt": 66,
+      "beobachtet": 14,
+      "keine": 3,
+      "ungesehen": 27
+    },
+    "expected": {
+      "gestuetzt": 31,
+      "nicht_belegt": 30,
+      "quelle_fehlt": 3,
+      "rueckfrage": 9,
+      "technischer_fehler": 2,
+      "widersprochen": 35
+    }
+  },
+  "booklets": {
+    "2020-02-09_de.pdf": "9df0813f2728c9de6dd29b132acf11d3e13bf7a011b7e6475a4c8b5155c889c8",
+    "2020-09-27_de.pdf": "a6663984e2d5c42e4c2548fd146229440e9ed941236b1d0221891f0b5c0ca50b",
+    "2020-11-29_de.pdf": "bc43ce8b442b0fd05821da5619afc173d3ba0e9936cef91c6a8772e600885f88",
+    "2021-03-07_de.pdf": "a4cc2b811cdd959cbb3353101c226cdbd2398cef17028349c241a833559dc6d2",
+    "2021-06-13_de.pdf": "521e39af06717d2adeb2f787a08b533164921a952c59b7ad3e5b114fcadec744",
+    "2021-09-26_de.pdf": "ebb4288817f5f5fdbde3aa24bf67688220e6c8e2f9fcf82f947a44aec046f341",
+    "2021-11-28_de.pdf": "f463fb7ea4b7f663d5e2af0f67bc8e364778ee3c0a19f56caadc655bc2670a7b",
+    "2022-02-13_de.pdf": "4979a6ed7f2f6616cc692638341b00ef20bb3e74cb6a40608f6f8c968fe167a4",
+    "2022-05-15_de.pdf": "c12ea935b73d98790649c3bb8f3f3c5ff967a999a0a4ddc969121b9dd5d47335",
+    "2022-09-25_de.pdf": "c67c9bce6da1b5587ee25919cff8172d33c45081e10a96f7c0476f49a91d2b97",
+    "2023-06-18_de.pdf": "d496622d23589e2c9379d2172e0d8c60eca4bbd119588c656c39d49170862881",
+    "2024-03-03_de.pdf": "53c7cc72c28f80969ed56d7813ad8c05e505b1817923418d0dfa45368a6bd07e",
+    "2024-06-09_de.pdf": "b5ced6e09502bf5956ce6219c8332a1611566b19a8d8ff7ddf3beb6c44924f92",
+    "2024-09-22_de.pdf": "d8e0047ae589df3bdaa91c93fcb0f6dd0cbb5e36f7aab00fe293ad996a9bfed4",
+    "2024-11-24_de.pdf": "9ea4ea66c852f580360e4b0837e0af8b5b201eedb8c2f4639fce9a7420dd4b84",
+    "2025-02-09_de.pdf": "97756edd20157c63956334c8ef563af17fecfd96afa9fd8fba2777b64df36180",
+    "2025-09-28_de.pdf": "39c020145299913685e4d0b6899fa23bb1f94938652a417e0c1da08d316ade8a",
+    "2025-11-30_de.pdf": "4b612b614e65e028c2c0fdaf7bf3d32ddbdcbea060b7540180969c95cf694636",
+    "2026-03-08_de.pdf": "d0c794f37d6d2cb25e9969ed058e2a7d7c3e2508f7f03e2b5e90415d364f6170",
+    "2026-06-14_de.pdf": "13c434202d63d32ca57f03311fb9de5fc7477d5c49ea14b06984f5d3a8591115",
+    "2026-09-27_de.pdf": "6d27a4c6c5ed0e8583a49864979dcc2ddeeb4c65e895b97a2df3fa1d089dbc15",
+    "2026-11-29_de.pdf": "391b1f2941820c9859b0fef5ac6dd366e325076ebd125f0c5ecd763fea428be2"
+  },
+  "review": {
+    "cases": 110,
+    "first_judgement_agrees": 82,
+    "changed_after_first_review": [],
+    "reviewer": "Sheyla"
+  },
+  "usage": "Dev frei. Test und Spezial-Test einmalig nach dem Konfigurationsfreeze (Stufe 5)."
+}

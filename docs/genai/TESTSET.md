@@ -196,6 +196,45 @@ beginnt mit der Fall-ID, die Zählregeln des fertigen Testsets mit `Testset:`.
   Vorlage so viele Hauptfälle wie `HAUPT_PLAN` (2 oder 6), bei Vorlagen mit 6 Fällen je Klasse 2; je Art so
   viele Spezialfälle wie `KIND_COUNTS`.
 
+## Gesperrt
+
+Am 13.11.2026 gesperrt, auf dem Branch `genai/agent-stufe3`. Er enthält `genai/agent-testset` (8d97bee)
+unverändert. `track_2a/data/genai/testset/manifest.json` hält fest:
+- den Commit 48b39e5 bei sauberem Arbeitsbaum,
+- den SHA-256 von `cases.jsonl` (`9d356dd1…`),
+- die 22 Büchlein.
+
+110 Fälle: Dev 30 Haupt- und 7 Spezialfälle, Test 60 Haupt- und 13 Spezialfälle.
+
+**Labelprüfung durch Sheyla:**
+- Blind auf der Prüfseite, alle 110 Fälle; die Urteile stehen in `label_review.jsonl` (140 Ereignisse).
+- Das erste Urteil stimmte bei 82 von 110 Fällen mit dem Entwurf überein.
+- Bei den übrigen 28 hat Sheyla nach dem Aufdecken des Entwurfs auf diesen gewechselt, ohne Notiz. Gründe
+  waren Lese- und Verständnisfehler, zum Beispiel 108 Ja-Stimmen gegenüber „mehr als 120“ oder ein
+  übersehener Hinweis „Simulierter API-Ausfall“.
+- Kein Fall wurde nach der Prüfung geändert. Am Ende weicht kein Urteil ab.
+
+**Unabhängige Zweitprüfung durch Codex:**
+- codex-cli 0.153.4, Modell `gpt-6-astra`, blind über alle 110 Fälle.
+- Codex sah nur, was die Prüfseite vor dem Urteil zeigt: keine Entwürfe, keine Notizen, neutrale Fallnummern.
+  Laut Protokoll hat es keine andere Datei gelesen.
+- Ergebnis: 110 von 110 gleich wie die Labels, auch bei allen 28 Fällen, die Sheyla nach dem Aufdecken
+  geändert hat. Dort stimmte Codex in keinem Fall ihrem ersten Urteil zu.
+- Datei: `track_2a/results/genai/testset_label_check_codex.jsonl`, mit Urteil und Begründung pro Fall.
+
+**Grenzen:**
+- Die Entwürfe stammen von Claude.
+- Die 28 Korrekturen geschahen nach dem Aufdecken. Codex stützt sie, ist aber ein Modell und keine zweite
+  Person.
+- Felipes Prüfung vom 11.10.2026 betraf das Holdout des Wettbewerbs, nicht dieses Testset.
+
+**Ab jetzt:**
+- `load_testset("dev")` liefert 37 Fälle.
+- `load_testset("test")` wirft `PermissionError` bis zum Konfigurationsfreeze in Stufe 5
+  (`allow_test=True`).
+- Stufe 3 kalibriert die Schwellenwerte des Wächters nur über `load_testset("dev")`.
+- Ändert sich `cases.jsonl`, lädt `load_testset` nichts mehr, weil der Hash nicht zum Manifest passt.
+
 ## Prüfskript
 
 Aus `track_2a/`:
