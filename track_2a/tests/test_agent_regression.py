@@ -170,6 +170,21 @@ class ArmTests(unittest.TestCase):
         self.assertIn('ost-0002', runs[1].error)
         self.assertEqual([record['id'] for record in records(self.tmp / 'regression-agent')], ['ost-0001', 'ost-0002'])
 
+    def test_regression_agent_with_a_claim_of_bad_length_is_a_technical_error_not_an_abort(self):
+        from dataclasses import replace
+        from src.agent import settings
+        for claim in ('', 'x' * (settings.MAX_CLAIM_CHARS + 1)):
+            with self.subTest(length=len(claim)):
+                cases = [replace(case_for(case_id='ost-0001'), claim=claim), case_for(case_id='ost-0002')]
+                bad, good = self.run_arm('regression-agent', cases,
+                                         FakeEngine(prediction=make_prediction(0, [(2, QUOTE)])),
+                                         name=f'laenge-{len(claim)}')
+                self.assertEqual(bad.outcome, 'technischer_fehler')
+                self.assertIn('ost-0001', bad.error)
+                self.assertEqual(good.outcome, 'gestuetzt')
+                self.assertEqual([r['id'] for r in records(self.tmp / f'laenge-{len(claim)}')],
+                                 ['ost-0001', 'ost-0002'])
+
     def test_resume_gives_the_finished_outcomes_back(self):
         cases = [case_for(case_id='ost-0001'), case_for(case_id='ost-0002', label=2)]
         engine = B0Engine(prediction=make_prediction(0, [(2, QUOTE)]))

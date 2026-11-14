@@ -319,6 +319,33 @@ class FreezeTests(unittest.TestCase):
         self.assertEqual((summary['split'], summary['mock'], summary['finished']), ('test', True, 2))
         self.assertEqual(self.opened, [])  # the real data/genai/testset/cases.jsonl was never opened
 
+    def test_freeze_functions_refuse_the_regression_arms_and_touch_nothing(self):
+        self.frozen()
+        before = self.freeze.read_text(encoding='utf-8')
+        for arm in ('regression-b0', 'regression-agent'):
+            for call in (lambda: eval_runner.require_freeze(self.freeze, arm),
+                         lambda: eval_runner.require_freeze(self.freeze, arm, resume_out=self.root / 'x'),
+                         lambda: eval_runner.mark_test_run(self.freeze, arm, out_dir=self.root / 'x'),
+                         lambda: eval_runner.open_test_split(self.freeze, arm, out_dir=self.root / 'x'),
+                         lambda: eval_runner.open_test_split(self.freeze, arm, out_dir=self.root / 'x', resume=True)):
+                with self.subTest(arm=arm), patch.object(eval_runner, '_read_freeze') as read, \
+                        patch.object(eval_runner, 'load_testset') as load, \
+                        self.assertRaises(eval_runner.FreezeError) as refused:
+                    call()
+                read.assert_not_called()  # nothing was read, not even the freeze file
+                load.assert_not_called()
+                self.assertIn(arm, str(refused.exception))
+        self.assertEqual(sorted(self.freeze.parent.glob('*.test_run.*')), [])  # no marker
+        self.assertEqual(self.freeze.read_text(encoding='utf-8'), before)
+        self.assertEqual(self.opened, [])
+
+    def test_the_script_records_the_split_in_campaign_json(self):
+        self.frozen()
+        out = self.root / 'test-b1'
+        code, output = self.run_script(*self.split_args(out, self.freeze))
+        self.assertEqual(code, 0, output)
+        self.assertEqual(json.loads((out / 'campaign.json').read_text(encoding='utf-8'))['split'], 'test')
+
     def test_mock_run_on_the_real_test_split_is_refused(self):
         self.frozen()
         with patch.object(eval_runner, 'CASES_PATH', testset_module.CASES_PATH), \

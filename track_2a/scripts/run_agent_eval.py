@@ -117,13 +117,14 @@ def _run(args: argparse.Namespace) -> int:
             if len(cases) != expected:
                 raise _Abort(f"Der Testteil hat {len(cases)} Fälle, das Manifest nennt {expected}.")
             runs = eval_runner.run_campaign(args.arm, cases, build_arm=build, max_requests=args.max_requests,
-                                            out_dir=args.out, resume=args.resume)
+                                            out_dir=args.out, resume=args.resume, split=args.split)
     else:  # dev, or the regression set (dev data too: no freeze)
         cases = load_regression_cases() if args.split == "regression" else eval_runner.load_dev()
         _check_cap(args, len(cases))
         with open_wiring(args.mock, args.out / eval_runner.TRACE_DIR) as wiring:
             runs = eval_runner.run_campaign(args.arm, cases, build_arm=eval_runner.make_arm(args.arm, wiring),
-                                            max_requests=args.max_requests, out_dir=args.out, resume=args.resume)
+                                            max_requests=args.max_requests, out_dir=args.out, resume=args.resume,
+                                            split=args.split)
     summary = eval_runner.write_summary(args.out, arm=args.arm, split=args.split, mock=args.mock, runs=runs,
                                         max_requests=args.max_requests,
                                         freeze=args.freeze if args.split == "test" else None)

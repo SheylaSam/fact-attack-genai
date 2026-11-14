@@ -10,7 +10,8 @@ Campaign (`run_campaign`): one arm over a list of cases, one check per case.
   with `CAP_REACHED`, never written to `cases.jsonl` and never silently dropped (`not_run.json`). Its requests count.
 * `cases.jsonl`: one record per finished case (the `CaseRun` without the case, plus `id` and `requests`), flushed and
   fsynced after each case. An existing `out_dir` is refused unless `resume`; `resume` skips the cases already in
-  `cases.jsonl`, rebuilds their `CaseRun`s and counts the requests spent so far (the larger of the records' sum and
+  `cases.jsonl` (an unterminated last line, left by a crash in the middle of a write, is dropped and logged; the case
+  runs again), rebuilds their `CaseRun`s and counts the requests spent so far (the larger of the records' sum and
   the journal lines, so a check that crashed before its record counts too) toward the cap.
 * After `STOP_AFTER_ERRORS` technical errors in a row the campaign stops and marks the rest `NOT_RUN` with
   `STOPPED_AFTER_ERRORS`: a dead endpoint does not eat the whole cap. A case with an injected fault neither counts
@@ -29,8 +30,12 @@ Arms (`make_arm`), each check with new tools, a new engine, a new budget and a n
   case's booklet with vote `None` (the production path), the agent with the case's vote fixed in its tools (the
   search stays in the given source). They make `regression.CaseOutcome`s, which the campaign records, resumes and caps
   like a `CaseRun`; a case whose vote cannot be built is a technical error with `error`, never a gap.
-* A case with `fault` gets `faults.faulty_transport` beneath its budget; no other case does. A fault case that sent no
-  request is recorded as it came out, with `error = FAULT_NOT_TRIGGERED`.
+* A case with `fault` gets `faults.faulty_transport` beneath its budget; no other case does. A fault case whose
+  outcome is not `technischer_fehler` is recorded as it came out, with `error` marked `FAULT_ENDED_AS_VERDICT` (or
+  `FAULT_NOT_TRIGGERED` if it sent no request at all): the rule "a fault ends technical" is enforced where results are
+  written, never by changing the outcome.
+* A failure the case itself causes (a vote id the index does not know, a claim outside 1..MAX_CLAIM_CHARS) is a
+  `technischer_fehler` record with `error`, never an exception that aborts the campaign.
 * `evidence_valid` is computed after the run for `gestuetzt` and `widersprochen` with the graph's own check
   (`graph.valid_evidence`), the same for every arm: True if the graph would keep the verdict (at least one quote
   verbatim on a page of the vote, no cited page without text); such a verdict without evidence is False. None for
@@ -41,7 +46,7 @@ Freeze: `config_hash` over the git tree SHAs of track_2a/src and track_2a/script
 thresholds, `TOOL_MODE`, the SHA-256 of prompts.py, the testset SHA of the manifest and a snapshot of the non-secret
 scalar settings of `src.config` and `src.agent.settings`. `write_freeze` writes the freeze file once, on a clean tree,
 after a real dev evaluation with this configuration. `open_test_split` is the only path to the test split. The test
-split runs once per arm (one campaign per arm and freeze): a new run is `require_freeze`, `mark_test_run` (a marker per
+split runs once per arm (one campaign per arm and freeze): a new run is `require_freeze`, `mark_test_run` (only b0, b1 and b2 have a test run; a marker per
 arm, created exclusively, and the entry `test_runs[arm]` with the out_dir, both fsynced), then
 `load_testset("test", allow_test=True)`. After an abort the run of that arm is only resumed, in the same out_dir, never
 evaluated anew.
@@ -52,6 +57,7 @@ import functools
 import glob
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -83,6 +89,8 @@ NOT_SCORED = "nicht_gewertet"  # the arm has no result for this kind of case (B0
 CAP_REACHED = "not_run_cap_reached"
 STOPPED_AFTER_ERRORS = "not_run_after_errors"
 FAULT_NOT_TRIGGERED = "fault_not_triggered"
+FAULT_ENDED_AS_VERDICT = "fault_ended_as_verdict"  # a fault case whose outcome is not a technical error
+TEST_ARMS = ("b0", "b1", "b2")  # the arms that may run on the test split; the regression arms are dev data
 STOP_AFTER_ERRORS = 3
 EVIDENCE_OUTCOMES = ("gestuetzt", "widersprochen")  # the verdicts whose evidence is checked
 ERROR_CHARS = 200
@@ -97,6 +105,8 @@ RESULTS_PREFIX = f"{_TRACK}/results/"
 FREEZE_SCHEMA = 1
 _SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSW|ENV_FILE|URL|_PATH$|_DIR$")
 _SCALARS = (str, int, float, bool, type(None))
+
+LOGGER = logging.getLogger(__name__)
 
 ArmBuilder = Callable[[Any, RequestBudget], Union[CaseRun, CaseOutcome]]
 
@@ -258,7 +268,10 @@ def _agent_case(case, budget: RequestBudget, *, wiring: Wiring, arm: str, nachsu
                                budget=budget, nachsuche=nachsuche, evidence_check=evidence_check)
         user = _AskedRecorder(session)
         started = time.perf_counter()
-        turn = drive(user, case)
+        try:
+            turn = drive(user, case)
+        except ValueError as exc:  # the case's own claim is unusable (length): a result, not an abort of the campaign
+            return _plain_run(case, arm, "technischer_fehler", _short_error(f"Fall {case.id}: {exc}"))
         latency_ms = (time.perf_counter() - started) * 1000
         events = session.events
         if isinstance(turn, Pending):  # the gold vote was not offered: the question stays unanswered
@@ -308,7 +321,10 @@ def _b0_case(case, budget: RequestBudget, *, wiring: Wiring, arm: str = "b0") ->
     """B0: today's check path on the oracle booklet of the gold vote, vote "Automatisch" (None)."""
     if case.vote_id is None or getattr(case, "fault", None):
         return _plain_run(case, arm, NOT_SCORED)  # no booklet to give / no transport to fault: no B0 result
-    vote = wiring.index.votes[case.vote_id]
+    vote = wiring.index.votes.get(case.vote_id)
+    if vote is None:
+        return _plain_run(case, arm, "technischer_fehler",
+                          _short_error(f"Fall {case.id}: Die Vorlage {case.vote_id} ist dem Index unbekannt."))
     engine = wiring.new_engine()
     try:
         if not wiring.mock:
@@ -366,7 +382,10 @@ def _regression_agent_case(case: RegressionCase, budget: RequestBudget, *, wirin
                                   _short_error(exc if case.id in str(exc) else f"Fall {case.id}: {exc}"))
         session = AgentSession(tools, wiring.decider(budget, None, vote.vote_id), engine, Tracer(), budget=budget)
         started = time.perf_counter()
-        turn = session.start(case.claim, case.claim_language)
+        try:
+            turn = session.start(case.claim, case.claim_language)
+        except ValueError as exc:  # a claim outside 1..MAX_CLAIM_CHARS: a result, not an abort of the campaign
+            return _plain_outcome(case, arm, "technischer_fehler", _short_error(f"Fall {case.id}: {exc}"))
         latency_ms = (time.perf_counter() - started) * 1000
         events = session.events
         if isinstance(turn, Pending):  # not expected with a given vote; shown as a question, never as a verdict
@@ -440,12 +459,15 @@ def _from_record(case, record: dict) -> Union[CaseRun, CaseOutcome]:
 
 
 def read_records(out_dir: Path) -> List[dict]:
-    """The records of `cases.jsonl` in `out_dir` (empty if there is none). ValueError names a broken line."""
+    """The records of `cases.jsonl` in `out_dir` (empty if there is none). An unterminated last line (a crash in the
+    middle of a write) is not a record and is left out; ValueError names any other broken line."""
     path = Path(out_dir) / CASES_NAME
     if not path.exists():
         return []
     found = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+    lines = path.read_text(encoding="utf-8").split("\n")
+    lines.pop()  # what follows the last newline: "" for a clean file, else the unterminated line
+    for number, line in enumerate(lines, 1):
         if not line.strip():
             continue
         try:
@@ -455,6 +477,25 @@ def read_records(out_dir: Path) -> List[dict]:
                              "die Anfragen stehen im Journal.") from None
         found.append(record)
     return found
+
+
+def _drop_unterminated_line(out_dir: Path) -> None:
+    """Cuts an unterminated last line off `cases.jsonl` (and logs it): the case it was meant for is not finished and
+    runs again, and the next record must not be glued onto the broken one. Its requests stay in the journals."""
+    path = Path(out_dir) / CASES_NAME
+    if not path.exists():
+        return
+    data = path.read_bytes()
+    keep = data.rfind(b"\n") + 1
+    if keep == len(data):
+        return
+    LOGGER.warning("%s: unvollständige letzte Zeile (%d Zeichen, abgebrochener Lauf) entfernt; der Fall läuft neu "
+                   "(Anfang: %s)", path, len(data) - keep,
+                   redact(data[keep:keep + 80].decode("utf-8", errors="replace")))
+    with path.open("r+b") as stream:
+        stream.truncate(keep)
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 def requests_spent(out_dir: Path) -> int:
@@ -491,7 +532,8 @@ def _ids_sha(ids: Sequence[str]) -> str:
     return hashlib.sha256("\n".join(ids).encode("utf-8")).hexdigest()
 
 
-def _start(arm: str, ids: List[str], max_requests: int, out_dir: Path, resume: bool) -> Dict[str, dict]:
+def _start(arm: str, ids: List[str], max_requests: int, out_dir: Path, resume: bool,
+           split: Optional[str] = None) -> Dict[str, dict]:
     """Creates `out_dir` (refusing an existing one without `resume`) or checks that it is this campaign's; returns
     the finished records by id."""
     campaign_path = out_dir / CAMPAIGN_NAME
@@ -503,6 +545,7 @@ def _start(arm: str, ids: List[str], max_requests: int, out_dir: Path, resume: b
         if campaign.get("arm") != arm or campaign.get("case_ids_sha256") != _ids_sha(ids):
             raise ValueError(f"{out_dir} gehört zu einem anderen Lauf (Arm {campaign.get('arm')!r} oder andere "
                              "Fälle)")
+        _drop_unterminated_line(out_dir)
         finished = {record["id"]: record for record in read_records(out_dir)}
         if unknown := sorted(set(finished) - set(ids)):
             raise ValueError(f"{out_dir}: Ergebnisse zu unbekannten Fällen: {', '.join(unknown[:5])}")
@@ -511,7 +554,8 @@ def _start(arm: str, ids: List[str], max_requests: int, out_dir: Path, resume: b
         raise ValueError(f"{out_dir} ist kein Lauf dieses Runners ({CAMPAIGN_NAME} fehlt)")
     out_dir.mkdir(parents=True, exist_ok=resume)
     with campaign_path.open("x", encoding="utf-8") as stream:
-        json.dump({"arm": arm, "case_ids_sha256": _ids_sha(ids), "cases": len(ids), "max_requests": max_requests,
+        json.dump({"arm": arm, **({"split": split} if split else {}), "case_ids_sha256": _ids_sha(ids),
+                   "cases": len(ids), "max_requests": max_requests,
                    "created_at": datetime.now(timezone.utc).isoformat()}, stream)
         stream.flush()
         os.fsync(stream.fileno())
@@ -519,13 +563,14 @@ def _start(arm: str, ids: List[str], max_requests: int, out_dir: Path, resume: b
 
 
 def run_campaign(arm: str, cases: Sequence[Any], *, build_arm: ArmBuilder, max_requests: int, out_dir: Path,
-                 resume: bool = False) -> List[Union[CaseRun, CaseOutcome]]:
+                 resume: bool = False, split: Optional[str] = None) -> List[Union[CaseRun, CaseOutcome]]:
     """Runs `build_arm(case, budget)` for every case under a total cap of `max_requests` HTTP requests; returns one
     `CaseRun` per case (a `CaseOutcome` for the regression arms), in the order of `cases` (see the module docstring
     for cap, journal, resume and not-run). Raises FileExistsError for an existing `out_dir` without `resume`,
     ValueError for an unknown arm, a regression arm over other cases than `RegressionCase`s (or the reverse), a bad or
     repeated case id or an `out_dir` of another campaign. An exception of `build_arm` ends the campaign: the cases
-    finished so far are in `cases.jsonl`, the requests in the journals, and `resume` continues."""
+    finished so far are in `cases.jsonl`, the requests in the journals, and `resume` continues. `split` (dev, test,
+    regression) is only written to `campaign.json` for the evaluation script."""
     _check_arm(arm)
     if type(max_requests) is not int or max_requests < 0:
         raise ValueError(f"max_requests muss eine ganze Zahl ab 0 sein, nicht {max_requests!r}")
@@ -535,7 +580,7 @@ def run_campaign(arm: str, cases: Sequence[Any], *, build_arm: ArmBuilder, max_r
                          "Regressionsfälle, die anderen Arme nie darüber.")
     ids = _case_ids(cases)
     out_dir = Path(out_dir)
-    finished = _start(arm, ids, max_requests, out_dir, resume)
+    finished = _start(arm, ids, max_requests, out_dir, resume, split)
     spent = requests_spent(out_dir)
     journal_dir = out_dir / JOURNAL_DIR
     runs: List[Union[CaseRun, CaseOutcome]] = []
@@ -563,9 +608,13 @@ def run_campaign(arm: str, cases: Sequence[Any], *, build_arm: ArmBuilder, max_r
                 runs.append(_plain(case, arm, NOT_RUN, stop_reason))
                 not_run.append({"id": case_id, "reason": stop_reason, "requests": budget.used})
                 continue
-            if getattr(case, "fault", None) and budget.used == 0 and run.outcome != NOT_SCORED:
-                # the injected fault never hit a request (e.g. an early result): shown, not disguised
-                run = replace(run, error=FAULT_NOT_TRIGGERED + (f": {run.error}" if run.error else ""))
+            if getattr(case, "fault", None) and run.outcome != NOT_SCORED:
+                # a fault case must end technical: any other outcome (or a fault that never hit a request) is shown
+                # with a marker, the outcome itself is never changed
+                marker = (FAULT_NOT_TRIGGERED if budget.used == 0
+                          else FAULT_ENDED_AS_VERDICT if run.outcome != "technischer_fehler" else None)
+                if marker:
+                    run = replace(run, error=marker + (f": {run.error}" if run.error else ""))
             if run.error is not None:
                 run = replace(run, error=_short_error(run.error))
             if run.outcome == "technischer_fehler" and run.error is None:
@@ -674,6 +723,14 @@ def config_hash() -> str:
     return _components_hash(config_components())
 
 
+def _check_test_arm(arm: str) -> None:
+    """Only b0, b1 and b2 have a test run; the regression arms are dev data and never touch the freeze."""
+    _check_arm(arm)
+    if arm not in TEST_ARMS:
+        raise FreezeError(f"Der Arm {arm} gehört zur Regressionsmenge (Dev-Daten) und hat keinen Testlauf; "
+                          f"der Freeze gilt nur für {', '.join(TEST_ARMS)}.")
+
+
 def _marker(path: Path, arm: str) -> Path:
     return path.with_name(f"{path.name}.test_run.{arm}")
 
@@ -778,8 +835,10 @@ def require_freeze(path: Path, arm: Optional[str] = None, *, resume_out: Optiona
     campaign per arm and freeze):
     * a new run of `arm` (`resume_out` None): `arm` has no recorded test run (entry or marker);
     * a resumed run (`resume_out`): `arm` has a recorded test run and it was started in `resume_out`.
-    Without `arm`: no arm may have a recorded test run."""
+    Without `arm`: no arm may have a recorded test run. A regression arm is refused before anything is read."""
     path = Path(path)
+    if arm is not None:
+        _check_test_arm(arm)
     freeze = _read_freeze(path)
     if arm is None:
         if resume_out is not None:
@@ -787,7 +846,6 @@ def require_freeze(path: Path, arm: Optional[str] = None, *, resume_out: Optiona
         if freeze.get("test_runs") or _markers(path):
             raise FreezeError("Mit diesem Freeze wurde der Testteil bereits ausgewertet.")
     else:
-        _check_arm(arm)
         recorded = _test_run(path, freeze, arm)
         if resume_out is None and recorded is not None:
             raise FreezeError(f"Der Testteil wurde mit Arm {arm} bereits begonnen (Ordner {recorded.get('out_dir')}); "
@@ -812,7 +870,7 @@ def mark_test_run(path: Path, arm: str, *, out_dir: Path) -> None:
     one arm cannot both get it), and the entry `test_runs[arm]` in the freeze file, both synced to disk. The entry
     names `out_dir`, the only place the run may be resumed."""
     path = Path(path)
-    _check_arm(arm)
+    _check_test_arm(arm)
     if _test_run(path, _read_freeze(path), arm) is not None:
         raise FreezeError(f"Der Testteil wurde mit Arm {arm} bereits begonnen.")
     entry = {"arm": arm, "started_at": datetime.now(timezone.utc).isoformat(), "out_dir": _out_key(out_dir)}
@@ -832,7 +890,8 @@ def mark_test_run(path: Path, arm: str, *, out_dir: Path) -> None:
 def open_test_split(freeze_path: Path, arm: str, *, out_dir: Path, resume: bool = False) -> list:
     """The only way to the test split. A new run: `require_freeze`, `mark_test_run`, then the cases. A resumed run
     (after an abort; never a second evaluation): `require_freeze` with this arm's recorded run in `out_dir`, then the
-    cases."""
+    cases. Only the arms b0, b1 and b2; a regression arm is refused before anything is read."""
+    _check_test_arm(arm)
     if resume:
         require_freeze(freeze_path, arm, resume_out=out_dir)
     else:

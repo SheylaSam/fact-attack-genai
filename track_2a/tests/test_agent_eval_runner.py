@@ -180,6 +180,68 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual([run.outcome for run in runs], ['technischer_fehler'] * 4 + [eval_runner.NOT_RUN])
         self.assertEqual(runs[-1].error, eval_runner.STOPPED_AFTER_ERRORS)
 
+    def test_every_fault_case_that_does_not_end_technical_is_flagged_and_the_outcome_stays(self):
+        def fault_case(case_id):
+            return make_case(case_id, group='spezial', kind='api_ausfall', expected='technischer_fehler',
+                             fault='http_500')
+
+        outcomes = {'sdev-01': 'gestuetzt', 'sdev-02': 'rueckfrage', 'sdev-03': 'technischer_fehler',
+                    'dev-001': 'gestuetzt'}
+
+        def build(case, budget):
+            budget.reserve(b'anfrage')  # the fault case did send a request: this is not the "no request" rule
+            return case_run(case, outcomes[case.id], error='Timeout' if case.id == 'sdev-03' else None)
+
+        cases = [fault_case('sdev-01'), fault_case('sdev-02'), fault_case('sdev-03'), make_case('dev-001')]
+        runs = eval_runner.run_campaign('b1', cases, build_arm=build, max_requests=30, out_dir=self.out)
+        self.assertEqual([run.outcome for run in runs], list(outcomes.values()))  # never changed
+        self.assertEqual(runs[0].error, eval_runner.FAULT_ENDED_AS_VERDICT)
+        self.assertEqual(runs[1].error, eval_runner.FAULT_ENDED_AS_VERDICT)
+        self.assertEqual(runs[2].error, 'Timeout')  # an expected technical error is not flagged
+        self.assertIsNone(runs[3].error)  # a case without a fault is never flagged
+        self.assertEqual([record['error'] for record in records(self.out)],
+                         [eval_runner.FAULT_ENDED_AS_VERDICT] * 2 + ['Timeout', None])
+
+    def test_resume_drops_an_unterminated_last_line_and_runs_that_case_again(self):
+        eval_runner.run_campaign('b1', self.cases, build_arm=counting_arm(5, []), max_requests=12, out_dir=self.out)
+        path = self.out / 'cases.jsonl'
+        complete = path.read_text(encoding='utf-8')
+        for tail in ('{"id": "dev-003", "arm": "b1", "outc',  # cut in the middle of a record
+                     json.dumps(records(self.out)[0] | {'id': 'dev-003'})):  # complete JSON, newline missing
+            with self.subTest(tail=tail[:20]):
+                path.write_text(complete + tail, encoding='utf-8')
+                calls = []
+                with self.assertLogs('src.agent.eval_runner', level='WARNING') as logged:
+                    runs = eval_runner.run_campaign('b1', self.cases, build_arm=counting_arm(5, calls),
+                                                    max_requests=100, out_dir=self.out, resume=True)
+                self.assertIn('dev-003', ''.join(logged.output) + ''.join(calls))  # logged; the case runs again
+                self.assertEqual(calls, ['dev-003', 'dev-004'])
+                self.assertEqual([run.outcome for run in runs], ['gestuetzt'] * 4)
+                text = path.read_text(encoding='utf-8')
+                self.assertTrue(text.endswith('\n'))
+                self.assertEqual([record['id'] for record in records(self.out)], [case.id for case in self.cases])
+                path.write_text(complete, encoding='utf-8')  # back to the state after the first run
+                for journal in (self.out / 'journals').glob('dev-00[34]*'):
+                    journal.unlink()
+
+    def test_resume_still_refuses_a_malformed_terminated_line(self):
+        eval_runner.run_campaign('b1', self.cases[:2], build_arm=counting_arm(1, []), max_requests=10, out_dir=self.out)
+        path = self.out / 'cases.jsonl'
+        path.write_text(path.read_text(encoding='utf-8') + '{"id": "dev-003", "arm\n', encoding='utf-8')
+        calls = []
+        with self.assertRaises(ValueError):
+            eval_runner.run_campaign('b1', self.cases, build_arm=counting_arm(1, calls), max_requests=10,
+                                     out_dir=self.out, resume=True)
+        self.assertEqual(calls, [])
+
+    def test_campaign_json_records_the_split_if_given(self):
+        eval_runner.run_campaign('b1', self.cases[:1], build_arm=counting_arm(1, []), max_requests=5,
+                                 out_dir=self.out / 'a', split='dev')
+        eval_runner.run_campaign('b1', self.cases[:1], build_arm=counting_arm(1, []), max_requests=5,
+                                 out_dir=self.out / 'b')
+        self.assertEqual(json.loads((self.out / 'a' / 'campaign.json').read_text(encoding='utf-8'))['split'], 'dev')
+        self.assertNotIn('split', json.loads((self.out / 'b' / 'campaign.json').read_text(encoding='utf-8')))
+
     def test_existing_out_dir_without_resume_is_refused(self):
         self.out.mkdir()
         (self.out / 'cases.jsonl').write_text('{"id": "alt"}\n', encoding='utf-8')
@@ -211,10 +273,20 @@ class CampaignTests(unittest.TestCase):
                 client.post('http://llm.invalid/v1/chat/completions', json={'n': len(seen)})
             return case_run(case)
 
-        with patch.object(eval_runner.os, 'fsync', wraps=os.fsync) as fsync:
+        synced = []  # records of cases.jsonl complete at each fsync of that very file
+        real_fsync = os.fsync
+
+        def counting_fsync(descriptor):
+            path = self.out / 'cases.jsonl'
+            if path.exists() and os.fstat(descriptor).st_ino == path.stat().st_ino:
+                synced.append(len(path.read_text(encoding='utf-8').splitlines()))
+            return real_fsync(descriptor)
+
+        with patch.object(eval_runner.os, 'fsync', side_effect=counting_fsync):
             eval_runner.run_campaign('b1', self.cases[:2], build_arm=build, max_requests=30, out_dir=self.out)
         self.assertEqual(seen, [1, 2, 3, 1, 2, 3])
-        self.assertGreaterEqual(fsync.call_count, 2)  # cases.jsonl is synced after each case
+        # cases.jsonl itself (not the journals, not campaign.json) is synced once per record, right after it is written
+        self.assertEqual(synced, [1, 2])
         lines = [json.loads(line) for line in (self.out / 'journals' / 'dev-001.requests.jsonl')
                  .read_text(encoding='utf-8').splitlines()]
         self.assertEqual([line['sequence'] for line in lines], [1, 2, 3])
@@ -328,6 +400,32 @@ class ArmTests(unittest.TestCase):
         [run] = self.run_arm('b1', [fault_case], FakeEngine())  # mock: the scripted decider sends nothing
         self.assertEqual(run.outcome, 'gestuetzt')  # recorded as it came out, not disguised
         self.assertEqual(run.error, eval_runner.FAULT_NOT_TRIGGERED)
+
+    def test_b0_with_an_unknown_vote_id_is_a_technical_error_and_the_campaign_goes_on(self):
+        engine = B0Engine(prediction=make_prediction(0, [(2, QUOTE)]))
+        unknown = make_case('dev-001', vote_id='1999-01-01_de#9')
+        first, second = self.run_arm('b0', [unknown, make_case('dev-002')], engine)
+        self.assertEqual(first.outcome, 'technischer_fehler')
+        self.assertIn('1999-01-01_de#9', first.error)
+        self.assertEqual((second.outcome, second.error), ('gestuetzt', None))
+        self.assertEqual([call['case_id'] for call in engine.claim_calls], ['dev-002'])
+        self.assertEqual([(r['id'], r['outcome']) for r in records(self.out / 'b0')],
+                         [('dev-001', 'technischer_fehler'), ('dev-002', 'gestuetzt')])
+        self.assertTrue(records(self.out / 'b0')[0]['error'])
+
+    def test_a_claim_of_bad_length_is_a_technical_error_and_the_campaign_goes_on(self):
+        for arm in ('b1', 'b2'):
+            for claim in ('', 'x' * (settings.MAX_CLAIM_CHARS + 1)):
+                with self.subTest(arm=arm, length=len(claim)):
+                    self.out = Path(self.tmp.name) / f'lauf-{arm}-{len(claim)}'
+                    bad, good = self.run_arm(arm, [make_case('dev-001', claim=claim), make_case('dev-002')],
+                                             FakeEngine())
+                    self.assertEqual(bad.outcome, 'technischer_fehler')
+                    self.assertIn('dev-001', bad.error)
+                    self.assertIsNone(bad.evidence_valid)
+                    self.assertEqual((good.outcome, good.error), ('gestuetzt', None))
+                    self.assertEqual([r['id'] for r in records(self.out / arm)], ['dev-001', 'dev-002'])
+                    self.assertEqual(records(self.out / arm)[0]['requests'], 0)
 
     def test_technical_error_always_has_a_reason(self):
         broken = FakeEngine(verify_error=RuntimeError('kaputt'))
