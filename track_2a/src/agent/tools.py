@@ -26,8 +26,10 @@ POOL_LIMIT = 2 * settings.MAX_PASSAGES  # passages the pool stores per vote; `pa
 MAX_QUERY_CHARS = 500
 MAX_ID_CHARS = 80  # an upload's id is "custom_" + 64 hex digits + "#0" = 73 characters
 MAX_QUESTION_CHARS = 300
+MAX_STATEMENT_CHARS = 300
 MAX_REASON_CHARS = 500
 OPTION_RANGE = (2, 4)
+STATEMENT_RANGE = (2, 4)  # statements of a compound claim teilaussage_fragen offers
 VOTE_CANDIDATES = 5  # votes suche_vorlagen reports
 VECTOR_PASSAGES = 8  # passages suche_passagen_vektor asks the index for
 SNIPPET_PREVIEW_CHARS = 120  # display only; the pool keeps the whole text
@@ -38,8 +40,9 @@ OUTSIDE_STATUS = "andere Vorlage, nicht aufgenommen"
 ERROR_INVALID_ARGS = "invalid_args"  # `Observation.data["error_kind"]`: the model's mistake, fed back as a search step
 ERROR_TOOL_FAILURE = "tool_failure"  # the index or the engine failed: a technical error
 
-TERMINAL_TOOLS = frozenset({"pruefen", "rueckfrage", "quelle_fehlt"})
-FIXED_VOTE_HIDDEN_TOOLS = frozenset({"suche_vorlagen", "rueckfrage"})  # nothing to find or to choose between
+TERMINAL_TOOLS = frozenset({"pruefen", "rueckfrage", "teilaussage_fragen", "quelle_fehlt"})
+# nothing to find or to choose between; teilaussage_fragen stays (a compound claim does not depend on the vote)
+FIXED_VOTE_HIDDEN_TOOLS = frozenset({"suche_vorlagen", "rueckfrage"})
 
 _Query = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_QUERY_CHARS)]
 _VoteId = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_ID_CHARS)]
@@ -67,9 +70,12 @@ class _CheckArgs(_Args):
     vorlage_id: _VoteId = Field(description="Vorlagen-ID, deren gesammelte Passagen geprüft werden.")
 
 
+_Question = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_QUESTION_CHARS)]
+_Statement = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_STATEMENT_CHARS)]
+
+
 class _AskArgs(_Args):
-    frage: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_QUESTION_CHARS)] = \
-        Field(description="Kurze Rückfrage an die Person, zum Beispiel welche Vorlage gemeint ist.")
+    frage: _Question = Field(description="Kurze Rückfrage an die Person, zum Beispiel welche Vorlage gemeint ist.")
     optionen: List[_VoteId] = Field(min_length=OPTION_RANGE[0], max_length=OPTION_RANGE[1],
                                     description="Zwei bis vier verschiedene Vorlagen-IDs als Antwortknöpfe.")
 
@@ -78,6 +84,21 @@ class _AskArgs(_Args):
     def _distinct(cls, value: List[str]) -> List[str]:
         if len(set(value)) != len(value):
             raise ValueError("'optionen' müssen verschiedene Vorlagen-IDs enthalten")
+        return value
+
+
+class _StatementArgs(_Args):
+    frage: _Question = Field(description="Kurze Frage an die Person, welche Teilaussage geprüft werden soll.")
+    teilaussagen: List[_Statement] = Field(
+        min_length=STATEMENT_RANGE[0], max_length=STATEMENT_RANGE[1],
+        description=f"Zwei bis vier verschiedene Teilaussagen der Behauptung als Antwortknöpfe, je ein vollständiger "
+                    f"Satz von 1 bis {MAX_STATEMENT_CHARS} Zeichen, der allein geprüft werden kann.")
+
+    @field_validator("teilaussagen")
+    @classmethod
+    def _distinct(cls, value: List[str]) -> List[str]:
+        if len({" ".join(text.split()).casefold() for text in value}) != len(value):
+            raise ValueError("'teilaussagen' müssen verschiedene Aussagen enthalten")
         return value
 
 
@@ -106,6 +127,10 @@ _TOOLS: Dict[str, Tuple[type, str]] = {
     "rueckfrage": (_AskArgs, (
         "Beendet den Lauf mit einer Rückfrage an die Person, wenn zwei bis vier Vorlagen gleich gut passen und "
         "die Behauptung nicht erkennen lässt, welche gemeint ist.")),
+    "teilaussage_fragen": (_StatementArgs, (
+        "Beendet den Lauf mit der Frage, welche Teilaussage geprüft werden soll, wenn die Behauptung zwei bis vier "
+        "eigenständige Aussagen verbindet, die einzeln verschieden ausfallen können. Jede Teilaussage wird ein "
+        "Antwortknopf und danach als eigene Behauptung geprüft. Geht auch vor der ersten Suche.")),
     "quelle_fehlt": (_SourceMissingArgs, (
         "Beendet den Lauf ohne Urteil, wenn keine Vorlage der Büchlein zur Behauptung passt.")),
 }

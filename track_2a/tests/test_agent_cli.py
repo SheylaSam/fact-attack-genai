@@ -217,6 +217,20 @@ class FormatResultTests(unittest.TestCase):
         done = AgentResult(outcome='gestuetzt', vote=V1)
         self.assertNotIn('--quelle', cli_format.format_result(done, claim=CLAIM))
 
+    def test_format_result_shows_the_statements_and_their_new_checks(self):
+        parts = ['Die Untermiete braucht eine "schriftliche" Zustimmung.', 'Die Kündigung wird leichter.']
+        result = AgentResult(outcome='rueckfrage', question='Welche Teilaussage?', statements=parts, asked_by='model')
+        text = cli_format.format_result(result, claim=CLAIM, answer_args=['--mock'])
+        self.assertIn('Teilaussagen:', text)
+        for part in parts:
+            self.assertIn(f'  - {part}', text)
+            self.assertIn(f'python -m src.agent {shlex.quote(part)} --mock', text)  # a new check, no --quelle
+        self.assertNotIn('--quelle', text)
+        self.assertNotIn('python -m src.agent', cli_format.format_result(result))  # no claim: no commands
+        data = json.loads(json.dumps(cli_format.result_to_dict(result), ensure_ascii=False))
+        self.assertEqual((data['statements'], data['options']), (parts, []))
+        self.assertEqual(cli_format.result_to_dict(AgentResult(outcome='quelle_fehlt'))['statements'], [])
+
     def test_result_json_has_asked_by(self):
         data = cli_format.result_to_dict(AgentResult(outcome='rueckfrage', options=[V1, V2], asked_by='guard'))
         self.assertEqual(data['asked_by'], 'guard')

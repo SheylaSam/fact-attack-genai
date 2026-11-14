@@ -9,6 +9,9 @@
 `interrupt`, nothing is checked yet, and the question comes back as `Pending`. `answer` resumes the paused graph with
 the chosen vote: the vote is fixed in `tools` and the check goes on from the state the pause saved. Every turn that
 does not end in a question is an `AgentResult`; its `events` hold the whole check, from before and after the answer.
+The model's question which statement of a compound claim to check (`teilaussage_fragen`) is no pause: it comes back
+as an `AgentResult` with outcome `rueckfrage` and `statements`, and `answer` does not take it. A chosen statement is
+checked as a new claim, with a new session (new tools, new budget).
 
 One session is one check at a time. `tools`, `decider`, `engine` and `tracer` must stay the same instances from
 `start` to `answer`: the vote pool, the guard's cache, the fixed vote and the template list live in `tools`, not in the

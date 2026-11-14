@@ -34,6 +34,7 @@ TOOL_TITLES = {
     "pruefen": "Prüfung starten",
     "quelle_fehlt": "Quelle fehlt",
     "rueckfrage": TITLE_ASK,
+    "teilaussage_fragen": TITLE_ASK,
 }
 NODE_TITLES = {
     "start": "Start",
@@ -51,6 +52,9 @@ TEXT_CONTRADICTED = "Das Büchlein enthält Aussagen, die dieser Behauptung wide
 TITLE_QUESTION = "Welche Vorlage ist gemeint?"
 TEXT_QUESTION = "Mehrere Vorlagen passen zur Behauptung. Wähle die Vorlage, die du meinst; danach geht die Prüfung weiter."
 TEXT_QUESTION_CHOOSE = "Wähle die Vorlage, die du meinst; danach geht die Prüfung weiter."  # the guard's mismatch
+TITLE_STATEMENT = "Welche Teilaussage soll geprüft werden?"  # a compound claim (teilaussage_fragen)
+TEXT_STATEMENT = ("Die Behauptung verbindet mehrere Aussagen, die einzeln verschieden ausfallen können. Wähle eine; "
+                  "sie wird als neue Behauptung geprüft.")
 TITLE_WHOLE_BOOKLET = "Gesamtes Büchlein"  # = source_index.WHOLE_BOOKLET_TITLE, the title of a "#0" vote
 TITLE_UPLOAD = "Eigenes PDF"  # = uploads.UPLOAD_TITLE, the title of an own PDF's vote
 TITLE_PICK_SOURCE = "Quelle selbst wählen"
@@ -65,7 +69,8 @@ TEXT_TECHNICAL = "Die Prüfung wurde wegen eines technischen Fehlers abgebrochen
 TEXT_KEYS: Tuple[str, ...] = tuple(dict.fromkeys((
     TITLE_ASK, TITLE_DECIDE, TITLE_RUNNING, *TOOL_TITLES.values(), *NODE_TITLES.values(),
     TITLE_SUPPORTED, TEXT_SUPPORTED, TITLE_NOT_PROVEN, TEXT_NOT_PROVEN, TITLE_CONTRADICTED, TEXT_CONTRADICTED,
-    TITLE_QUESTION, TEXT_QUESTION, TEXT_QUESTION_CHOOSE, TITLE_WHOLE_BOOKLET, TITLE_UPLOAD, TITLE_PICK_SOURCE, TEXT_PICK_SOURCE, TITLE_NO_SOURCE, TEXT_NO_SOURCE,
+    TITLE_QUESTION, TEXT_QUESTION, TEXT_QUESTION_CHOOSE, TITLE_STATEMENT, TEXT_STATEMENT,
+    TITLE_WHOLE_BOOKLET, TITLE_UPLOAD, TITLE_PICK_SOURCE, TEXT_PICK_SOURCE, TITLE_NO_SOURCE, TEXT_NO_SOURCE,
     TEXT_LAST_VOTE, TITLE_TECHNICAL, TEXT_TECHNICAL)))
 
 # outcome -> NLI label (the card's label); the same mapping as the agent graph's, without importing langgraph
@@ -90,7 +95,7 @@ def _asks(group: List[TraceEvent]) -> bool:
     for item in group:
         if item.node == "act" and not item.error:
             guard_stopped = item.summary.startswith("Wächter:") and "guard" in item.data  # the action was not run
-            if item.tool == "rueckfrage" or guard_stopped:
+            if item.tool in ("rueckfrage", "teilaussage_fragen") or guard_stopped:  # the model's own questions
                 return True
     return False
 
@@ -116,7 +121,8 @@ def _errors(group: List[TraceEvent]) -> Optional[str]:
 def _ask_detail(group: List[TraceEvent]) -> str:
     act = next((item for item in group if item.node == "act"), None)
     ask = next((item for item in group if item.node == "ask"), None)
-    if act is not None and act.tool != "rueckfrage":  # the guard's: say what it stopped, then how it went on
+    # the guard's question: say what it stopped, then how it went on; the model's own questions: the ask summary
+    if act is not None and act.tool not in ("rueckfrage", "teilaussage_fragen"):
         return " · ".join(_flat(item.summary) for item in (act, ask) if item is not None and item.summary)
     return _flat((ask or act or group[-1]).summary)
 
@@ -188,6 +194,15 @@ def question_text(events: Sequence[TraceEvent]) -> str:
     return TEXT_QUESTION
 
 
+def statement_choices(turn: Any) -> List[str]:
+    """The statements of a compound claim the model asks to choose from (`teilaussage_fragen`), one button each, in
+    its order; empty for every other turn (a vote question, a `Pending`, a verdict, an exception, None). A chosen
+    statement is checked as a new claim. They are the model's text: the app shows them escaped."""
+    if getattr(turn, "outcome", None) != "rueckfrage":
+        return []
+    return [text for text in getattr(turn, "statements", None) or [] if isinstance(text, str)]
+
+
 def outcome_view(result: "AgentResult") -> OutcomeView:
     """How the result is announced: verdicts for the three that judge the claim, states for the others."""
     outcome = result.outcome
@@ -197,6 +212,8 @@ def outcome_view(result: "AgentResult") -> OutcomeView:
         return OutcomeView("verdict", TITLE_CONTRADICTED, TEXT_CONTRADICTED, "warn")
     if outcome == "nicht_belegt":
         return OutcomeView("verdict", TITLE_NOT_PROVEN, TEXT_NOT_PROVEN, "info")
+    if outcome == "rueckfrage" and statement_choices(result):
+        return OutcomeView("state", TITLE_STATEMENT, TEXT_STATEMENT, "info")
     if outcome == "rueckfrage":
         return OutcomeView("state", TITLE_QUESTION, TEXT_QUESTION, "info")
     if outcome == "quelle_fehlt":

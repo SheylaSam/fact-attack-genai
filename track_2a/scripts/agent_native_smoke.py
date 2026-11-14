@@ -1,8 +1,8 @@
 """Capped real smoke of native tool calling with `tool_choice="required"` and of the completion cap.
 
 Two questions, four HTTP requests, counted on ONE `RequestBudget(limit=4)` with a journal (fsync before every send, SDK
-retries off). The prompt is the graph's real one (`prompts.system_prompt`), the tools are the six real `TOOL_SPECS`,
-offered in every situation.
+retries off). The prompt is the graph's real one (`prompts.system_prompt`), the tools are the real `TOOL_SPECS`
+(seven since stage 5), offered in every situation.
 
 | No. | Mode            | Situation | Purpose                                          |
 |-----|-----------------|-----------|--------------------------------------------------|
@@ -230,7 +230,7 @@ def build_report(rows: List[dict], budget: RequestBudget, journal: Path, stopped
         "journal": _display(journal),
         "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "prompt": "prompts.system_prompt() of the agent graph; request 1 appends decider.format_instruction(TOOL_SPECS), "
-                  "requests 2-4 pass the six TOOL_SPECS to bind_tools(tool_choice='required')",
+                  "requests 2-4 pass all TOOL_SPECS to bind_tools(tool_choice='required')",
         "history_source": "Observations are real stage-3 AgentTools outputs over the real source index (offline, mock "
                           "engine), hard-coded; suche_passagen without anfrage",
         "situations": [{"id": s.id, "description": s.description, "claim": s.claim, "expected_tool": s.expected_tool,

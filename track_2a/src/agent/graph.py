@@ -4,14 +4,14 @@
                           ├─→ verify → check_evidence ─┬─→ finish → END
                           │                            └─→ nachsuche → decide (one search step) → act
                           │                                  └─→ verify (new passages, once) → check_evidence → finish
-                          ├─→ ask → finish (rueckfrage, from the guard or from the model)
+                          ├─→ ask → finish (rueckfrage, from the guard or from the model; teilaussage_fragen)
                           └─→ finish (quelle_fehlt, technical error)
 
 * `decide` asks the decider for the next action; every answer is one step (`steps`).
-* `act` runs a search tool, or accepts a terminal action (`pruefen`, `rueckfrage`, `quelle_fehlt`) after validating
-  its arguments and resolving every vote id with `AgentTools.check_vote_id`. An invalid action, invalid arguments or a
-  rejected terminal action is fed back to the decider as an observation and is a search step. A failed tool ends the
-  run as `technischer_fehler`.
+* `act` runs a search tool, or accepts a terminal action (`pruefen`, `rueckfrage`, `teilaussage_fragen`,
+  `quelle_fehlt`) after validating its arguments and resolving every vote id with `AgentTools.check_vote_id`. An
+  invalid action, invalid arguments or a rejected terminal action is fed back to the decider as an observation and is
+  a search step. A failed tool ends the run as `technischer_fehler`.
 * The guard sits in `act`: without a fixed vote, before every vote-bound action (`suche_passagen`,
   `suche_passagen_vektor`, `pruefen`, with valid arguments and a known vote id) it looks at the vote ranking of the
   claim's own wording (`AgentTools.claim_assessment`, never the model's query; searched once, then cached). If the
@@ -25,6 +25,10 @@
   vote (`AgentTools.fix_vote`), swaps the system message for the fixed-vote prompt, answers the intercepted action
   with the choice, restores the search budget and continues at `decide`. Everything with side effects sits after the
   `interrupt`: a node that interrupts runs again from its top on resume.
+* `teilaussage_fragen` (a compound claim: which of its 2-4 statements to check) is a question of the model that ends
+  the run in both modes: `ask` sets `rueckfrage` with `statements` and never interrupts. Checking a statement is a new
+  check with it as the claim, never a resume. Unlike `quelle_fehlt` it needs no search before (the claim itself shows
+  whether it is compound), and the guard does not judge it (it names no vote).
 * `quelle_fehlt` is accepted only after a search: without a fixed vote after a `suche_vorlagen` without error, with
   a fixed vote after a passage search. Otherwise it is rejected like any invalid action.
 * At most `max_steps` search steps. After them the decider is asked once more and offered only the terminal tools; if
@@ -77,6 +81,9 @@ Outcome = Literal["gestuetzt", "widersprochen", "nicht_belegt", "rueckfrage", "q
 LABEL_OUTCOMES: Dict[int, str] = {0: "gestuetzt", 1: "nicht_belegt", 2: "widersprochen"}
 DISCARDED_NOTE = "Urteil ohne prüfbaren Beleg verworfen"
 QUESTION_REASON = "Mehrere Vorlagen passen zur Behauptung, und sie lässt nicht erkennen, welche gemeint ist."
+STATEMENT_REASON = ("Die Behauptung verbindet mehrere Aussagen, die einzeln verschieden ausfallen können. Welche "
+                    "Teilaussage geprüft werden soll, ist offen; jede wird als eigene Behauptung geprüft.")
+STATEMENT_TOOL = "teilaussage_fragen"
 MISMATCH_REASON = ("Die Behauptung passt am besten zur Vorlage «{top}», die Aktion des Modells nennt aber die "
                    "Vorlage «{chosen}». Es ist nicht klar, welche gemeint ist.")
 DISCARDED_REASON = ("Die Prüfung ergab «{verdict}», aber kein Zitat steht so im PDF-Text der angegebenen Seite. "
@@ -137,6 +144,7 @@ class AgentResult:
     steps: int = 0
     asked_by: Optional[Literal["guard", "model"]] = None  # who asked back; only with outcome "rueckfrage"
     checks: int = 0  # evidence checks that ran (verify calls): 0, 1 or 2
+    statements: List[str] = field(default_factory=list)  # teilaussage_fragen: the statements to choose from, else []
 
 
 class _State(TypedDict, total=False):
@@ -168,6 +176,7 @@ class _State(TypedDict, total=False):
     evidence: List[EvidenceItem]
     question: str
     options: List[VoteRef]
+    statements: List[str]  # the statements of teilaussage_fragen: `ask` ends the run with them, it never pauses
     last_vote: VoteRef  # session memory: the person's last chosen vote; the question may be answered with it too
     reasoning: str
     note: str
@@ -467,6 +476,11 @@ class _Nodes:
                      "ask_data": {"options": [{"vote_id": o.vote_id, "title": o.title, "date": o.date}
                                               for o in options]}, "route": "ask"},
                     f"Rückfrage mit {len(options)} Optionen: {', '.join(o.vote_id for o in options)}")
+        if action.tool == STATEMENT_TOOL:  # no search needed: the claim itself shows whether it is compound
+            statements = list(args["teilaussagen"])
+            return ({"question": args["frage"], "options": [], "statements": statements, "asked_by": "model",
+                     "ask_data": {"statements": statements}, "ask_reason": STATEMENT_REASON, "route": "ask"},
+                    f"Rückfrage nach der Teilaussage mit {len(statements)} Teilaussagen")
         if self.tools.fixed_vote_id is None and not state.get("vote_searches", 0):
             raise ValueError(NO_SEARCH_YET)
         if self.tools.fixed_vote_id is not None and not state.get("passage_searches", 0):
@@ -476,10 +490,16 @@ class _Nodes:
 
     def ask(self, state: _State) -> dict:
         """The only node that sets the outcome `rueckfrage`; in interactive mode it pauses for the answer and goes on
-        with the chosen vote instead."""
+        with the chosen vote instead. The question for a statement (`statements`) ends the run in both modes."""
         options, step = state["options"], state["steps"]
         asked_by = state.get("asked_by", "model")
         started = time.perf_counter()
+        statements = state.get("statements") or []
+        if statements:  # answered by a new check of the chosen statement, never by a resume: no interrupt
+            self.emit(step, "ask", started, tool=STATEMENT_TOOL, args={"teilaussagen": list(statements)},
+                      data=state.get("ask_data"),
+                      summary=f"Rückfrage (Modell) nach der Teilaussage: {len(statements)} Teilaussagen")
+            return {"outcome": "rueckfrage", "reasoning": state.get("ask_reason", STATEMENT_REASON), "route": "finish"}
         ids = [option.vote_id for option in options]
         if not self.interactive:
             who = "Wächter" if asked_by == "guard" else "Modell"
@@ -610,7 +630,9 @@ class _Nodes:
         if error is not None:
             outcome = "technischer_fehler"
         summary = f"Ergebnis: {outcome}"
-        if outcome == "rueckfrage":
+        if outcome == "rueckfrage" and state.get("statements"):
+            summary += f", {len(state['statements'])} Teilaussagen"
+        elif outcome == "rueckfrage":
             summary += f", {len(state.get('options', []))} Optionen"
         elif outcome in ("gestuetzt", "widersprochen"):
             summary += f", {len(state.get('evidence', []))} Belege"
@@ -671,6 +693,7 @@ def _result(state: dict, events: List[TraceEvent]) -> AgentResult:
     return AgentResult(outcome=state["outcome"], evidence=list(state.get("evidence", [])),
                        question=state.get("question") if asked else None,
                        options=list(state.get("options", [])) if asked else [],
+                       statements=list(state.get("statements") or []) if asked else [],
                        reasoning=state.get("reasoning", ""), note=state.get("note"),
                        asked_by=state.get("asked_by") if asked else None, **common)
 

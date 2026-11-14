@@ -61,6 +61,20 @@ class AgentSessionTests(unittest.TestCase):
         self.assertEqual((result.outcome, result.vote), ('gestuetzt', V1))
         self.assertIsNone(clear.pending)
 
+    def test_a_statement_question_is_a_result_and_leaves_nothing_to_answer(self):
+        parts = ['Die Untermiete braucht eine schriftliche Zustimmung.', 'Die Kündigung wird leichter.']
+        decider = PresetDecider(act('teilaussage_fragen', frage='Welche Teilaussage?', teilaussagen=parts))
+        session, tools, engine = make_session(decider)  # CLOSE: a vote-bound action would be asked about first
+        turn = session.start(CLAIM)
+        self.assertIsInstance(turn, AgentResult)
+        self.assertNotIsInstance(turn, Pending)
+        self.assertEqual((turn.outcome, turn.asked_by, turn.statements), ('rueckfrage', 'model', parts))
+        self.assertIsNone(session.pending)
+        with self.assertRaises(ValueError):
+            session.answer(V1.vote_id)  # a statement is no answer to this check: the app starts a new one
+        self.assertIsNone(tools.fixed_vote_id)
+        self.assertEqual(engine.verify_calls, [])
+
     def test_the_scripted_decider_finishes_the_check_with_the_answered_vote(self):
         session, _, engine = make_session(ScriptedDecider())
         self.assertIsInstance(session.start(CLAIM), Pending)
