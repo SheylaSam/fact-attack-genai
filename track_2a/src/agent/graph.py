@@ -57,7 +57,7 @@ Sync only (`invoke`): the request budget counts only synchronous requests.
 from dataclasses import dataclass, field, replace
 import re
 import time
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, TypedDict, Union
+from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Tuple, TypedDict, Union
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
@@ -209,6 +209,35 @@ def page_texts(engine, pdf, page: int) -> List[str]:
     source = engine.source_page(pdf, page) or {}
     texts = [source.get("text") or ""] + list(source.get("blocks") or [])
     return [text for text in (official_normalize(t) for t in texts if isinstance(t, str)) if text]
+
+
+def valid_evidence(engine, pdf, vote: VoteRef, quotes: Iterable[Tuple[Any, str]]
+                   ) -> Tuple[List[EvidenceItem], List[int]]:
+    """The evidence check: of the (page, quote) pairs, the quotes found verbatim (after `official_normalize`) in the
+    PDF text of their page or of one of its text blocks (`page_texts`), without duplicates, on a page of `vote.pages`
+    only; and the cited pages without readable PDF text, whose quotes cannot be checked.
+
+    The graph's `check_evidence` keeps a verdict only with at least one such quote and no unreadable page; the
+    evaluation runner applies the same function after the run, to every arm alike."""
+    pages: Dict[int, List[str]] = {}
+    seen, items, unreadable = set(), [], []
+    for page, raw in quotes:
+        if type(page) is not int or page < 1:
+            continue
+        quote = _PAGE_PREFIX.sub("", raw)
+        normalized = official_normalize(quote)
+        if not normalized or (page, normalized) in seen:
+            continue
+        if page not in vote.pages:  # a quote of another vote's page is no evidence for this vote
+            continue
+        if page not in pages:
+            pages[page] = page_texts(engine, pdf, page)
+            if not pages[page]:
+                unreadable.append(page)
+        if any(normalized in text for text in pages[page]):
+            seen.add((page, normalized))
+            items.append(EvidenceItem(page=page, quote=quote))
+    return items, sorted(unreadable)
 
 
 class _Nodes:
@@ -599,9 +628,6 @@ class _Nodes:
         return {"phase": "nachsuche", "checked": list(state["passages"]), "first": first,
                 "messages": list(state["messages"]) + exchange, "route": "decide"}
 
-    def _page_texts(self, pdf, page: int) -> List[str]:
-        return page_texts(self.engine, pdf, page)
-
     @staticmethod
     def _given_evidence(prediction: PredictionResult) -> List[EvidenceItem]:
         """The quotes of the check as given (evidence check off): only the engine's page prefix is removed, as in
@@ -614,30 +640,8 @@ class _Nodes:
         return items
 
     def _valid_evidence(self, vote: VoteRef, prediction: PredictionResult) -> Tuple[List[EvidenceItem], List[int]]:
-        """The quotes found verbatim (after `official_normalize`) in the PDF text of their page or of one of its text
-        blocks, without duplicates, on a page of `vote.pages` only; and the cited pages without readable PDF text,
-        whose quotes cannot be checked."""
-        pdf = self.booklet_pdf(vote)
-        pages: Dict[int, List[str]] = {}
-        seen, items, unreadable = set(), [], []
-        for source in prediction.evidence_sources:
-            page = source.page_number
-            if type(page) is not int or page < 1:
-                continue
-            quote = _PAGE_PREFIX.sub("", source.quote)
-            normalized = official_normalize(quote)
-            if not normalized or (page, normalized) in seen:
-                continue
-            if page not in vote.pages:  # a quote of another vote's page is no evidence for this vote
-                continue
-            if page not in pages:
-                pages[page] = self._page_texts(pdf, page)
-                if not pages[page]:
-                    unreadable.append(page)
-            if any(normalized in text for text in pages[page]):
-                seen.add((page, normalized))
-                items.append(EvidenceItem(page=page, quote=quote))
-        return items, sorted(unreadable)
+        return valid_evidence(self.engine, self.booklet_pdf(vote), vote,
+                              [(source.page_number, source.quote) for source in prediction.evidence_sources])
 
     def finish(self, state: _State) -> dict:
         outcome, error = state.get("outcome"), state.get("error")
