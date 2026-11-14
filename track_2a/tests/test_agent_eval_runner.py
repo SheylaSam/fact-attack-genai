@@ -159,6 +159,27 @@ class CampaignTests(unittest.TestCase):
             eval_runner.run_campaign('b2', self.cases[:2], build_arm=counting_arm(5, []), max_requests=24,
                                      out_dir=self.out, resume=True)
 
+    def test_consecutive_technical_errors_stop_the_campaign_but_fault_cases_do_not_count(self):
+        def failing(case, budget):
+            budget.reserve(b'anfrage')
+            return case_run(case, 'technischer_fehler', error='Endpunkt antwortet nicht')
+
+        def fault_case(case_id):
+            return make_case(case_id, group='spezial', kind='api_ausfall', expected='technischer_fehler',
+                             fault='timeout')
+
+        faults = [fault_case(f'sdev-0{n}') for n in range(1, 5)]
+        runs = eval_runner.run_campaign('b1', faults + [make_case('dev-001')], build_arm=failing, max_requests=60,
+                                        out_dir=self.out / 'fehler')
+        self.assertNotIn(eval_runner.NOT_RUN, [run.outcome for run in runs])  # four expected errors: no stop
+
+        mixed = [make_case('dev-001'), make_case('dev-002'), fault_case('sdev-01'), make_case('dev-003'),
+                 make_case('dev-004')]
+        runs = eval_runner.run_campaign('b1', mixed, build_arm=failing, max_requests=60, out_dir=self.out / 'mix')
+        # the fault case neither counts nor resets: dev-003 is the third error in a row, dev-004 does not run
+        self.assertEqual([run.outcome for run in runs], ['technischer_fehler'] * 4 + [eval_runner.NOT_RUN])
+        self.assertEqual(runs[-1].error, eval_runner.STOPPED_AFTER_ERRORS)
+
     def test_existing_out_dir_without_resume_is_refused(self):
         self.out.mkdir()
         (self.out / 'cases.jsonl').write_text('{"id": "alt"}\n', encoding='utf-8')
@@ -233,6 +254,17 @@ class ArmTests(unittest.TestCase):
         self.assertEqual(invented.outcome, 'widersprochen')  # the outcome is never changed by the post-hoc check
         self.assertFalse(invented.evidence_valid)
 
+    def test_evidence_validity_is_only_for_gestuetzt_and_widersprochen(self):
+        for label, quotes, expected in ((1, [(2, QUOTE)], None),  # nicht_belegt: never judged, even with a quote
+                                        (1, [], None),
+                                        (0, [], False),  # a gestuetzt verdict without evidence is invalid
+                                        (2, [], False),
+                                        (0, [(2, QUOTE)], True)):
+            with self.subTest(label=label, quotes=bool(quotes)):
+                self.out = Path(self.tmp.name) / f'lauf-{label}-{len(quotes)}'
+                [run] = self.run_arm('b0', [make_case()], B0Engine(prediction=make_prediction(label, quotes)))
+                self.assertEqual(run.evidence_valid, expected)
+
     def test_b0_has_no_result_for_ohne_abstimmung_cases(self):
         engine = B0Engine()
         case = make_case('sdev-07', vote_id=None, group='spezial', kind='ohne_abstimmung', expected='quelle_fehlt')
@@ -257,6 +289,7 @@ class ArmTests(unittest.TestCase):
             [b2] = self.run_arm('b2', [make_case()], FakeEngine(prediction=invented))
         self.assertEqual([(kw['nachsuche'], kw['evidence_check']) for kw in sessions], [(True, True), (False, False)])
         self.assertEqual(b1.outcome, 'nicht_belegt')  # B1 discards the verdict without a valid quote
+        self.assertIsNone(b1.evidence_valid)  # nicht_belegt: no evidence judgement in any arm
         self.assertEqual(b2.outcome, 'gestuetzt')  # B2 takes the quote over unchecked
         self.assertFalse(b2.evidence_valid)  # the same check after the run, for the metric only
         self.assertEqual((b1.final_vote_id, b2.final_vote_id), (V1.vote_id, V1.vote_id))

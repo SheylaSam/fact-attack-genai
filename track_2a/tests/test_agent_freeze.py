@@ -97,17 +97,20 @@ class FreezeTests(unittest.TestCase):
         eval_runner.write_freeze(self.freeze, self.dev_run())
         return self.freeze
 
-    def run_script(self, *argv):
+    def run_script(self, *argv, arm='b1', engine_factory=FakeEngine):
         @contextlib.contextmanager
         def fake_wiring(mock, trace_dir):
             yield eval_runner.Wiring(index=FakeIndex(CLEAR), booklets_dir=BOOKLETS, mock=True,
-                                     engine_factory=FakeEngine, trace_dir=trace_dir)
+                                     engine_factory=engine_factory, trace_dir=trace_dir)
 
         stdout, stderr = io.StringIO(), io.StringIO()
         with patch.object(self.script, 'open_wiring', fake_wiring), contextlib.redirect_stdout(stdout), \
                 contextlib.redirect_stderr(stderr):
-            code = self.script.main(['--arm', 'b1', '--max-requests', '24', '--mock', *argv])
+            code = self.script.main(['--arm', arm, '--max-requests', '24', '--mock', *argv])
         return code, stdout.getvalue() + stderr.getvalue()
+
+    def recorded_runs(self):
+        return json.loads(self.freeze.read_text(encoding='utf-8'))['test_runs']
 
     def split_args(self, out, freeze=None):
         return ['--split', 'test', '--out', str(out)] + (['--freeze', str(freeze)] if freeze else [])
@@ -126,7 +129,7 @@ class FreezeTests(unittest.TestCase):
             self.freeze.write_text(json.dumps(stale), encoding='utf-8')
             code, output = self.run_script(*self.split_args(self.root / 'c', self.freeze))
             self.assertEqual(code, 1)
-            self.assertNotIn('test_run', json.loads(self.freeze.read_text(encoding='utf-8')))
+            self.assertEqual(self.recorded_runs(), {})
             load.assert_not_called()
         for name in ('a', 'b', 'c'):
             self.assertFalse((self.root / name).exists())
@@ -134,22 +137,93 @@ class FreezeTests(unittest.TestCase):
 
     def test_test_split_refuses_a_second_run(self):
         self.frozen()
+        first = self.root / 'erster'
         with patch.object(eval_runner, 'load_testset', wraps=eval_runner.load_testset) as load:
-            code, output = self.run_script(*self.split_args(self.root / 'erster', self.freeze))
+            code, output = self.run_script(*self.split_args(first, self.freeze))
             self.assertEqual(code, 0, output)
             code, output = self.run_script(*self.split_args(self.root / 'zweiter', self.freeze))
-            self.assertEqual(code, 1)
+            self.assertEqual(code, 1)  # a second new run of the same arm
+            self.assertIn('bereits', output)
         self.assertEqual(load.call_count, 1)
         self.assertFalse((self.root / 'zweiter').exists())
-        self.assertIn('test_run', json.loads(self.freeze.read_text(encoding='utf-8')))
+        self.assertEqual(self.recorded_runs()['b1']['out_dir'], str(first.resolve()))
         with self.assertRaises(eval_runner.FreezeError):
-            eval_runner.mark_test_run(self.freeze)
+            eval_runner.mark_test_run(self.freeze, 'b1', out_dir=self.root / 'dritter')
         # the marker file holds even if the entry is removed from the freeze file
         cleaned = json.loads(self.freeze.read_text(encoding='utf-8'))
-        cleaned.pop('test_run')
+        cleaned['test_runs'] = {}
         self.freeze.write_text(json.dumps(cleaned), encoding='utf-8')
         with self.assertRaises(eval_runner.FreezeError):
+            eval_runner.require_freeze(self.freeze, 'b1')
+        with self.assertRaises(eval_runner.FreezeError):  # without an arm: no arm may have run
             eval_runner.require_freeze(self.freeze)
+        self.assertEqual(self.opened, [])
+
+    def test_each_arm_runs_the_test_split_once(self):
+        self.frozen()
+        for arm in ('b1', 'b2', 'b0'):
+            with self.subTest(arm=arm):
+                code, output = self.run_script(*self.split_args(self.root / arm, self.freeze), arm=arm)
+                self.assertEqual(code, 0, output)
+                code, _ = self.run_script(*self.split_args(self.root / f'{arm}-nochmal', self.freeze), arm=arm)
+                self.assertEqual(code, 1)
+                self.assertFalse((self.root / f'{arm}-nochmal').exists())
+        self.assertEqual(sorted(self.recorded_runs()), ['b0', 'b1', 'b2'])
+        self.assertEqual(sorted(path.name for path in self.freeze.parent.glob('*.test_run.*')),
+                         ['config_freeze.json.test_run.b0', 'config_freeze.json.test_run.b1',
+                          'config_freeze.json.test_run.b2'])
+        self.assertEqual(self.opened, [])
+
+    def test_aborted_test_run_is_only_resumed_in_its_own_out_dir(self):
+        self.frozen()
+        out = self.root / 'test-b1'
+        made = []
+
+        def failing_second_engine():
+            made.append(True)
+            if len(made) == 2:  # the check of the second case breaks off the campaign
+                raise RuntimeError('Abbruch')
+            return FakeEngine()
+
+        with patch.object(eval_runner, 'load_testset', wraps=eval_runner.load_testset) as load:
+            code, output = self.run_script(*self.split_args(out, self.freeze),
+                                           engine_factory=failing_second_engine)
+            self.assertEqual(code, 1, output)
+            self.assertEqual([record['id'] for record in records(out)], self.test_ids[:1])
+
+            code, _ = self.run_script('--resume', *self.split_args(out, self.freeze), arm='b2')
+            self.assertEqual(code, 1)  # no test run of b2 to resume
+            other = self.root / 'anderswo'
+            code, output = self.run_script('--resume', *self.split_args(other, self.freeze))
+            self.assertEqual(code, 1)  # b1's run belongs to its own out_dir
+            self.assertFalse(other.exists())
+            code, _ = self.run_script(*self.split_args(out, self.freeze))
+            self.assertEqual(code, 1)  # a new run into the same folder is no resume
+
+            resumed = []
+
+            def counting_engine():
+                resumed.append(True)
+                return FakeEngine()
+
+            code, output = self.run_script('--resume', *self.split_args(out, self.freeze),
+                                           engine_factory=counting_engine)
+            self.assertEqual(code, 0, output)
+        self.assertEqual(len(resumed), 1)  # only test-002 was checked
+        self.assertEqual([record['id'] for record in records(out)], self.test_ids)  # test-001 not checked again
+        summary = json.loads((out / 'summary.json').read_text(encoding='utf-8'))
+        self.assertEqual((summary['finished'], summary['cases']), (2, 2))
+        self.assertEqual(load.call_count, 2)  # the first run and the resume, nothing else
+        self.assertEqual(list(self.recorded_runs()), ['b1'])
+
+        self.git.status = ' M track_2a/src/agent/graph.py\0'  # a dirty tree or a changed configuration blocks too
+        with self.assertRaises(eval_runner.FreezeError):
+            eval_runner.require_freeze(self.freeze, 'b1', resume_out=out)
+        self.git.status = ''
+        with patch.object(settings, 'GUARD_SCORE_MARGIN', 0.02), self.assertRaises(eval_runner.FreezeError):
+            eval_runner.require_freeze(self.freeze, 'b1', resume_out=out)
+        self.assertEqual(eval_runner.require_freeze(self.freeze, 'b1', resume_out=out)['test_runs']['b1']['arm'],
+                         'b1')
         self.assertEqual(self.opened, [])
 
     def test_changed_prompt_or_threshold_changes_the_hash_and_blocks_the_test_split(self):
@@ -175,7 +249,7 @@ class FreezeTests(unittest.TestCase):
             self.assertNotEqual(eval_runner.config_hash(), frozen_hash)
         self.git.src_tree = 'baum-src-2'  # a new commit under src/
         self.assertNotEqual(eval_runner.config_hash(), frozen_hash)
-        self.assertNotIn('test_run', json.loads(self.freeze.read_text(encoding='utf-8')))
+        self.assertEqual(self.recorded_runs(), {})
 
     def test_dirty_tree_blocks_the_freeze(self):
         dev = self.dev_run()
@@ -199,6 +273,25 @@ class FreezeTests(unittest.TestCase):
         with self.assertRaises(eval_runner.FreezeError):
             eval_runner.require_freeze(self.freeze)
 
+    def test_no_secret_enters_the_hash_input_or_the_freeze_file(self):
+        key = 'sk-geheim-0123456789abcdef'
+        env_file = str(self.root / 'geheim' / 'apertus.env')
+        with patch.object(eval_runner.config, 'LLM_API_KEY', key), \
+                patch.dict(os.environ, {'FACT_ATTACK_ENV_FILE': env_file}), \
+                patch.object(eval_runner.config, 'A_PROMPT', f'Prompt mit {key}'), \
+                patch.object(eval_runner.config, 'B_PROMPT', env_file):  # secrets under harmless names too
+            snapshot = json.dumps(eval_runner._settings_snapshot(), default=str)
+            components = json.dumps(eval_runner.config_components(), default=str)
+            self.frozen()
+            frozen = self.freeze.read_text(encoding='utf-8')
+            for secret in (key, env_file, 'apertus.env'):
+                for text in (snapshot, components, frozen):
+                    self.assertNotIn(secret, text)
+            self.assertNotIn('"src.config.LLM_API_KEY"', snapshot)
+            self.assertNotIn('"src.config.LLM_BASE_URL"', snapshot)
+            self.assertNotIn('"src.config.A_PROMPT"', snapshot)  # its value contains the key: left out
+        self.assertIn('"src.config.LLM_NAME"', snapshot)
+
     def test_freeze_needs_a_real_dev_evaluation_with_this_configuration(self):
         with self.assertRaises(eval_runner.FreezeError):
             eval_runner.write_freeze(self.freeze, self.root / 'kein-lauf')
@@ -221,8 +314,7 @@ class FreezeTests(unittest.TestCase):
         self.assertEqual(load.call_args.kwargs['cases_path'], self.cases_path)
         self.assertTrue(load.call_args.kwargs['allow_test'])
         self.assertEqual([record['id'] for record in records(out)], self.test_ids)
-        freeze = json.loads(self.freeze.read_text(encoding='utf-8'))
-        self.assertIn('test_run', freeze)
+        self.assertEqual(list(self.recorded_runs()), ['b1'])
         summary = json.loads((out / 'summary.json').read_text(encoding='utf-8'))
         self.assertEqual((summary['split'], summary['mock'], summary['finished']), ('test', True, 2))
         self.assertEqual(self.opened, [])  # the real data/genai/testset/cases.jsonl was never opened
@@ -235,7 +327,7 @@ class FreezeTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('--mock', output)
         load.assert_not_called()
-        self.assertNotIn('test_run', json.loads(self.freeze.read_text(encoding='utf-8')))
+        self.assertEqual(self.recorded_runs(), {})
         self.assertEqual(self.opened, [])
 
 

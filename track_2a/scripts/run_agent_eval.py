@@ -8,10 +8,12 @@ Usage (from track_2a/):
 * Without `--mock` the run is paid: it needs `FACT_ATTACK_ENV_FILE` (never printed) and an API key, and
   `--max-requests` may not exceed the per-check cap (`settings.MAX_REQUESTS`) times the number of cases.
 * `--max-requests` is the cap of the whole campaign; `--resume` continues a run in DIR and counts what it spent.
-* `--split test` needs `--freeze` (scripts/freeze_config.py). The order is fixed: everything that can fail is checked
-  first, then `require_freeze`, `mark_test_run` (synced to disk) and only then the test cases are read. The test run
-  happens once: no second run, no `--resume`. A mock run on the real test split is refused (it would use up the
-  one test run); a mock rehearsal works on a synthetic test set only.
+* `--split test` needs `--freeze` (scripts/freeze_config.py) and runs once per arm. The order is fixed: everything
+  that can fail is checked first, then `require_freeze`, `mark_test_run` for the arm (synced to disk, with DIR) and
+  only then the test cases are read. A second new run of the same arm is refused. After an abort the run of an arm is
+  only resumed (`--resume`, same arm, same DIR, same configuration on a clean tree), never evaluated anew. A mock
+  run on the real test split is refused (it would use up the arm's one test run); a mock rehearsal works on a
+  synthetic test set only.
 * `--split regression` comes with the regression arms.
 
 Results in DIR: `cases.jsonl` (one record per case), `journals/` (one request journal per check), `traces/`,
@@ -93,8 +95,6 @@ def _run(args: argparse.Namespace) -> int:
     if args.split == "test":
         if args.freeze is None:
             raise _Abort("--split test verlangt --freeze (scripts/freeze_config.py).")
-        if args.resume:
-            raise _Abort("Der Testteil läuft genau einmal; --resume ist dafür nicht erlaubt.")
         if args.mock and Path(eval_runner.CASES_PATH).resolve() == testset_module.CASES_PATH.resolve():
             raise _Abort("--mock auf dem echten Testteil würde den einmaligen Testlauf verbrauchen. Probeläufe nur "
                          "auf einem synthetischen Testset.")
@@ -104,14 +104,14 @@ def _run(args: argparse.Namespace) -> int:
     if args.split == "test":
         expected = eval_runner.test_case_count()  # from the manifest: no test case is read before the freeze check
         _check_cap(args, expected)
-        eval_runner.require_freeze(args.freeze)
+        eval_runner.require_freeze(args.freeze, args.arm, resume_out=args.out if args.resume else None)
         with open_wiring(args.mock, args.out / eval_runner.TRACE_DIR) as wiring:
             build = eval_runner.make_arm(args.arm, wiring)
-            cases = eval_runner.open_test_split(args.freeze, out_dir=args.out)
+            cases = eval_runner.open_test_split(args.freeze, args.arm, out_dir=args.out, resume=args.resume)
             if len(cases) != expected:
                 raise _Abort(f"Der Testteil hat {len(cases)} Fälle, das Manifest nennt {expected}.")
             runs = eval_runner.run_campaign(args.arm, cases, build_arm=build, max_requests=args.max_requests,
-                                            out_dir=args.out)
+                                            out_dir=args.out, resume=args.resume)
     else:
         cases = eval_runner.load_dev()
         _check_cap(args, len(cases))
@@ -141,7 +141,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"Fehler: {type(exc).__name__}: {eval_runner.redact(exc)}", file=sys.stderr)
         if args.out.is_dir():
             print(f"Bisher gesendete Anfragen stehen in {args.out / eval_runner.JOURNAL_DIR}; fortsetzen mit "
-                  "--resume (nicht für den Testteil).", file=sys.stderr)
+                  "--resume (Testteil: gleicher Arm, gleicher Ordner).", file=sys.stderr)
     return EXIT_REFUSED
 
 

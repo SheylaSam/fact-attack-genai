@@ -12,8 +12,9 @@ Campaign (`run_campaign`): one arm over a list of cases, one check per case.
   fsynced after each case. An existing `out_dir` is refused unless `resume`; `resume` skips the cases already in
   `cases.jsonl`, rebuilds their `CaseRun`s and counts the requests spent so far (the larger of the records' sum and
   the journal lines, so a check that crashed before its record counts too) toward the cap.
-* After `STOP_AFTER_ERRORS` technical errors in a row (cases without an injected fault) the campaign stops and marks
-  the rest `NOT_RUN` with `STOPPED_AFTER_ERRORS`: a dead endpoint does not eat the whole cap.
+* After `STOP_AFTER_ERRORS` technical errors in a row the campaign stops and marks the rest `NOT_RUN` with
+  `STOPPED_AFTER_ERRORS`: a dead endpoint does not eat the whole cap. A case with an injected fault neither counts
+  toward the streak nor resets it (its technical error is expected).
 * The runner is generic over the case: it needs `.id` (and reads `.fault` if there is one). The arm builder makes
   the `CaseRun`. Arms are registered by name in `ARMS`.
 
@@ -26,20 +27,25 @@ Arms (`make_arm`), each check with new tools, a new engine, a new budget and a n
 * B2: B1 without Nachsuche and without evidence check.
 * A case with `fault` gets `faults.faulty_transport` beneath its budget; no other case does. A fault case that sent no
   request is recorded as it came out, with `error = FAULT_NOT_TRIGGERED`.
-* `evidence_valid` is computed after the run for every verdict with the graph's own check (`graph.valid_evidence`), the
-  same for every arm: True if the graph would keep the verdict (at least one quote verbatim on a page of the vote, no
-  cited page without text); a verdict without evidence is False; None for a non-verdict. The outcome never changes.
+* `evidence_valid` is computed after the run for `gestuetzt` and `widersprochen` with the graph's own check
+  (`graph.valid_evidence`), the same for every arm: True if the graph would keep the verdict (at least one quote
+  verbatim on a page of the vote, no cited page without text); such a verdict without evidence is False. None for
+  `nicht_belegt` and every non-verdict, in every arm. The outcome never changes.
 * `error` is set (short, key and key file redacted) whenever the outcome is `technischer_fehler`.
 
 Freeze: `config_hash` over the git tree SHAs of track_2a/src and track_2a/scripts, the model name, the guard
 thresholds, `TOOL_MODE`, the SHA-256 of prompts.py, the testset SHA of the manifest and a snapshot of the non-secret
 scalar settings of `src.config` and `src.agent.settings`. `write_freeze` writes the freeze file once, on a clean tree,
-after a real dev evaluation with this configuration. `open_test_split` is the only path to the test split:
-`require_freeze`, `mark_test_run` (fsync), then `load_testset("test", allow_test=True)`.
+after a real dev evaluation with this configuration. `open_test_split` is the only path to the test split. The test
+split runs once per arm (one campaign per arm and freeze): a new run is `require_freeze`, `mark_test_run` (a marker per
+arm, created exclusively, and the entry `test_runs[arm]` with the out_dir, both fsynced), then
+`load_testset("test", allow_test=True)`. After an abort the run of that arm is only resumed, in the same out_dir, never
+evaluated anew.
 """
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 import functools
+import glob
 import hashlib
 import json
 import os
@@ -61,7 +67,7 @@ from src.agent.graph import LABEL_OUTCOMES, valid_evidence
 from src.agent.scripted_user import drive
 from src.agent.search_backend import LocalBackend
 from src.agent.session import AgentSession, Pending
-from src.agent.testset import CASES_PATH, MANIFEST_PATH, VERDICTS, load_testset
+from src.agent.testset import CASES_PATH, MANIFEST_PATH, load_testset
 from src.agent.tools import AgentTools
 from src.agent.trace import Tracer
 from src.text_utils import guess_language
@@ -72,6 +78,7 @@ CAP_REACHED = "not_run_cap_reached"
 STOPPED_AFTER_ERRORS = "not_run_after_errors"
 FAULT_NOT_TRIGGERED = "fault_not_triggered"
 STOP_AFTER_ERRORS = 3
+EVIDENCE_OUTCOMES = ("gestuetzt", "widersprochen")  # the verdicts whose evidence is checked
 ERROR_CHARS = 200
 
 CASES_NAME, CAMPAIGN_NAME, NOT_RUN_NAME, SUMMARY_NAME = "cases.jsonl", "campaign.json", "not_run.json", "summary.json"
@@ -188,9 +195,10 @@ def _close(engine) -> None:
 
 def evidence_validity(outcome: str, vote, quotes: Sequence[Tuple[Any, str]], engine, booklets_dir: Path
                       ) -> Optional[bool]:
-    """Post-hoc evidence check of a run, the same for every arm: None for a non-verdict, False for a verdict without
-    vote or without quotes, else whether the graph's check (`graph.valid_evidence`) would keep the verdict."""
-    if outcome not in VERDICTS:
+    """Post-hoc evidence check of a run, the same for every arm: None unless the outcome is gestuetzt or
+    widersprochen (`nicht_belegt` and every non-verdict), False for such a verdict without vote or without quotes,
+    else whether the graph's check (`graph.valid_evidence`) would keep the verdict."""
+    if outcome not in EVIDENCE_OUTCOMES:
         return None
     if vote is None or not quotes:
         return False
@@ -472,7 +480,9 @@ def run_campaign(arm: str, cases: Sequence[Any], *, build_arm: ArmBuilder, max_r
             results.flush()
             os.fsync(results.fileno())
             runs.append(run)
-            if run.outcome == "technischer_fehler" and not getattr(case, "fault", None):
+            if getattr(case, "fault", None):  # its technical error is expected: neither counts nor resets
+                continue
+            if run.outcome == "technischer_fehler":
                 errors_in_row += 1
                 if errors_in_row >= STOP_AFTER_ERRORS:
                     stop_reason = STOPPED_AFTER_ERRORS
@@ -515,15 +525,20 @@ def tree_changes() -> List[str]:
 
 def _settings_snapshot() -> Dict[str, Any]:
     """The non-secret scalar settings of `src.config` and `src.agent.settings` (environment overrides included);
-    names with KEY, TOKEN, SECRET, URL, paths and directories are left out."""
+    names with KEY, TOKEN, SECRET, PASSW, ENV_FILE, URL, paths and directories are left out, and so is any value that
+    contains the API key or the key file's path."""
+    secrets = [value for value in (config.LLM_API_KEY, os.environ.get("FACT_ATTACK_ENV_FILE")) if value]
     snapshot = {}
     for module in (config, settings):
         for name, value in sorted(vars(module).items()):
             if not name.isupper() or name.startswith("_") or _SECRET_NAME.search(name):
                 continue
-            if isinstance(value, _SCALARS) or (isinstance(value, (list, tuple))
-                                               and all(isinstance(item, _SCALARS) for item in value)):
-                snapshot[f"{module.__name__}.{name}"] = list(value) if isinstance(value, tuple) else value
+            if not (isinstance(value, _SCALARS) or (isinstance(value, (list, tuple))
+                                                    and all(isinstance(item, _SCALARS) for item in value))):
+                continue
+            if any(secret in json.dumps(value, default=str) for secret in secrets):  # never hash a secret value
+                continue
+            snapshot[f"{module.__name__}.{name}"] = list(value) if isinstance(value, tuple) else value
     return snapshot
 
 
@@ -565,8 +580,16 @@ def config_hash() -> str:
     return _components_hash(config_components())
 
 
-def _marker(path: Path) -> Path:
-    return path.with_name(path.name + ".test_run")
+def _marker(path: Path, arm: str) -> Path:
+    return path.with_name(f"{path.name}.test_run.{arm}")
+
+
+def _markers(path: Path) -> List[Path]:
+    return sorted(path.parent.glob(glob.escape(path.name) + ".test_run.*"))
+
+
+def _out_key(out_dir: Path) -> str:
+    return str(Path(out_dir).resolve())
 
 
 def _read_freeze(path: Path) -> dict:
@@ -579,7 +602,25 @@ def _read_freeze(path: Path) -> dict:
         raise FreezeError(f"Die Freeze-Datei {path} ist nicht lesbar.") from None
     if not isinstance(freeze, dict) or not isinstance(freeze.get("config_hash"), str):
         raise FreezeError(f"Die Freeze-Datei {path} hat keinen config_hash.")
+    if not isinstance(freeze.get("test_runs", {}), dict):
+        raise FreezeError(f"Die Freeze-Datei {path} hat ein unlesbares test_runs.")
     return freeze
+
+
+def _test_run(path: Path, freeze: dict, arm: str) -> Optional[dict]:
+    """The recorded test run of `arm`, or None. The marker file (written first, exclusively) and the entry in the
+    freeze file are both records; if both exist they must name the same out_dir."""
+    entry = freeze.get("test_runs", {}).get(arm)
+    marker = _marker(path, arm)
+    marked = None
+    if marker.exists():
+        try:
+            marked = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            raise FreezeError(f"Der Marker {marker.name} ist nicht lesbar; bitte prüfen.") from None
+    if entry is not None and marked is not None and entry.get("out_dir") != marked.get("out_dir"):
+        raise FreezeError(f"Freeze-Eintrag und Marker des Arms {arm} nennen verschiedene Ordner; bitte prüfen.")
+    return entry if entry is not None else marked
 
 
 def _require_clean_tree() -> None:
@@ -613,7 +654,7 @@ def write_freeze(path: Path, dev_run: Path) -> dict:
     """Writes the freeze file once (never overwritten): clean tree, and a real dev evaluation in `dev_run` that ran
     with this configuration on a clean tree. Returns what was written."""
     path = Path(path)
-    if path.exists() or _marker(path).exists():
+    if path.exists() or _markers(path):
         raise FreezeError(f"{path} existiert schon; ein Freeze wird nie überschrieben.")
     _require_clean_tree()
     components = config_components()
@@ -623,7 +664,7 @@ def write_freeze(path: Path, dev_run: Path) -> dict:
               "git_commit": _git("rev-parse", "HEAD").strip(),  # for information only
               "frozen_at": datetime.now(timezone.utc).isoformat(), "dev_run": str(dev_run),
               "dev_run_arm": summary.get("arm"),
-              "dev_run_summary_sha256": _sha256((Path(dev_run) / SUMMARY_NAME).read_bytes())}
+              "dev_run_summary_sha256": _sha256((Path(dev_run) / SUMMARY_NAME).read_bytes()), "test_runs": {}}
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         with path.open("x", encoding="utf-8") as stream:
@@ -636,14 +677,32 @@ def write_freeze(path: Path, dev_run: Path) -> dict:
     return freeze
 
 
-def require_freeze(path: Path) -> dict:
-    """Raises FreezeError if the freeze file is missing, the test split already ran (entry or marker), the tree is
-    not clean or the configuration hash differs; returns the freeze."""
+def require_freeze(path: Path, arm: Optional[str] = None, *, resume_out: Optional[Path] = None) -> dict:
+    """Raises FreezeError unless the freeze allows the run; returns the freeze.
+
+    Always: the freeze file exists, the tree is clean and the configuration hash matches. Then, per arm (one test
+    campaign per arm and freeze):
+    * a new run of `arm` (`resume_out` None): `arm` has no recorded test run (entry or marker);
+    * a resumed run (`resume_out`): `arm` has a recorded test run and it was started in `resume_out`.
+    Without `arm`: no arm may have a recorded test run."""
     path = Path(path)
     freeze = _read_freeze(path)
-    if "test_run" in freeze or _marker(path).exists():
-        raise FreezeError("Der Testteil wurde mit diesem Freeze bereits ausgewertet; ein zweiter Lauf ist nicht "
-                          "erlaubt (Änderungen brauchen ein neues Testset).")
+    if arm is None:
+        if resume_out is not None:
+            raise ValueError("resume_out braucht einen Arm")
+        if freeze.get("test_runs") or _markers(path):
+            raise FreezeError("Mit diesem Freeze wurde der Testteil bereits ausgewertet.")
+    else:
+        _check_arm(arm)
+        recorded = _test_run(path, freeze, arm)
+        if resume_out is None and recorded is not None:
+            raise FreezeError(f"Der Testteil wurde mit Arm {arm} bereits begonnen (Ordner {recorded.get('out_dir')}); "
+                              "ein zweiter Lauf ist nicht erlaubt, nur die Wiederaufnahme dort (--resume).")
+        if resume_out is not None and recorded is None:
+            raise FreezeError(f"Für Arm {arm} gibt es keinen begonnenen Testlauf; --resume ist nicht möglich.")
+        if resume_out is not None and recorded.get("out_dir") != _out_key(resume_out):
+            raise FreezeError(f"Der Testlauf von Arm {arm} gehört zum Ordner {recorded.get('out_dir')}, nicht zu "
+                              f"{resume_out}; fortgesetzt wird nur dort.")
     _require_clean_tree()
     components = config_components()
     if _components_hash(components) != freeze["config_hash"]:
@@ -654,28 +713,37 @@ def require_freeze(path: Path) -> dict:
     return freeze
 
 
-def mark_test_run(path: Path, *, out_dir: Optional[Path] = None) -> None:
-    """Records the test run before its first case: a marker file created exclusively (two runs cannot both get it)
-    and the `test_run` entry in the freeze file, both synced to disk."""
+def mark_test_run(path: Path, arm: str, *, out_dir: Path) -> None:
+    """Records the test run of `arm` before its first case: a marker file per arm, created exclusively (two runs of
+    one arm cannot both get it), and the entry `test_runs[arm]` in the freeze file, both synced to disk. The entry
+    names `out_dir`, the only place the run may be resumed."""
     path = Path(path)
-    freeze = _read_freeze(path)
-    if "test_run" in freeze:
-        raise FreezeError("Der Testteil wurde mit diesem Freeze bereits ausgewertet.")
-    entry = {"started_at": datetime.now(timezone.utc).isoformat(), "out_dir": str(out_dir) if out_dir else None}
+    _check_arm(arm)
+    if _test_run(path, _read_freeze(path), arm) is not None:
+        raise FreezeError(f"Der Testteil wurde mit Arm {arm} bereits begonnen.")
+    entry = {"arm": arm, "started_at": datetime.now(timezone.utc).isoformat(), "out_dir": _out_key(out_dir)}
     try:
-        with _marker(path).open("x", encoding="utf-8") as stream:
+        with _marker(path, arm).open("x", encoding="utf-8") as stream:
             stream.write(json.dumps(entry) + "\n")
             stream.flush()
             os.fsync(stream.fileno())
     except FileExistsError:
-        raise FreezeError("Der Testteil wurde mit diesem Freeze bereits ausgewertet (Marker vorhanden).") from None
-    _write_atomic(path, json.dumps({**freeze, "test_run": entry}, indent=2, ensure_ascii=False) + "\n")
+        raise FreezeError(f"Der Testteil wurde mit Arm {arm} bereits begonnen (Marker vorhanden).") from None
+    _fsync_dir(path.parent)
+    freeze = _read_freeze(path)  # read again right before writing: another arm may have added its entry
+    runs = {**freeze.get("test_runs", {}), arm: entry}
+    _write_atomic(path, json.dumps({**freeze, "test_runs": runs}, indent=2, ensure_ascii=False) + "\n")
 
 
-def open_test_split(freeze_path: Path, *, out_dir: Optional[Path] = None) -> list:
-    """The only way to the test split: `require_freeze`, `mark_test_run`, then the cases."""
-    require_freeze(freeze_path)
-    mark_test_run(freeze_path, out_dir=out_dir)
+def open_test_split(freeze_path: Path, arm: str, *, out_dir: Path, resume: bool = False) -> list:
+    """The only way to the test split. A new run: `require_freeze`, `mark_test_run`, then the cases. A resumed run
+    (after an abort; never a second evaluation): `require_freeze` with this arm's recorded run in `out_dir`, then the
+    cases."""
+    if resume:
+        require_freeze(freeze_path, arm, resume_out=out_dir)
+    else:
+        require_freeze(freeze_path, arm)
+        mark_test_run(freeze_path, arm, out_dir=out_dir)
     return load_testset("test", cases_path=CASES_PATH, manifest_path=MANIFEST_PATH, allow_test=True)
 
 
