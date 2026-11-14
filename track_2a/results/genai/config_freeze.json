@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "config_hash": "c60b30bce0b66b6047a03bcd3633ce930f54ee5ebdad248ac9a578279cfa7394",
+  "components": {
+    "src_tree": "6003aa9bac77b0a9da47e88d043d93074fd628e6",
+    "scripts_tree": "defcebf535e2bc6731f9026627c4ef6bdb6ef314",
+    "model": "swiss-ai/Apertus-v1.5-70B-thinking",
+    "guard": [
+      0.01,
+      0.0,
+      null
+    ],
+    "tool_mode": "json",
+    "prompts_sha256": "b1aeddfa917a5782fa6ad81156a9f8a89825fee218b8520472b1369b2c602bcb",
+    "testset_sha256": "9d356dd19cda156197a2cb0e02d7cb879377466983666bf16d99bae4c89f4e09",
+    "settings_sha256": "ad282ea88ee04a01fe6b0693b55619233348e194c9f04c6ef2354f54603e1ca8"
+  },
+  "git_commit": "7bca92b557929b7601df9a489d91341e71db9501",
+  "frozen_at": "2026-11-14T15:30:49.542691+00:00",
+  "dev_run": "results/genai/agent_eval_dev_b1",
+  "dev_run_arm": "b1",
+  "dev_run_summary_sha256": "680f3b64d46fe8402f3179584b95fcbf00ee1a160075ab17efacfdd989fdba03",
+  "test_runs": {
+    "b1": {
+      "arm": "b1",
+      "started_at": "2026-11-14T15:37:42.935277+00:00",
+      "out_dir": "/Users/sheyla/Documents/ChatGPT/GenAI/work/fact-attack-stufe3/track_2a/results/genai/agent_eval_test_b1"
+    },
+    "b2": {
+      "arm": "b2",
+      "started_at": "2026-11-14T15:44:50.963965+00:00",
+      "out_dir": "/Users/sheyla/Documents/ChatGPT/GenAI/work/fact-attack-stufe3/track_2a/results/genai/agent_eval_test_b2"
+    },
+    "b0": {
+      "arm": "b0",
+      "started_at": "2026-11-14T15:49:58.032289+00:00",
+      "out_dir": "/Users/sheyla/Documents/ChatGPT/GenAI/work/fact-attack-stufe3/track_2a/results/genai/agent_eval_test_b0"
+    }
+  }
+}

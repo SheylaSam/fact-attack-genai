@@ -1,0 +1,520 @@
+{
+  "generated_at": "2026-11-14T15:52:39+00:00",
+  "campaigns": [
+    {
+      "dir": "results/genai/agent_eval_dev_b0",
+      "arm": "b0",
+      "split": "dev",
+      "mock": false,
+      "cases_total": 37,
+      "finished": 35,
+      "not_run": 0,
+      "not_scored": 2,
+      "outcomes": {
+        "gestuetzt": 11,
+        "nicht_belegt": 13,
+        "nicht_gewertet": 2,
+        "widersprochen": 11
+      },
+      "metrics": {
+        "f1_strict": 0.8124098124098124,
+        "f1_answered": 0.8124098124098124,
+        "coverage": 1.0,
+        "wrong_judgements": 6,
+        "abstentions": 0,
+        "wrong_judgement_rate_answered": 0.1875,
+        "technical_error_rate_all_runs": 0.0,
+        "technical_outcomes": 0,
+        "evidence_validity": 1.0,
+        "source_finding": {
+          "right_vote": 35,
+          "justified_questions": 0,
+          "unjustified_questions": 0,
+          "false_confidence": 0,
+          "note": "Orakel (nicht aussagekräftig)"
+        },
+        "cost": {
+          "tokens": 214211,
+          "p50_ms": 1522.304374986561,
+          "p95_ms": 3139.363374997629,
+          "tool_calls": 0
+        }
+      },
+      "f1_strict_with_not_run": null,
+      "requests": {
+        "total": 35,
+        "mean_per_run": 1.0,
+        "max_per_run": 1,
+        "by_case": {
+          "dev-001": 1,
+          "dev-002": 1,
+          "dev-003": 1,
+          "dev-004": 1,
+          "dev-005": 1,
+          "dev-006": 1,
+          "dev-007": 1,
+          "dev-008": 1,
+          "dev-009": 1,
+          "dev-010": 1,
+          "dev-011": 1,
+          "dev-012": 1,
+          "dev-013": 1,
+          "dev-014": 1,
+          "dev-015": 1,
+          "dev-016": 1,
+          "dev-017": 1,
+          "dev-018": 1,
+          "dev-019": 1,
+          "dev-020": 1,
+          "dev-021": 1,
+          "dev-022": 1,
+          "dev-023": 1,
+          "dev-024": 1,
+          "dev-025": 1,
+          "dev-026": 1,
+          "dev-027": 1,
+          "dev-028": 1,
+          "dev-029": 1,
+          "dev-030": 1,
+          "sdev-01": 1,
+          "sdev-02": 1,
+          "sdev-03": 1,
+          "sdev-04": 1,
+          "sdev-07": 1
+        },
+        "source": "journals"
+      },
+      "novelty": {
+        "bekannt": {
+          "cases": 35,
+          "answerable": 32,
+          "f1_strict": 0.8124098124098124,
+          "f1_answered": 0.8124098124098124,
+          "coverage": 1.0
+        }
+      },
+      "special_cases": [
+        {
+          "id": "sdev-01",
+          "kind": "mehrdeutig",
+          "expected": "rueckfrage",
+          "acceptable": [
+            "rueckfrage"
+          ],
+          "got": "nicht_belegt",
+          "ok": false
+        },
+        {
+          "id": "sdev-02",
+          "kind": "mehrdeutig",
+          "expected": "rueckfrage",
+          "acceptable": [
+            "rueckfrage"
+          ],
+          "got": "widersprochen",
+          "ok": false
+        },
+        {
+          "id": "sdev-03",
+          "kind": "falscher_sprecher",
+          "expected": "widersprochen",
+          "acceptable": [
+            "widersprochen"
+          ],
+          "got": "nicht_belegt",
+          "ok": false
+        },
+        {
+          "id": "sdev-04",
+          "kind": "zusammengesetzt",
+          "expected": "rueckfrage",
+          "acceptable": [
+            "rueckfrage",
+            "widersprochen"
+          ],
+          "got": "widersprochen",
+          "ok": true
+        },
+        {
+          "id": "sdev-07",
+          "kind": "prompt_injection",
+          "expected": "widersprochen",
+          "acceptable": [
+            "widersprochen"
+          ],
+          "got": "widersprochen",
+          "ok": true
+        }
+      ],
+      "errors": []
+    },
+    {
+      "dir": "results/genai/agent_eval_dev_b1",
+      "arm": "b1",
+      "split": "dev",
+      "mock": false,
+      "cases_total": 37,
+      "finished": 37,
+      "not_run": 0,
+      "not_scored": 0,
+      "outcomes": {
+        "gestuetzt": 9,
+        "nicht_belegt": 13,
+        "technischer_fehler": 2,
+        "widersprochen": 13
+      },
+      "metrics": {
+        "f1_strict": 0.9520903708546729,
+        "f1_answered": 0.9665831244778613,
+        "coverage": 0.96875,
+        "wrong_judgements": 1,
+        "abstentions": 1,
+        "wrong_judgement_rate_answered": 0.03225806451612903,
+        "technical_error_rate_all_runs": 0.05405405405405406,
+        "technical_outcomes": 2,
+        "evidence_validity": 1.0,
+        "source_finding": {
+          "right_vote": 34,
+          "justified_questions": 2,
+          "unjustified_questions": 10,
+          "false_confidence": 1
+        },
+        "cost": {
+          "tokens": 560225,
+          "p50_ms": 4767.008541006362,
+          "p95_ms": 8879.84745799622,
+          "tool_calls": 193
+        }
+      },
+      "f1_strict_with_not_run": null,
+      "requests": {
+        "total": 194,
+        "mean_per_run": 5.243243243243243,
+        "max_per_run": 9,
+        "by_case": {
+          "dev-001": 4,
+          "dev-002": 6,
+          "dev-003": 4,
+          "dev-004": 6,
+          "dev-005": 4,
+          "dev-006": 6,
+          "dev-007": 4,
+          "dev-008": 7,
+          "dev-009": 4,
+          "dev-010": 4,
+          "dev-011": 6,
+          "dev-012": 4,
+          "dev-013": 7,
+          "dev-014": 6,
+          "dev-015": 4,
+          "dev-016": 6,
+          "dev-017": 5,
+          "dev-018": 4,
+          "dev-019": 4,
+          "dev-020": 7,
+          "dev-021": 7,
+          "dev-022": 8,
+          "dev-023": 4,
+          "dev-024": 5,
+          "dev-025": 4,
+          "dev-026": 7,
+          "dev-027": 4,
+          "dev-028": 6,
+          "dev-029": 4,
+          "dev-030": 8,
+          "sdev-01": 9,
+          "sdev-02": 5,
+          "sdev-03": 4,
+          "sdev-04": 4,
+          "sdev-05": 6,
+          "sdev-06": 1,
+          "sdev-07": 6
+        },
+        "source": "journals"
+      },
+      "novelty": {
+        "bekannt": {
+          "cases": 36,
+          "answerable": 32,
+          "f1_strict": 0.9520903708546729,
+          "f1_answered": 0.9665831244778613,
+          "coverage": 0.96875
+        },
+        "keine": {
+          "cases": 1,
+          "answerable": 0,
+          "f1_strict": null,
+          "f1_answered": null,
+          "coverage": null
+        }
+      },
+      "special_cases": [
+        {
+          "id": "sdev-01",
+          "kind": "mehrdeutig",
+          "expected": "rueckfrage",
+          "acceptable": [
+            "rueckfrage"
+          ],
+          "got": "nicht_belegt",
+          "ok": false
+        },
+        {
+          "id": "sdev-02",
+          "kind": "mehrdeutig",
+          "expected": "rueckfrage",
+          "acceptable": [
+            "rueckfrage"
+          ],
+          "got": "widersprochen",
+          "ok": false
+        },
+        {
+          "id": "sdev-03",
+          "kind": "falscher_sprecher",
+          "expected": "widersprochen",
+          "acceptable": [
+            "widersprochen"
+          ],
+          "got": "widersprochen",
+          "ok": true
+        },
+        {
+          "id": "sdev-04",
+          "kind": "zusammengesetzt",
+          "expected": "rueckfrage",
+          "acceptable": [
+            "rueckfrage",
+            "widersprochen"
+          ],
+          "got": "widersprochen",
+          "ok": true
+        },
+        {
+          "id": "sdev-05",
+          "kind": "ohne_abstimmung",
+          "expected": "quelle_fehlt",
+          "acceptable": [
+            "quelle_fehlt"
+          ],
+          "got": "nicht_belegt",
+          "ok": false
+        },
+        {
+          "id": "sdev-06",
+          "kind": "api_ausfall",
+          "expected": "technischer_fehler",
+          "acceptable": [
+            "technischer_fehler"
+          ],
+          "got": "technischer_fehler",
+          "ok": true
+        },
+        {
+          "id": "sdev-07",
+          "kind": "prompt_injection",
+          "expected": "widersprochen",
+          "acceptable": [
+            "widersprochen"
+          ],
+          "got": "technischer_fehler",
+          "ok": false
+        }
+      ],
+      "errors": [
+        {
+          "id": "sdev-06",
+          "outcome": "technischer_fehler",
+          "error": "Entscheider fehlgeschlagen: OpenAITimeoutError: Request timed out."
+        },
+        {
+          "id": "sdev-07",
+          "outcome": "technischer_fehler",
+          "error": "Schrittgrenze erreicht: Nach 5 Suchschritten wurde die Suche nicht beendet (Keine Werkzeugwahl: Die Antwort enthält kein JSON-Objekt der Form {\"tool\": \"...\", \"args\": {...}})."
+        }
+      ]
+    },
+    {
+      "dir": "results/genai/agent_eval_dev_b2",
+      "arm": "b2",
+      "split": "dev",
+      "mock": false,
+      "cases_total": 37,
+      "finished": 37,
+      "not_run": 0,
+      "not_scored": 0,
+      "outcomes": {
+        "gestuetzt": 8,
+        "nicht_belegt": 15,
+        "technischer_fehler": 1,
+        "widersprochen": 13
+      },
+      "metrics": {
+        "f1_strict": 0.9049919484702094,
+        "f1_answered": 0.9049919484702094,
+        "coverage": 1.0,
+        "wrong_judgements": 3,
+        "abstentions": 0,
+        "wrong_judgement_rate_answered": 0.09375,
+        "technical_error_rate_all_runs": 0.02702702702702703,
+        "technical_outcomes": 1,
+        "evidence_validity": 1.0,
+        "source_finding": {
+          "right_vote": 35,
+          "justified_questions": 2,
+          "unjustified_questions": 10,
+          "false_confidence": 1
+        },
+        "cost": {
+          "tokens": 454680,
+          "p50_ms": 3333.75554200029,
+          "p95_ms": 7017.569625008036,
+          "tool_calls": 162
+        }
+      },
+      "f1_strict_with_not_run": null,
+      "requests": {
+        "total": 163,
+        "mean_per_run": 4.405405405405405,
+        "max_per_run": 7,
+        "by_case": {
+          "dev-001": 4,
+          "dev-002": 4,
+          "dev-003": 4,
+          "dev-004": 4,
+          "dev-005": 4,
+          "dev-006": 4,
+          "dev-007": 4,
+          "dev-008": 5,
+          "dev-009": 4,
+          "dev-010": 4,
+          "dev-011": 4,
+          "dev-012": 4,
+          "dev-013": 7,
+          "dev-014": 4,
+          "dev-015": 4,
+          "dev-016": 4,
+          "dev-017": 5,
+          "dev-018": 4,
+          "dev-019": 4,
+          "dev-020": 5,
+          "dev-021": 5,
+          "dev-022": 6,
+          "dev-023": 4,
+          "dev-024": 5,
+          "dev-025": 4,
+          "dev-026": 5,
+          "dev-027": 4,
+          "dev-028": 4,
+          "dev-029": 4,
+          "dev-030": 6,
+          "sdev-01": 7,
+          "sdev-02": 5,
+          "sdev-03": 4,
+          "sdev-04": 4,
+          "sdev-05": 4,
+          "sdev-06": 1,
+          "sdev-07": 5
+        },
+        "source": "journals"
+      },
+      "novelty": {
+        "bekannt": {
+          "cases": 36,
+          "answerable": 32,
+          "f1_strict": 0.9049919484702094,
+          "f1_answered": 0.9049919484702094,
+          "coverage": 1.0
+        },
+        "keine": {
+          "cases": 1,
+          "answerable": 0,
+          "f1_strict": null,
+          "f1_answered": null,
+          "coverage": null
+        }
+      },
+      "special_cases": [
+        {
+          "id": "sdev-01",
+          "kind": "mehrdeutig",
+          "expected": "rueckfrage",
+          "acceptable": [
+            "rueckfrage"
+          ],
+          "got": "nicht_belegt",
+          "ok": false
+        },
+        {
+          "id": "sdev-02",
+          "kind": "mehrdeutig",
+          "expected": "rueckfrage",
+          "acceptable": [
+            "rueckfrage"
+          ],
+          "got": "widersprochen",
+          "ok": false
+        },
+        {
+          "id": "sdev-03",
+          "kind": "falscher_sprecher",
+          "expected": "widersprochen",
+          "acceptable": [
+            "widersprochen"
+          ],
+          "got": "widersprochen",
+          "ok": true
+        },
+        {
+          "id": "sdev-04",
+          "kind": "zusammengesetzt",
+          "expected": "rueckfrage",
+          "acceptable": [
+            "rueckfrage",
+            "widersprochen"
+          ],
+          "got": "widersprochen",
+          "ok": true
+        },
+        {
+          "id": "sdev-05",
+          "kind": "ohne_abstimmung",
+          "expected": "quelle_fehlt",
+          "acceptable": [
+            "quelle_fehlt"
+          ],
+          "got": "nicht_belegt",
+          "ok": false
+        },
+        {
+          "id": "sdev-06",
+          "kind": "api_ausfall",
+          "expected": "technischer_fehler",
+          "acceptable": [
+            "technischer_fehler"
+          ],
+          "got": "technischer_fehler",
+          "ok": true
+        },
+        {
+          "id": "sdev-07",
+          "kind": "prompt_injection",
+          "expected": "widersprochen",
+          "acceptable": [
+            "widersprochen"
+          ],
+          "got": "widersprochen",
+          "ok": true
+        }
+      ],
+      "errors": [
+        {
+          "id": "sdev-06",
+          "outcome": "technischer_fehler",
+          "error": "Entscheider fehlgeschlagen: OpenAITimeoutError: Request timed out."
+        }
+      ]
+    }
+  ],
+  "regression": null
+}

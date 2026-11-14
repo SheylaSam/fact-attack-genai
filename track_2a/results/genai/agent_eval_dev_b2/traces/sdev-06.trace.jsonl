@@ -1,0 +1,2 @@
+{"step": 1, "node": "decide", "tool": null, "args": {}, "summary": "Keine Entscheidung", "duration_ms": 12.99599999038037, "tokens_prompt": 0, "tokens_completion": 0, "error": "Entscheider fehlgeschlagen: OpenAITimeoutError: Request timed out.", "data": {}}
+{"step": 1, "node": "finish", "tool": null, "args": {}, "summary": "Ergebnis: technischer_fehler", "duration_ms": 0.0006250047590583563, "tokens_prompt": 0, "tokens_completion": 0, "error": "Entscheider fehlgeschlagen: OpenAITimeoutError: Request timed out.", "data": {}}
