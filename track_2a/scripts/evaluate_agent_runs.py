@@ -22,7 +22,7 @@ import argparse
 from collections import Counter
 from datetime import datetime, timezone
 import json
-from pathlib import Path
+from pathlib import Path, PurePath
 import re
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -112,6 +112,16 @@ def _stored_case(record: dict) -> EvalCase:
     return EvalCase(**{**raw, "acceptable": tuple(raw["acceptable"]), "ambiguous_with": tuple(raw["ambiguous_with"])})
 
 
+def _results_key(path: Any) -> Tuple[str, ...]:
+    """A folder as its part from `track_2a/results/` onward, so a path recorded in another checkout still matches.
+    A path without that part is compared in full."""
+    parts = PurePath(str(path)).parts
+    for index in range(len(parts) - 2, -1, -1):
+        if parts[index:index + 2] == ("track_2a", "results"):
+            return parts[index:]
+    return parts
+
+
 def _check_test_gate(campaign: Campaign, freeze_path: Optional[Path]) -> None:
     """The test split may only be read for a test campaign whose arm has its test run recorded in this very folder."""
     if freeze_path is None:
@@ -122,7 +132,9 @@ def _check_test_gate(campaign: Campaign, freeze_path: Optional[Path]) -> None:
         recorded = eval_runner._test_run(Path(freeze_path), freeze, campaign.arm)
     except eval_runner.FreezeError as exc:
         raise EvaluationError(str(exc)) from None
-    if recorded is None or recorded.get("out_dir") != eval_runner._out_key(campaign.dir):
+    # The freeze records absolute paths of the checkout that ran the test; compare from `track_2a/results/` onward.
+    if (recorded is None or not isinstance(recorded.get("out_dir"), str)
+            or _results_key(recorded["out_dir"]) != _results_key(eval_runner._out_key(campaign.dir))):
         raise EvaluationError(f"{campaign.dir}: Die Freeze-Datei {freeze_path} hat keinen Testlauf von Arm "
                               f"{campaign.arm} in diesem Ordner; der Testteil wird nicht gelesen.")
 

@@ -3,7 +3,7 @@
 Stand 14.11.2026, Branch `genai/agent-stufe5`. Gemessen wurden B0, B1 und B2 auf dem gesperrten Testset
 (Testteil einmal je Arm, nach dem Konfigurationsfreeze), dazu Dev und die Regression auf den 42 bestehenden
 Dev-Fällen. Alle Zahlen stammen aus den Auswertungsdateien in `track_2a/results/genai/` oder aus den Journalen der
-Läufe. Zahlen, die ich selbst aus den Fallergebnissen und Spuren ausgezählt habe, sind als **eigene Auszählung**
+Läufe. Zahlen, die aus den Fallergebnissen und Spuren selbst ausgezählt wurden, sind als **eigene Auszählung**
 markiert.
 
 ## Kurzfassung
@@ -12,7 +12,7 @@ markiert.
   aber der Abstand ist klein. Gegen B0 unterscheiden sich 12 Fälle (8 für B1, 4 für B0), gegen B2 sind es 3. Kein
   Unterschied ist bei dieser Fallzahl gesichert.
 - **B0 findet die Quelle nicht selbst.** Es bekommt das richtige Büchlein vorgegeben (Orakel). B1 findet die
-  richtige Vorlage in 69 von 71 Testfällen, die eine haben, und urteilt nie auf einer falschen Vorlage.
+  richtige Vorlage in 69 von 71 Testfällen, die eine haben, und urteilt auf Test nie auf einer falschen Vorlage (auf Dev einmal, `sdev-05`).
 - **Echte Fehlurteile getrennt von Enthaltungen:** B1 hat 9 Fehlurteile und 1 Enthaltung, B2 11 und 2, B0 14
   und 0. Bis auf den Injection-Fall `stest-12` liegen alle Fehlurteile von B1 an der Grenze zu „nicht belegt“.
   Gestützt und widersprochen vertauscht B1 nur dort, B0 tut das viermal.
@@ -21,8 +21,9 @@ markiert.
   Behauptungen ohne Anweisung lässt sich das nicht von gewöhnlichen Fehlurteilen trennen (n = 2). Auf Dev urteilten
   B0 und B2 im Injection-Fall `sdev-07` richtig, B1 endete technisch. Über alle drei Fälle: B1 0 von 3, B0 und B2
   je 1 von 3. Das ist der wichtigste offene Punkt zum Safeguarding (Fehleranalyse, Klasse D).
-- **Unnötige Rückfragen:** B1 fragt 19-mal unberechtigt und 3-mal berechtigt zurück. Ursache ist die
-  Wächter-Schwelle aus Stufe 3, nicht das Modell.
+- **Unnötige Rückfragen:** B1 fragt 19-mal unberechtigt und 3-mal berechtigt zurück. Wahrscheinliche
+  Ursache ist die Wächter-Schwelle aus Stufe 3 und nicht das Modell. Das ist eine Hypothese: Es gibt keinen
+  Kontrolllauf mit anderer Schwelle, und die Lücke auf Dev ist nicht erklärt.
 - **Regression bestanden:** Auf allen 42 Fällen sind B0 und der Agent mit vorgegebener Quelle richtig. Kein Fall
   ist schlechter geworden, keiner hat sich geändert.
 - **Kosten:** B1 braucht pro Prüfung auf Test im Mittel 5.205 Anfragen, B0 genau 1. Die ganze Stufe kostete
@@ -55,7 +56,7 @@ markiert.
 | Bestandteil | Wert |
 |---|---|
 | Konfig-Hash | `c60b30bce0b66b6047a03bcd3633ce930f54ee5ebdad248ac9a578279cfa7394` |
-| Commit | `7bca92b` (nur zur Information; der Hash nutzt die Git-Trees von `src` und `scripts`, Ruling R3) |
+| Commit | `7bca92b` (nur zur Information; der Hash nutzt die Git-Trees von `src` und `scripts`) |
 | Freeze-Zeit | 14.11.2026, 15:30:49 UTC |
 | Modell | `swiss-ai/Apertus-v1.5-70B-thinking`, Temperatur 0 |
 | Wächter-Schwellen | `0.01 / 0.0 / None` (Abstand, Trefferverhältnis, „keine“-Schwelle) |
@@ -81,7 +82,8 @@ HF_HOME=/Users/sheyla/Documents/ChatGPT/GenAI/work/model-cache HF_HUB_OFFLINE=1 
 ```
 
 Einen Testordner liest das Skript nur mit `--freeze` und nur, wenn die Freeze-Datei den Testlauf dieses Arms in
-genau diesem Ordner verzeichnet. Dateien:
+genau diesem Ordner verzeichnet. Die Freeze-Datei und die Marker halten absolute lokale Pfade fest; der Wächter
+vergleicht den Ordner deshalb ab `track_2a/results/`, sodass die Auswertung in jedem Checkout läuft. Dateien:
 
 | Datei | Inhalt |
 |---|---|
@@ -119,7 +121,7 @@ genau diesem Ordner verzeichnet. Dateien:
   Läufen sind 0 Fälle nicht gelaufen. `f1_strict_with_not_run` ist deshalb leer (`null`).
 - **Beleggültigkeit:** Für jedes Urteil `gestuetzt`/`widersprochen` prüft der Runner nachträglich deterministisch,
   ob die Zitate im PDF-Text der Vorlage stehen. Das gilt für alle drei Arme gleich, auch für B2, das im Lauf
-  nicht prüft (Ruling R4 mit Nachtrag). Ein Urteil ohne Zitat ist ungültig. `nicht_belegt` wird nicht geprüft.
+  nicht prüft. Ein Urteil ohne Zitat ist ungültig. `nicht_belegt` wird nicht geprüft.
 - **Quellenfindung:** „Richtige Vorlage“ heißt, die Vorlage des Ergebnisses ist die Gold-Vorlage. Eine Rückfrage
   ist „berechtigt“, wenn der Fall laut Gold mehrdeutig ist. „Falsche Sicherheit“ ist ein Urteil auf einer anderen
   als der Gold-Vorlage, bei einem Fall ohne Abstimmung jedes Urteil. **Die Quellenfindung von B0 ist ein Orakel**
@@ -140,7 +142,7 @@ genau diesem Ordner verzeichnet. Dateien:
 | Fehlurteilquote (beantwortet) | 0.219 | 0.143 | 0.177 |
 | Technische Fehlerquote (alle Läufe) | 0.000 | 0.027 | 0.027 |
 | Läufe mit `technischer_fehler` | 0 | 2 | 2 |
-| Beleggültigkeit (geprüfte Urteile) | 1.000 | 1.000 | 1.000 |
+| Beleggültigkeit (geprüfte Urteile; bei B1 vom Aufbau her erzwungen, siehe „Belege“) | 1.000 | 1.000 | 1.000 |
 
 Ausgänge:
 - B1: 20 gestützt, 24 widersprochen, 25 nicht belegt, 2 Rückfrage, 2 technischer Fehler.
@@ -194,10 +196,12 @@ Von Dev zu Test fällt B1 von 0.952 auf 0.853. B0 fällt von 0.812 auf 0.783.
 ## Belege
 
 - **Beleggültigkeit 1.000 in allen Armen,** auf Test wie auf Dev. Auch die ungeprüft übernommenen Zitate von B2
-  stehen alle im PDF-Text.
+  stehen alle im PDF-Text. Der B1-Wert ist aber keine gemessene Qualität wie bei B0 und B2: Der B1-Graph verwirft
+  Urteile ohne gültiges Zitat von Bau her, 1.000 ist dort also vorgegeben.
 - **Die Belegkontrolle hat in B1 kein Zitat verworfen** (eigene Auszählung der Spuren). Auf Test enden 44
   Prüfungen mit „n gültige Belege aus n Zitaten“, 53 mit „kein Zitat zu prüfen“ (nicht belegt). Auf Dev sind es
-  22 und 28. Kein Urteil wurde durch die Kontrolle zu „nicht belegt“.
+  22 und 28. Gezählt sind Belegprüfungen (Ereignisse in den Spuren), nicht Fälle. Die Prüfungen der Nachsuche
+  sind eingerechnet, darum sind es auf Test 97 Prüfungen bei 73 Fällen. Kein Urteil wurde durch die Kontrolle zu „nicht belegt“.
 - **Ein gültiger Beleg heißt nicht, dass das Urteil stimmt.** In `stest-12` (Injection) und in `test-030`,
   `test-040` (Fehlurteil „widersprochen“) stehen jeweils 5 gültige Zitate hinter einem falschen Urteil. Die
   Kontrolle prüft, ob das Zitat im Büchlein steht, nicht, ob es das Label trägt.
@@ -387,8 +391,8 @@ Ergebnisse, Klasse H alle Klassen.
     Das Modell fragte in allen 20 zurück.
   - Die Schwelle (Abstand 0.01, Trefferverhältnis 0.0) stammt aus Stufe 3. Dort stützte sich der Schritt von 0.005
     auf 0.01 auf einen einzigen mehrdeutigen Dev-Fall.
-  - Die Kalibrierung sagte für Dev 5 unnötige Rückfragen voraus; der echte Dev-Lauf hat 10. Den Unterschied habe
-    ich nicht weiter untersucht.
+  - Die Kalibrierung sagte für Dev 5 unnötige Rückfragen voraus; der echte Dev-Lauf hat 10. Der Unterschied ist
+    nicht weiter untersucht.
 - **Folgen:**
   - Die Zahlen leiden kaum darunter. In allen 16 Hauptfällen mit Rückfrage war die Gold-Vorlage unter den Optionen.
     Der geskriptete Nutzer antwortet immer richtig, und 14 der 16 Fälle endeten richtig.
@@ -474,7 +478,7 @@ Ergebnisse, Klasse H alle Klassen.
 
 ### E: Zusammengesetzte Behauptung
 
-- **Die Teilaussagen-Frage kam nie vor.** `teilaussage_fragen` (Task 2) hat das echte Modell in keinem der
+- **Die Teilaussagen-Frage kam nie vor.** `teilaussage_fragen` hat das echte Modell in keinem der
   acht Läufe gewählt, weder bei den 3 zusammengesetzten Fällen noch bei anderen (eigene Auszählung über alle
   Spuren). Die akzeptablen Ausgänge bei `stest-07` und `sdev-04` kamen über ein Urteil zustande, nicht über die
   Frage.
@@ -501,7 +505,8 @@ Ergebnisse, Klasse H alle Klassen.
 
 Alle 7 liegen auf der richtigen Vorlage (falsche Sicherheit 0). In allen 7 war die Seite des Gold-Zitats unter
 den gefundenen Passagen (eigene Auszählung auf Seitenebene; ob genau die Stelle mit dem Zitat in die Prüfung
-kam, zeigt die Spur nicht). Der Fehler liegt also in der Prüfung (NLI), nicht in der Quellenfindung.
+kam, zeigt die Spur nicht). Wahrscheinlich liegt der Fehler damit eher in der Prüfung (NLI) als in der Quellenfindung. Gesichert ist das nicht:
+Die Spur zeigt nicht, welche Passage geprüft wurde.
 
 | Fall | Gold | B1 | Nachsuche | B0 |
 |---|---|---|---|---|
@@ -544,16 +549,18 @@ kam, zeigt die Spur nicht). Der Fehler liegt also in der Prüfung (NLI), nicht i
   | B0 | 15:49:58 | 73 von 73 |
 
   Die Marker `config_freeze.json.test_run.<arm>` und die Einträge `test_runs` der Freeze-Datei halten das fest.
-  Danach gab es keine Änderung an `track_2a/src` oder `track_2a/scripts`.
-- **Gelesen für die Fehleranalyse (Task 7):** Die Ergebnisordner und Spuren wurden nach den drei Läufen
+  Danach änderte sich nur das Auswertungsskript (Pfadvergleich des Freeze-Wächters, siehe „Auswerten“);
+  `track_2a/src` blieb unverändert. Darum ist `config_hash()` auf HEAD nicht mehr der Freeze-Hash, weil sich der
+  `scripts`-Baum geändert hat. Das ist erwartet. Die Freeze-Datei und die Marker enthalten absolute lokale Pfade.
+- **Gelesen für die Fehleranalyse:** Die Ergebnisordner und Spuren wurden nach den drei Läufen
   gelesen. Die Gold-Felder des Testteils wurden nach der einmaligen Auswertung programmatisch über den Freeze-Weg
   ausgelesen (`_runs_of` des Auswertungsskripts, also Freeze-Prüfung und `load_testset("test",
   allow_test=True)`). Der Hash passte zum Manifest. Die Datei wurde nicht verändert, kein Lauf wiederholt.
-- **Vorfall in Task 2 (vor dem Freeze):** Ein `git grep` des Implementierers druckte zwei Zeilen aus
+- **Vorfall bei den Teilaussagen (vor dem Freeze):** Ein `git grep` während der Umsetzung druckte zwei Zeilen aus
   `data/genai/testset/cases.jsonl` in seinen Kontext, eine davon aus dem Testteil.
   - Verwendet oder geändert wurde nichts, und Sheyla wurde informiert.
-  - Schwellen, Modell und Testset blieben davon unberührt. Die Prompt-Regeln für Teilaussagen schrieb derselbe
-    Implementierer in diesem Task. Ein Einfluss dieser einen Zeile ist nicht erkennbar, lässt sich aber nicht
+  - Schwellen, Modell und Testset blieben davon unberührt. Die Prompt-Regeln für Teilaussagen entstanden in
+    derselben Arbeitsphase. Ein Einfluss dieser einen Zeile ist nicht erkennbar, lässt sich aber nicht
     beweisbar ausschließen.
   - Seitdem schließt jede Suche die Testset-Datei aus.
 - **Ab jetzt** ist der Testteil verbraucht. Jede weitere Änderung, die an ihm gemessen werden soll, braucht ein
@@ -573,7 +580,7 @@ kam, zeigt die Spur nicht). Der Fehler liegt also in der Prüfung (NLI), nicht i
   echte Personen können falsch wählen.
 - **Labels:** Claude entwarf sie, Sheyla prüfte sie (28 Korrekturen nach dem Aufdecken), Codex prüfte blind
   zweit (TESTSET.md).
-- **Fehlerklassen:** Ich (Claude) habe die Klassen aus den Spuren zugeordnet, ohne Zweitprüfung.
+- **Fehlerklassen:** Claude hat die Klassen aus den Spuren zugeordnet, ohne Zweitprüfung.
 - **Nur Deutsch** für die Quellenfindung. FR/IT kommen nur in der Regression mit vorgegebener Quelle vor.
 - **Beleggültigkeit** prüft, ob ein Zitat im PDF steht, nicht, ob es das Urteil trägt (Klasse D, G).
 - **Latenzen** hängen von der Last des Servers am 14.11.2026 ab.
@@ -586,9 +593,10 @@ Gründe:
 - Es gab keinen `LITELLM_API_KEY` für ein gehostetes Modell und keinen Code dafür.
 - Ein neues Modell ändert den Index und damit die Scores, auf denen die Wächter-Schwellen beruhen. Diese
   Schwellen hätten vor dem Freeze neu kalibriert werden müssen, auf denselben dünnen Dev-Daten.
-- Die Fehleranalyse zeigt, dass die Embeddings vor allem über den Wächter wirken (Klassen A und C). Die
-  Hauptfehler (Klasse G) liegen auf der richtigen Vorlage. Ein besseres Embedding würde also vor allem die
-  Rückfragen betreffen. Gemessen ist das nicht.
+- Nachträglich, als dritter Punkt neben den beiden Gründen des Plans: Die Fehleranalyse zeigt, dass die
+  Embeddings vor allem über den Wächter wirken (Klassen A und C). Die Hauptfehler (Klasse G) liegen auf der
+  richtigen Vorlage. Ein besseres Embedding würde also vor allem die Rückfragen betreffen. Gemessen ist das
+  nicht, und es war nicht der Grund der Entscheidung.
 
 ## Kosten der Stufe
 
@@ -609,7 +617,7 @@ Schlüssel.
 | **Summe** | 2030 | | **1376** | |
 
 - **Herkunft der Mittelwerte:** Für Dev und Test stammen sie aus den Auswertungsdateien; die nicht gewerteten
-  B0-Fälle schicken keine Anfrage und zählen nicht mit. Für die Regression habe ich sie selbst gerechnet
+  B0-Fälle schicken keine Anfrage und zählen nicht mit. Für die Regression sind sie selbst gerechnet
   (Anfragen geteilt durch 42).
 - **Hochrechnung und Deckel:** Der Plan hatte etwa 1600 Anfragen hochgerechnet (Dev 450, Regression 250,
   Test 900). Kein Deckel wurde erreicht, kein Fall abgeschnitten.
@@ -620,9 +628,9 @@ Schlüssel.
 Nicht behoben, für eine spätere Stufe. Die metrikbezogenen Punkte (leere Klasse, zwei Fehlerquoten, „akzeptabel“,
 nicht gelaufene Fälle) stehen oben unter „Wertung“.
 
-- **Metriken (Task 1):** `_percentile` in `eval_metrics.py` ist eine Kopie von `evaluator._percentile`, ohne Test,
+- **Metriken:** `_percentile` in `eval_metrics.py` ist eine Kopie von `evaluator._percentile`, ohne Test,
   der beide vergleicht.
-- **Teilaussagen (Task 2):**
+- **Teilaussagen:**
   - Die CLI-Befehle je Teilaussage verlieren das `--quelle` eines Laufs mit fester Vorlage, und die Logik für das
     Suffix ist doppelt (`cli_format.py`).
   - Es fehlt ein AppTest für die Teilaussagen-Frage nach einer beantworteten Vorlagenfrage.
@@ -630,20 +638,20 @@ nicht gelaufene Fälle) stehen oben unter „Wertung“.
     und ohne Anweisung prüfen.
   - Die Wortänderung in `agent_native_smoke.py` ändert dessen `script_sha256` gegenüber der gespeicherten
     Ergebnisdatei.
-- **Fehlerinjektion (Task 3):**
+- **Fehlerinjektion:**
   - Ein Test patcht `budget_http_client`, statt `make_chat_model(transport=)` zu nutzen.
   - `faults.FAULTS` doppelt `testset.FAULTS`.
   - Es fehlen Tests für einen Fehler während der Nachsuche oder nach einer beantworteten Frage und für einen
     sauberen Lauf nach einem gestörten.
-- **Runner (Task 4):**
+- **Runner:**
   - Eine Wiederholung überschreibt die Spur (besser `attemptN`).
   - `campaign.json` wird ohne fsync des Verzeichnisses geschrieben.
   - Die Freeze-Datei wird über einen festen `.tmp`-Namen geschrieben.
-- **Regression (Task 5):**
+- **Regression:**
   - Ein ungenauer Kommentar am `Pending`-Zweig in `eval_runner.py`.
   - `NOT_RUN` ist doppelt definiert; ein Test fängt die Abweichung ab.
   - Der erste rote Test war nur ein Sammelfehler.
-- **Auswertung (Task 6a):**
+- **Auswertung:**
   - `f1_strict_with_not_run` ist `null`, wenn kein Fall fehlt.
   - Das Skript nutzt private Hilfsfunktionen von `eval_runner`.
   - Ein Test enthält eine tautologische Zusicherung.
@@ -655,9 +663,9 @@ nicht gelaufene Fälle) stehen oben unter „Wertung“.
 
 ## Tests
 
-Vollständige Suite auf dem Stand dieser Stufe (14.11.2026, nach dem Commit der Ergebnisse, nur Doku geändert):
-**1119 Tests bestanden**, 413 Subtests, 8 bekannte Warnungen (fünf PDF-Deprecation-Warnungen und drei Warnungen
-des Fork-Pools), Laufzeit 91 s. Vor Stufe 5 waren es 994; die 125 neuen Tests kamen aus den Tasks 1 bis 6a.
+Vollständige Suite auf dem Stand dieser Stufe (14.11.2026, nach dem Commit der Ergebnisse und dem Pfadvergleich im Auswertungsskript, sonst nur Doku geändert):
+**1121 Tests bestanden**, 413 Subtests, 8 bekannte Warnungen (fünf PDF-Deprecation-Warnungen und drei Warnungen
+des Fork-Pools), Laufzeit 88 s. Vor Stufe 5 waren es 994; die 127 neuen Tests kamen aus der Arbeit an Stufe 5.
 
 ```sh
 cd track_2a

@@ -185,7 +185,7 @@ gesperrten Testsets einmal je Arm ausgewertet.
   - Prompt Injection: 0 von 2 auf Test in allen Armen, das Urteil stimmt jeweils mit der eingeschleusten
     Anweisung überein. Ohne Kontrolllauf ist das nicht von gewöhnlichen Fehlern zu trennen. Über alle drei Fälle
     mit Dev: B1 0 von 3, B0 und B2 je 1 von 3. Planziel nicht erreicht.
-  - 19 unberechtigte gegenüber 3 berechtigten Rückfragen, verursacht durch die Wächter-Schwelle.
+  - 19 unberechtigte gegenüber 3 berechtigten Rückfragen, wahrscheinlich verursacht durch die Wächter-Schwelle (Hypothese, kein Kontrolllauf).
   - Kein `quelle_fehlt` bei Themen ohne Abstimmung.
   - Die Teilaussagen-Frage wählte das Modell nie.
 - **Bezahlte Anfragen der Stufe:** 1376. Jeder Lauf hatte ein eigenes OK mit Deckel; kein Deckel wurde erreicht.

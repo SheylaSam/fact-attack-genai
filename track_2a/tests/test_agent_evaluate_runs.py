@@ -269,6 +269,32 @@ class EvaluateRunsTests(unittest.TestCase):
         self.assertFalse((self.root / 'bericht.md').exists())
         self.assertEqual(self.opened, [])
 
+    def test_a_recorded_path_from_another_checkout_with_the_same_results_suffix_is_accepted(self):
+        outcomes = {'test-001': 'gestuetzt', 'test-002': 'widersprochen'}
+        name = 'track_2a/results/genai/agent_eval_test_b1'
+        out, _ = self.campaign(name, 'b1', outcomes, cases=held_out_cases(), split='test')
+        self.freeze.write_text(json.dumps({'config_hash': 'x', 'test_runs': {'b1': {
+            'arm': 'b1', 'out_dir': f'/somewhere/else/checkout/{name}'}}}), encoding='utf-8')
+        with patch.object(self.script, 'load_testset', wraps=self.script.load_testset) as load:
+            _, data = self.report(out, extra=['--freeze', str(self.freeze)])
+        load.assert_called_once()
+        self.assertEqual(data['campaigns'][0]['finished'], 2)
+
+    def test_a_recorded_path_with_another_results_suffix_is_refused(self):
+        outcomes = {'test-001': 'gestuetzt', 'test-002': 'widersprochen'}
+        out, _ = self.campaign('track_2a/results/genai/agent_eval_test_b1', 'b1', outcomes,
+                               cases=held_out_cases(), split='test')
+        for recorded in ('/somewhere/else/checkout/track_2a/results/genai/agent_eval_test_b2',
+                         '/somewhere/else/checkout/track_2a/results/genai/agent_eval_test_b1/sub',
+                         '/somewhere/else/checkout/results/genai/agent_eval_test_b1'):
+            self.freeze.write_text(json.dumps({'config_hash': 'x', 'test_runs': {'b1': {
+                'arm': 'b1', 'out_dir': recorded}}}), encoding='utf-8')
+            with patch.object(self.script, 'load_testset') as load:
+                code, _ = self.evaluate(out, extra=['--freeze', str(self.freeze)])
+            self.assertEqual(code, 1, recorded)
+            load.assert_not_called()
+        self.assertEqual(self.opened, [])
+
     def test_a_test_campaign_with_a_recorded_test_run_is_evaluated_from_the_synthetic_test_split(self):
         outcomes = {'test-001': 'gestuetzt', 'test-002': 'widersprochen'}
         out, _ = self.campaign('test-b1', 'b1', outcomes, cases=held_out_cases(), split='test')
