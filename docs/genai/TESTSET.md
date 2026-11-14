@@ -254,8 +254,8 @@ Der Testteil ist seit dem 14.11.2026 ausgewertet und damit verbraucht. Ergebniss
 
   Marker: `config_freeze.json.test_run.<arm>`.
 - **Auswertung** um 15:52:39 UTC mit `scripts/evaluate_agent_runs.py --freeze …`. Für die Fehleranalyse (Task 7)
-  wurden die Testfälle danach noch einmal über denselben Weg des Auswertungsskripts gelesen, nicht durch Öffnen
-  von `cases.jsonl`.
+  wurden die Gold-Felder des Testteils nach der einmaligen Auswertung programmatisch über den Freeze-Weg
+  ausgelesen (`load_testset("test", allow_test=True)`); die Datei wurde nicht verändert, kein Lauf wiederholt.
 - **Unverändert:** Nichts unter `data/genai/testset/` wurde geändert. Der Hash passte bei jedem Laden zum Manifest.
 - **Vorfall vor dem Freeze (Task 2):** Ein `git grep` eines Implementierers druckte zwei Zeilen aus
   `cases.jsonl` in dessen Kontext, eine davon aus dem Testteil. Verwendet oder geändert wurde nichts, und Sheyla
