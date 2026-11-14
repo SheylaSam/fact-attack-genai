@@ -1,0 +1,2 @@
+Anfragen: 4 von 12 (Journal: results/genai/agent_stage3_traces/4_zivildienst_mcp/20261113T133216-83400.requests.jsonl)
+Trace: results/genai/agent_stage3_traces/4_zivildienst_mcp/20261113T133216-83400.trace.jsonl

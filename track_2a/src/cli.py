@@ -77,7 +77,7 @@ def predict(
         config.DEFAULT_STRATEGY,
         "--strategy",
         "-s",
-        help="Strategy: 'retrieval' (selected passages) or 'full' (full document)",
+        help="Strategy: hybrid, retrieval, full, vector or vector_hybrid",
     ),
     top_k: int = typer.Option(config.DEFAULT_TOP_K, "--top-k", "-k", help="Number of passages to retrieve when using retrieval strategy"),
     json_output: bool = typer.Option(False, "--json", help="Output strictly conforming to official OST JSON format"),
@@ -90,82 +90,85 @@ def predict(
     """
     client = ApertusClient(mock=True) if mock else None
     engine = ClaimVerificationEngine(strategy=strategy, apertus_client=client)
-    _require_model(engine, mock)
+    try:
+        _require_model(engine, mock)
 
-    if reference:
-        # Beginner Task: Direct premise verification
-        result = engine.verify_premise(
-            claim=claim,
-            reference=reference,
-            claim_language=lang,
-            case_id=case_id,
+        if reference:
+            # Beginner Task: Direct premise verification
+            result = engine.verify_premise(
+                claim=claim,
+                reference=reference,
+                claim_language=lang,
+                case_id=case_id,
+            )
+        else:
+            # Advanced Task: Booklet PDF verification
+            if not booklet.exists():
+                # Check fallback in booklets directory
+                fallback = config.BOOKLETS_DIR / booklet.name
+                if fallback.exists():
+                    booklet = fallback
+                else:
+                    console.print(f"[bold red]Error:[/bold red] Booklet PDF not found at {booklet}. Run 'download' first.")
+                    raise typer.Exit(code=1)
+
+            result = engine.verify_claim(
+                claim=claim,
+                booklet_pdf=booklet,
+                claim_language=lang,
+                strategy=strategy,
+                top_k=top_k,
+                vote=vote,
+                case_id=case_id,
+            )
+
+        if json_output:
+            official_data = result.to_official_dict(case_id=case_id)
+            print(json.dumps(official_data, indent=2, ensure_ascii=False))
+            return
+
+        from rich.panel import Panel
+        from rich.table import Table
+
+        console.print(Panel(f"[bold cyan]Verifying Claim with Apertus[/bold cyan]\n[italic]\"{claim}\"[/italic]", expand=False))
+
+        color_map = {0: "green", 1: "yellow", 2: "red"}
+        label_color = color_map.get(result.label, "white")
+
+        table = Table(title="Verification Result", show_header=True, header_style="bold magenta")
+        table.add_column("Property", style="bold")
+        table.add_column("Value")
+
+        table.add_row("Classification", f"[{label_color}]{result.label} — {result.label_name}[/{label_color}]")
+        table.add_row("Meaning", config.LABEL_EXPLANATIONS.get(result.label, ""))
+        table.add_row(
+            "Calibrated Confidences",
+            f"Entail (0): {result.p_entail:.2f} | Neutral (1): {result.p_neutral:.2f} | Contra (2): {result.p_contra:.2f}",
         )
-    else:
-        # Advanced Task: Booklet PDF verification
-        if not booklet.exists():
-            # Check fallback in booklets directory
-            fallback = config.BOOKLETS_DIR / booklet.name
-            if fallback.exists():
-                booklet = fallback
-            else:
-                console.print(f"[bold red]Error:[/bold red] Booklet PDF not found at {booklet}. Run 'download' first.")
-                raise typer.Exit(code=1)
+        if result.fuzzy_rule:
+            table.add_row("Decision Arbiter", f"[bold cyan]{result.fuzzy_rule}[/bold cyan]")
+        if result.numerical_conflict:
+            table.add_row("Numerical Check", f"[bold red][CONFLICT] {result.numerical_conflict}[/bold red]")
+        table.add_row("Reasoning", result.reasoning)
+        table.add_row("Strategy", result.strategy)
+        table.add_row("Prompt Tokens", str(result.tokens_prompt))
+        table.add_row("Total Tokens", str(result.tokens_total))
+        table.add_row("Latency", f"{result.latency_ms:.1f} ms")
 
-        result = engine.verify_claim(
-            claim=claim,
-            booklet_pdf=booklet,
-            claim_language=lang,
-            strategy=strategy,
-            top_k=top_k,
-            vote=vote,
-            case_id=case_id,
-        )
+        console.print(table)
 
-    if json_output:
-        official_data = result.to_official_dict(case_id=case_id)
-        print(json.dumps(official_data, indent=2, ensure_ascii=False))
-        return
-
-    from rich.panel import Panel
-    from rich.table import Table
-
-    console.print(Panel(f"[bold cyan]Verifying Claim with Apertus[/bold cyan]\n[italic]\"{claim}\"[/italic]", expand=False))
-
-    color_map = {0: "green", 1: "yellow", 2: "red"}
-    label_color = color_map.get(result.label, "white")
-
-    table = Table(title="Verification Result", show_header=True, header_style="bold magenta")
-    table.add_column("Property", style="bold")
-    table.add_column("Value")
-
-    table.add_row("Classification", f"[{label_color}]{result.label} — {result.label_name}[/{label_color}]")
-    table.add_row("Meaning", config.LABEL_EXPLANATIONS.get(result.label, ""))
-    table.add_row(
-        "Calibrated Confidences",
-        f"Entail (0): {result.p_entail:.2f} | Neutral (1): {result.p_neutral:.2f} | Contra (2): {result.p_contra:.2f}",
-    )
-    if result.fuzzy_rule:
-        table.add_row("Decision Arbiter", f"[bold cyan]{result.fuzzy_rule}[/bold cyan]")
-    if result.numerical_conflict:
-        table.add_row("Numerical Check", f"[bold red][CONFLICT] {result.numerical_conflict}[/bold red]")
-    table.add_row("Reasoning", result.reasoning)
-    table.add_row("Strategy", result.strategy)
-    table.add_row("Prompt Tokens", str(result.tokens_prompt))
-    table.add_row("Total Tokens", str(result.tokens_total))
-    table.add_row("Latency", f"{result.latency_ms:.1f} ms")
-
-    console.print(table)
-
-    if result.evidence_sources:
-        console.print("\n[bold underline]Supporting Evidence Passages (with Page Citations):[/bold underline]")
-        for i, src in enumerate(result.evidence_sources, 1):
-            page_info = f" [bold yellow](Page {src.page_number})[/bold yellow]" if src.page_number else ""
-            prop_info = f" [magenta](Vorlage {src.proposal_id})[/magenta]" if src.proposal_id else ""
-            console.print(f"[cyan]Passage {i}{page_info}{prop_info}:[/cyan] {src.quote}\n")
-    elif result.evidence:
-        console.print("\n[bold underline]Supporting Evidence Passages:[/bold underline]")
-        for i, ev in enumerate(result.evidence, 1):
-            console.print(f"[cyan]Passage {i}:[/cyan] {ev}\n")
+        if result.evidence_sources:
+            console.print("\n[bold underline]Supporting Evidence Passages (with Page Citations):[/bold underline]")
+            for i, src in enumerate(result.evidence_sources, 1):
+                page_info = f" [bold yellow](Page {src.page_number})[/bold yellow]" if src.page_number else ""
+                prop_info = f" [magenta](Vorlage {src.proposal_id})[/magenta]" if src.proposal_id else ""
+                console.print(f"[cyan]Passage {i}{page_info}{prop_info}:[/cyan] {src.quote}\n")
+        elif result.evidence:
+            console.print("\n[bold underline]Supporting Evidence Passages:[/bold underline]")
+            for i, ev in enumerate(result.evidence, 1):
+                console.print(f"[cyan]Passage {i}:[/cyan] {ev}\n")
+    finally:
+        engine.close()
 
 
 def resolve_booklet_path(path_str: str, input_dir: Path) -> Path:
@@ -252,7 +255,7 @@ def case_booklet(item: Dict[str, Any], input_dir: Path) -> Optional[Path]:
 def run_batch(
     input_path: Path = typer.Option(..., "--input", "-i", help="Path to input JSON or JSONL file conforming to OST task schema"),
     output_path: Optional[Path] = typer.Option(None, "--output", "-o", help="Optional path to output JSON/JSONL file"),
-    strategy: str = typer.Option(config.DEFAULT_STRATEGY, "--strategy", "-s", help="Strategy: 'hybrid', 'retrieval' or 'full'"),
+    strategy: str = typer.Option(config.DEFAULT_STRATEGY, "--strategy", "-s", help="Strategy: 'hybrid', 'retrieval', 'full', 'vector' or 'vector_hybrid'"),
     top_k: int = typer.Option(config.DEFAULT_TOP_K, "--top-k", "-k", help="Passages to retrieve"),
     task: str = typer.Option("auto", "--task", "-t", help="'auto' (booklet if the case names one, else reference text), 'advanced' or 'beginner'"),
     workers: int = typer.Option(config.BATCH_WORKERS, "--workers", "-w", help="Cases processed in parallel"),
@@ -279,121 +282,124 @@ def run_batch(
 
     client = ApertusClient(mock=True) if mock else None
     engine = ClaimVerificationEngine(strategy=strategy, apertus_client=client)
-    _require_model(engine, mock)
+    try:
+        _require_model(engine, mock)
 
-    def process(idx: int, item: Dict[str, Any]) -> Dict[str, Any]:
-        cid = item.get("id", f"case-{idx:04d}")
-        try:
-            if item.get("_invalid"):
-                raise ValueError(item["_invalid"])
-            claim_text = _text(item.get("claim"))
-            claim_field = item.get("claim")
-            given_lang = str((claim_field.get("language") if isinstance(claim_field, dict) else None)
-                             or item.get("claim_language") or "").lower()
-            claim_lang = given_lang if given_lang in ("de", "fr", "it") else guess_language(claim_text)
-            ref_text = _text(item.get("reference")) or _text(item.get("reference_string"))
-
-            booklet_pdf = None
-            if task != "beginner":
-                booklet_pdf = case_booklet(item, input_path.parent)
-            if booklet_pdf is None and task == "advanced":
-                raise FileNotFoundError("case has no booklet (booklet.path, booklet_file or booklet_url)")
-            if booklet_pdf is None and not ref_text:
-                raise ValueError("case has neither a booklet nor a reference text")
-
-            if booklet_pdf is None:
-                res = engine.verify_premise(claim=claim_text, reference=ref_text, claim_language=claim_lang, case_id=cid)
-            else:
-                res = engine.verify_claim(
-                    claim=claim_text,
-                    booklet_pdf=booklet_pdf,
-                    claim_language=claim_lang,
-                    booklet_language=(item["booklet"].get("language") if isinstance(item.get("booklet"), dict) else None),
-                    vote=_text(item.get("vote")) or None,
-                    strategy=strategy,
-                    top_k=top_k,
-                    case_id=cid,
-                )
-            return res.to_official_dict(case_id=cid)
-        except Exception as exc:
-            # One broken case must never cost the whole batch: emit a valid (neutral) record and continue
-            print(f"[warning] {cid}: {type(exc).__name__}: {exc}", file=sys.stderr)
-            return {
-                "id": cid,
-                "label": 1,
-                "label_name": "neutral",
-                "evidence": [],
-                "metrics": {"input_tokens": 0, "output_tokens": 0, "inference_time_ms": 0},
-            }
-
-    # Cases run in parallel (parsing overlaps with other cases' LLM requests); the output keeps the input order
-    # and every case is predicted independently, so results do not depend on case order
-    import threading
-    from concurrent.futures import ThreadPoolExecutor
-    from src.apertus_client import LLM_CLOCK
-
-    from src import page_pool
-    from src.inference import is_parse_cached
-
-    # Booklets ordered by their number of cases (then first appearance); cases are processed booklet by booklet in this
-    # order, so the workers stay on booklets that are ready while the next ones are parsed. The pages of uncached
-    # booklets are queued at once in a process pool (src/page_pool.py, forked here before any other thread starts).
-    # Results are written in input order, and the processing order does not change any prediction.
-    case_pdfs: List[Optional[Path]] = []
-    for item in cases:
-        try:
-            case_pdfs.append(case_booklet(item, input_path.parent) if task != "beginner" else None)
-        except Exception:
-            case_pdfs.append(None)  # the case itself reports the problem
-    first_seen = {pdf: n for n, pdf in reversed(list(enumerate(case_pdfs))) if pdf is not None}
-    n_cases = {pdf: case_pdfs.count(pdf) for pdf in first_seen}
-    pdfs = sorted(first_seen, key=lambda pdf: (-n_cases[pdf], first_seen[pdf]))
-    rank = {pdf: r for r, pdf in enumerate(pdfs)}
-    order = sorted(range(len(cases)), key=lambda i: (rank.get(case_pdfs[i], -1), i))
-    page_pool.start([pdf for pdf in pdfs if not is_parse_cached(pdf)])
-
-    def prefetch_booklets() -> None:
-        # numpy (via rank_bm25) loads while the first booklet is extracted; then passages and BM25 index booklet by
-        # booklet in the same order, in the background
-        if pdfs:
-            import rank_bm25  # noqa: F401
-            if config.EVIDENCE_POLICY != "legacy":
-                import pymupdf  # noqa: F401  (evidence pages; loaded here instead of in the first finished case)
-        for pdf in pdfs:
+        def process(idx: int, item: Dict[str, Any]) -> Dict[str, Any]:
+            cid = item.get("id", f"case-{idx:04d}")
             try:
-                engine._get_booklet_data(pdf)
+                if item.get("_invalid"):
+                    raise ValueError(item["_invalid"])
+                claim_text = _text(item.get("claim"))
+                claim_field = item.get("claim")
+                given_lang = str((claim_field.get("language") if isinstance(claim_field, dict) else None)
+                                 or item.get("claim_language") or "").lower()
+                claim_lang = given_lang if given_lang in ("de", "fr", "it") else guess_language(claim_text)
+                ref_text = _text(item.get("reference")) or _text(item.get("reference_string"))
+
+                booklet_pdf = None
+                if task != "beginner":
+                    booklet_pdf = case_booklet(item, input_path.parent)
+                if booklet_pdf is None and task == "advanced":
+                    raise FileNotFoundError("case has no booklet (booklet.path, booklet_file or booklet_url)")
+                if booklet_pdf is None and not ref_text:
+                    raise ValueError("case has neither a booklet nor a reference text")
+
+                if booklet_pdf is None:
+                    res = engine.verify_premise(claim=claim_text, reference=ref_text, claim_language=claim_lang, case_id=cid)
+                else:
+                    res = engine.verify_claim(
+                        claim=claim_text,
+                        booklet_pdf=booklet_pdf,
+                        claim_language=claim_lang,
+                        booklet_language=(item["booklet"].get("language") if isinstance(item.get("booklet"), dict) else None),
+                        vote=_text(item.get("vote")) or None,
+                        strategy=strategy,
+                        top_k=top_k,
+                        case_id=cid,
+                    )
+                return res.to_official_dict(case_id=cid)
+            except Exception as exc:
+                # One broken case must never cost the whole batch: emit a valid (neutral) record and continue
+                print(f"[warning] {cid}: {type(exc).__name__}: {exc}", file=sys.stderr)
+                return {
+                    "id": cid,
+                    "label": 1,
+                    "label_name": "neutral",
+                    "evidence": [],
+                    "metrics": {"input_tokens": 0, "output_tokens": 0, "inference_time_ms": 0},
+                }
+
+        # Cases run in parallel (parsing overlaps with other cases' LLM requests); the output keeps the input order
+        # and every case is predicted independently, so results do not depend on case order
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        from src.apertus_client import LLM_CLOCK
+
+        from src import page_pool
+        from src.inference import is_parse_cached
+
+        # Booklets ordered by their number of cases (then first appearance); cases are processed booklet by booklet in this
+        # order, so the workers stay on booklets that are ready while the next ones are parsed. The pages of uncached
+        # booklets are queued at once in a process pool (src/page_pool.py, forked here before any other thread starts).
+        # Results are written in input order, and the processing order does not change any prediction.
+        case_pdfs: List[Optional[Path]] = []
+        for item in cases:
+            try:
+                case_pdfs.append(case_booklet(item, input_path.parent) if task != "beginner" else None)
             except Exception:
-                pass  # the case itself reports the problem
+                case_pdfs.append(None)  # the case itself reports the problem
+        first_seen = {pdf: n for n, pdf in reversed(list(enumerate(case_pdfs))) if pdf is not None}
+        n_cases = {pdf: case_pdfs.count(pdf) for pdf in first_seen}
+        pdfs = sorted(first_seen, key=lambda pdf: (-n_cases[pdf], first_seen[pdf]))
+        rank = {pdf: r for r, pdf in enumerate(pdfs)}
+        order = sorted(range(len(cases)), key=lambda i: (rank.get(case_pdfs[i], -1), i))
+        page_pool.start([pdf for pdf in pdfs if not is_parse_cached(pdf)])
 
-    threading.Thread(target=prefetch_booklets, daemon=True).start()
-    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        done = dict(zip(order, pool.map(lambda i: process(i + 1, cases[i]), order)))
-    official_results = [done[i] for i in range(len(cases))]
-    page_pool.stop()
-    # Our estimate of the scored processing time: wall clock (incl. start-up) minus time with an LLM request in flight
-    wall_s = time.perf_counter() - started
-    non_llm_ms = (wall_s - LLM_CLOCK.busy_s()) * 1000 / max(1, len(cases))
-    if output_path:  # without --output, stdout carries the predictions only
-        print(f"[timing] {len(cases)} cases, wall {wall_s:.1f} s, non-LLM {non_llm_ms:.1f} ms/case", file=sys.stderr)
+        def prefetch_booklets() -> None:
+            # numpy (via rank_bm25) loads while the first booklet is extracted; then passages and BM25 index booklet by
+            # booklet in the same order, in the background
+            if pdfs:
+                import rank_bm25  # noqa: F401
+                if config.EVIDENCE_POLICY != "legacy":
+                    import pymupdf  # noqa: F401  (evidence pages; loaded here instead of in the first finished case)
+            for pdf in pdfs:
+                try:
+                    engine._get_booklet_data(pdf)
+                except Exception:
+                    pass  # the case itself reports the problem
 
-    if output_path:
-        if output_path.parent:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w", encoding="utf-8") as out_f:
-            if config.OFFICIAL_IO or str(output_path).endswith(".jsonl"):
-                for r in official_results:
-                    out_f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        threading.Thread(target=prefetch_booklets, daemon=True).start()
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+            done = dict(zip(order, pool.map(lambda i: process(i + 1, cases[i]), order)))
+        official_results = [done[i] for i in range(len(cases))]
+        page_pool.stop()
+        # Our estimate of the scored processing time: wall clock (incl. start-up) minus time with an LLM request in flight
+        wall_s = time.perf_counter() - started
+        non_llm_ms = (wall_s - LLM_CLOCK.busy_s()) * 1000 / max(1, len(cases))
+        if output_path:  # without --output, stdout carries the predictions only
+            print(f"[timing] {len(cases)} cases, wall {wall_s:.1f} s, non-LLM {non_llm_ms:.1f} ms/case", file=sys.stderr)
+
+        if output_path:
+            if output_path.parent:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as out_f:
+                if config.OFFICIAL_IO or str(output_path).endswith(".jsonl"):
+                    for r in official_results:
+                        out_f.write(json.dumps(r, ensure_ascii=False) + "\n")
+                else:
+                    out_payload = official_results if len(official_results) > 1 else official_results[0]
+                    out_f.write(json.dumps(out_payload, indent=2, ensure_ascii=False) + "\n")
+            print(f"Successfully processed {len(official_results)} case(s) -> {output_path}")
+        else:
+            if config.OFFICIAL_IO:
+                for prediction in official_results:
+                    print(json.dumps(prediction, ensure_ascii=False))
             else:
                 out_payload = official_results if len(official_results) > 1 else official_results[0]
-                out_f.write(json.dumps(out_payload, indent=2, ensure_ascii=False) + "\n")
-        print(f"Successfully processed {len(official_results)} case(s) -> {output_path}")
-    else:
-        if config.OFFICIAL_IO:
-            for prediction in official_results:
-                print(json.dumps(prediction, ensure_ascii=False))
-        else:
-            out_payload = official_results if len(official_results) > 1 else official_results[0]
-            print(json.dumps(out_payload, indent=2, ensure_ascii=False))
+                print(json.dumps(out_payload, indent=2, ensure_ascii=False))
+    finally:
+        engine.close()
     # Exit code 0 even if single cases failed: each of them has a valid neutral record, and a non-zero exit could
     # invalidate the whole submission
 
@@ -401,7 +407,7 @@ def run_batch(
 @app.command()
 def benchmark(
     dataset: Optional[Path] = typer.Option(None, "--dataset", "-d", help="Path to JSONL benchmark dataset"),
-    strategy: str = typer.Option(config.DEFAULT_STRATEGY, "--strategy", "-s", help="Strategy: 'hybrid', 'retrieval' or 'full'"),
+    strategy: str = typer.Option(config.DEFAULT_STRATEGY, "--strategy", "-s", help="Strategy: 'hybrid', 'retrieval', 'full', 'vector' or 'vector_hybrid'"),
     limit: Optional[int] = typer.Option(None, "--limit", "-n", help="Label-balanced sample size"),
     task: str = typer.Option("advanced", "--task", "-t", help="'advanced' (booklet PDF) or 'beginner' (reference string)"),
     top_k: int = typer.Option(config.DEFAULT_TOP_K, "--top-k", "-k", help="Passages to retrieve when using retrieval strategy"),
@@ -418,22 +424,25 @@ def benchmark(
         apertus_client=ApertusClient(mock=True) if mock else None,
         prompt_mode=prompt_mode,
     )
-    _require_model(engine, mock)
-    if dataset and not dataset.exists() and dataset.parent.resolve() == (config.DATA_DIR / "hf").resolve():
-        # The Docker build fetches the OST dataset; if that failed (e.g. offline build), fetch it now
-        from src import hf_dataset
+    try:
+        _require_model(engine, mock)
+        if dataset and not dataset.exists() and dataset.parent.resolve() == (config.DATA_DIR / "hf").resolve():
+            # The Docker build fetches the OST dataset; if that failed (e.g. offline build), fetch it now
+            from src import hf_dataset
 
-        hf_dataset.main()
-    if dataset and not dataset.exists():
-        console.print(f"[bold red]Error:[/bold red] Dataset not found: {dataset}")
-        raise typer.Exit(code=1)
-    from src.evaluator import BenchmarkEvaluator  # lazy: sklearn is slow to import
+            hf_dataset.main()
+        if dataset and not dataset.exists():
+            console.print(f"[bold red]Error:[/bold red] Dataset not found: {dataset}")
+            raise typer.Exit(code=1)
+        from src.evaluator import BenchmarkEvaluator  # lazy: sklearn is slow to import
 
-    evaluator = BenchmarkEvaluator(engine=engine)
-    evaluator.evaluate(
-        dataset_path=dataset, strategy=strategy, limit=limit, task=task,
-        top_k=top_k, workers=workers, seed=seed, tag=tag,
-    )
+        evaluator = BenchmarkEvaluator(engine=engine)
+        evaluator.evaluate(
+            dataset_path=dataset, strategy=strategy, limit=limit, task=task,
+            top_k=top_k, workers=workers, seed=seed, tag=tag,
+        )
+    finally:
+        engine.close()
 
 
 @app.command()

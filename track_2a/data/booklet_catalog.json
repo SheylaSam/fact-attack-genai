@@ -1,0 +1,728 @@
+{
+  "metadata_source": "https://huggingface.co/datasets/OSTswiss/MNLIoverSwissVotingBooklets",
+  "sources": {
+    "2020-02-09_fr.pdf": {
+      "date": "2020-02-09",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/aSmZ7rOvZDrG/2020-02-09_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Interdiction de la discriminatio n en raison de l’orientatio n sexuelle",
+        "Initiative populaire « Davantage de logements abordables »"
+      ],
+      "sha256": "e57074725ce371592bfb0760665c3d90d99b972ca48dfcb0577022276da9a54e"
+    },
+    "2020-02-09_de.pdf": {
+      "date": "2020-02-09",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/aSmZ7rOvZDrG/2020-02-09_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Volksinitiativ e «Mehr bezahlbare Wohnungen»",
+        "Verbot der Diskriminierung aufgrund der sexuellen Orientierung"
+      ],
+      "sha256": "9df0813f2728c9de6dd29b132acf11d3e13bf7a011b7e6475a4c8b5155c889c8"
+    },
+    "2020-02-09_it.pdf": {
+      "date": "2020-02-09",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/aSmZ7rOvZDrG/2020-02-09_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Divieto della discriminazione basata sull’orientamento sessuale",
+        "Iniziativa popolar e «Più abitazioni a prezzi accessibili»"
+      ],
+      "sha256": "480dd90b98de6d9f680a98d0cc165715b939e539e5e31da3dbe34846a610ad6d"
+    },
+    "2020-09-27_fr.pdf": {
+      "date": "2020-09-27",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/XuiMCko39BzI/2020-09-27_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Modification de la loi sur les allocations pour perte de gain (contre-projet indirect à l’initiative populaire « Pour un congé de paternité raisonnable – en faveur de toute la famille »)",
+        "Modification de la loi fédérale sur l’impôt fédéral direct",
+        "Initiative populaire « Pour une immigration modérée (initiative de limitation) »",
+        "Arrêté fédéral relatif à l’acquisition de nouveaux avions de combat",
+        "Modification de la loi sur la chasse"
+      ],
+      "sha256": "8e3c67fd515a7438d1ec687be65001c01a0ece56eb952fdd23f9ca23c8393355"
+    },
+    "2020-09-27_de.pdf": {
+      "date": "2020-09-27",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/XuiMCko39BzI/2020-09-27_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Änderung des Bundesgesetzes über die direkte Bundessteuer",
+        "Bundesbeschluss über die Beschaffung neuer Kampf flugzeuge",
+        "Volksinitiative «Für eine massvolle Zuwanderung (Begrenzungsinitiative)»",
+        "Änderung des Erwerbsersatz gesetzes (indirekter Gegenvorschlag zur Volksinitiative «Für einen vernünftigen Vaterschaftsurlaub – zum Nutzen der ganzen Familie»)",
+        "Änderung des Jagdgesetzes"
+      ],
+      "sha256": "a6663984e2d5c42e4c2548fd146229440e9ed941236b1d0221891f0b5c0ca50b"
+    },
+    "2020-09-27_it.pdf": {
+      "date": "2020-09-27",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/XuiMCko39BzI/2020-09-27_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Decreto federale concernente l’acquisto di nuovi aerei da combattimento",
+        "Modifica della legge federale sull’imposta federale diretta",
+        "Iniziativa popolare «Per un’immigrazione moderata (Iniziativa per la limitazione)»",
+        "Modifica della legge sulla caccia",
+        "Modifica della legge sulle indennità di perdita di guadagno (controprogetto indiretto all’iniziativa popolare «Per un congedo di paternità ragionevole – a favore di tutta la famiglia»)"
+      ],
+      "sha256": "76acc2e7d58639dccae9d52d7cdeba73418f57aec9928fa0898017f7be2e5111"
+    },
+    "2020-11-29_it.pdf": {
+      "date": "2020-11-29",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/ywovGJwC1GeO/2020-11-29_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Iniziativa popolare «Per il divieto di finanziare i produttori di materiale bellico»",
+        "Iniziativa popolare «Per imprese responsabili – a tutela dell’essere umano e dell’ambiente»"
+      ],
+      "sha256": "6d4b77f24df45bf73e4e4fefdff30e1a77016ccc057ed2137d04269367490f6e"
+    },
+    "2020-11-29_fr.pdf": {
+      "date": "2020-11-29",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/ywovGJwC1GeO/2020-11-29_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Initiative populaire « Entreprises responsables – pour protéger l’être humain et l’environnement »",
+        "Initiative populaire « Pour une interdiction du financement des producteurs de matériel de guerre »"
+      ],
+      "sha256": "62870b79f34f5d9af48ca53709090140403133edc23ef393bf7b17bcdd35c48f"
+    },
+    "2020-11-29_de.pdf": {
+      "date": "2020-11-29",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/ywovGJwC1GeO/2020-11-29_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Volksinitiative «Für verantwortungsvolle Unternehmen – zum Schutz von Mensch und Umwelt»",
+        "Volksinitiative «Für ein Verbot der Finanzierung von Kriegs materialproduzenten»"
+      ],
+      "sha256": "bc43ce8b442b0fd05821da5619afc173d3ba0e9936cef91c6a8772e600885f88"
+    },
+    "2021-03-07_de.pdf": {
+      "date": "2021-03-07",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/jezxrs8DLj5a/2021-03-07_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Wirtschaftspartnerschaftsabkommen mit Indonesien",
+        "Bundesgesetz über elektronische Identifizierungsdienste (E-ID-Gesetz)",
+        "Volksinitiative «Ja zum Verhüllungsverbot»"
+      ],
+      "sha256": "a4cc2b811cdd959cbb3353101c226cdbd2398cef17028349c241a833559dc6d2"
+    },
+    "2021-03-07_fr.pdf": {
+      "date": "2021-03-07",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/jezxrs8DLj5a/2021-03-07_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Accord de partenariat économique avec l’Indonésie",
+        "Loi fédérale sur les services d’identification électronique (LSIE)",
+        "Initiative populaire « Oui à l’interdiction de se dissimuler le visage »"
+      ],
+      "sha256": "127fe5bf35487ae5327cf27553838123974263f140d924fc5c1e73c0fca0bfcf"
+    },
+    "2021-03-07_it.pdf": {
+      "date": "2021-03-07",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/jezxrs8DLj5a/2021-03-07_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Legge federale sui servizi d’identificazione elettronica (Legge sull’Ie)",
+        "Accordo di partenariato economico con l’Indonesia",
+        "Iniziativa popolare «Sì al divieto di dissimulare il proprio viso»"
+      ],
+      "sha256": "e6ffd768c3c65b9ca19566bc6bc6fda6f1f9e4324cce7898475e02bfec526e21"
+    },
+    "2021-06-13_de.pdf": {
+      "date": "2021-06-13",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/UxUxfYD5ma0h/2021-06-13_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "CO2-Gesetz",
+        "Volksinitiative für sauberes Trinkwasser und gesunde Nahrung",
+        "Covid-19-Gesetz",
+        "Volksinitiative «Für eine Schweiz ohne synthetische Pestizide»",
+        "Bundesgesetz über polizeiliche Massnahmen zur Bekämpfung von Terrorismus (PMT)"
+      ],
+      "sha256": "521e39af06717d2adeb2f787a08b533164921a952c59b7ad3e5b114fcadec744"
+    },
+    "2021-06-13_it.pdf": {
+      "date": "2021-06-13",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/UxUxfYD5ma0h/2021-06-13_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Iniziativa popolare «Per una Svizzera senza pesticidi sintetici»",
+        "Legge sul CO2",
+        "Legge federale sulle misure di polizia per la lotta al terrorismo (MPT)",
+        "Iniziativa popolare per acqua potabile pulita e cibo sano",
+        "Legge COVID-19"
+      ],
+      "sha256": "89443719a1e8c0ea4d954754d50e81253bb2f4d2f6ce4d2ad1c19cf0edd570de"
+    },
+    "2021-06-13_fr.pdf": {
+      "date": "2021-06-13",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/UxUxfYD5ma0h/2021-06-13_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Initiative populaire « Pour une Suisse libre de pesticides de synthèse »",
+        "Loi sur le CO2",
+        "Loi COVID-19",
+        "Initiative populaire pour une eau potable propre et une alimentation saine",
+        "Loi fédérale sur les mesures policières de lutte contre le terrorisme (MPT)"
+      ],
+      "sha256": "65c54df2537b8ab9d6e155c0e602d6bc2379e47741004bc66565064d0aee4ab4"
+    },
+    "2021-09-26_de.pdf": {
+      "date": "2021-09-26",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/NJXQlhZXHqDA/2021-09-26_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Ehe für alle",
+        "Volksinitiative «Löhne entlasten, Kapital gerecht besteuern»"
+      ],
+      "sha256": "ebb4288817f5f5fdbde3aa24bf67688220e6c8e2f9fcf82f947a44aec046f341"
+    },
+    "2021-09-26_fr.pdf": {
+      "date": "2021-09-26",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/NJXQlhZXHqDA/2021-09-26_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Mariage pour tous",
+        "Initiative populaire « Alléger les impôts sur les salaires, imposer équitablement le capital »"
+      ],
+      "sha256": "ae46dce97c0eb0b000339159ba998f373126f1879eff6bcfed6398d147d30ecf"
+    },
+    "2021-09-26_it.pdf": {
+      "date": "2021-09-26",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/NJXQlhZXHqDA/2021-09-26_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Iniziativa popolare «Sgravare i salari, tassare equamente il capitale»",
+        "Matrimonio per tutti"
+      ],
+      "sha256": "d01075b2fabc1609d8c7e2b5ede595286c504d35ea4947b1fa0709fddbb63538"
+    },
+    "2021-11-28_it.pdf": {
+      "date": "2021-11-28",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/TbPPMZBkuvPm/2021-11-28_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Iniziativa sulle cure infermieristiche",
+        "Iniziativa sulla giustizia",
+        "Modifica del 19 marzo 2021 della legge COVID-19"
+      ],
+      "sha256": "72bc2e78fd62f8452a8fe9aebd31c5740e77d30e298ed940dcbf788b4ab8cba2"
+    },
+    "2021-11-28_de.pdf": {
+      "date": "2021-11-28",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/TbPPMZBkuvPm/2021-11-28_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Pflegeinitiative",
+        "Änderung vom 19. März 2021 des Covid-19-Gesetzes",
+        "Justiz-Initiative"
+      ],
+      "sha256": "f463fb7ea4b7f663d5e2af0f67bc8e364778ee3c0a19f56caadc655bc2670a7b"
+    },
+    "2021-11-28_fr.pdf": {
+      "date": "2021-11-28",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/TbPPMZBkuvPm/2021-11-28_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Initiative sur les soins infirmiers",
+        "Modification du 19 mars 2021 de la loi COVID-19",
+        "Initiative sur la justice"
+      ],
+      "sha256": "340fecfcdcdf292824addf73002c60e91a86744648355665035a5356a38d2225"
+    },
+    "2022-02-13_de.pdf": {
+      "date": "2022-02-13",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/JwKnnvQMcYT2/2022-02-13_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Volksinitiative «Ja zum Schutz der Kinder und Jugendlichen vor Tabakwerbung (Kinder und Jugendliche ohne Tabakwerbung)»",
+        "Bundesgesetz über ein Massnahmenpaket zugunsten der Medien",
+        "Volksinitiative «Ja zum Tier- und Menschenversuchsverbot – Ja zu Forschungswegen mit Impulsen für Sicherheit und Fortschritt»",
+        "Änderung des Bundesgesetzes über die Stempelabgaben"
+      ],
+      "sha256": "4979a6ed7f2f6616cc692638341b00ef20bb3e74cb6a40608f6f8c968fe167a4"
+    },
+    "2022-02-13_it.pdf": {
+      "date": "2022-02-13",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/JwKnnvQMcYT2/2022-02-13_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Iniziativa popolare «Sì al divieto degli esperimenti sugli animali e sugli esseri umani – Sì ad approcci di ricerca che favoriscano la sicurezza e il progresso»",
+        "Modifica della legge federale sulle tasse di bollo",
+        "Iniziativa popolare «Sì alla protezione dei fanciulli e degli adolescenti dalla pubblicità per il tabacco (Fanciulli e adolescenti senza pubblicità per il tabacco)»",
+        "Legge federale su un pacchetto di misure a favore dei media"
+      ],
+      "sha256": "1f3346e546e5384f70fd7df7bb80db3be2df5681bd0ff5067437fa1ee7b52a2d"
+    },
+    "2022-02-13_fr.pdf": {
+      "date": "2022-02-13",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/JwKnnvQMcYT2/2022-02-13_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Loi fédérale sur un train de mesures en faveur des médias",
+        "Initiative populaire « Oui à l’interdiction de l’expérimentation animale et humaine – Oui aux approches de recherche qui favorisent la sécurité et le progrès »",
+        "Initiative populaire « Oui à la protection des enfants et des jeunes contre la publicité pour le tabac (enfants et jeunes sans publicité pour le tabac) »",
+        "Modification de la loi fédérale sur les droits de timbre"
+      ],
+      "sha256": "2d8cb9710acf095b5bdb2f5cf431f1bdd93e21b5e250b168170a1e249b0b7a22"
+    },
+    "2022-05-15_it.pdf": {
+      "date": "2022-05-15",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/PCWaDg8-GOcJ/2022-05-15_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Recepimento del regolamento UE relativo alla guardia di frontiera e costiera europea (Sviluppo dell’acquis di Schengen)",
+        "Modifica della legge sui trapianti (controprogetto indiretto all’iniziativa popolare «Favorire la donazione di organi e salvare vite umane»)",
+        "Modifica della legge sul cinema"
+      ],
+      "sha256": "f23c14a6ee995836f5a8e0ec5c1776e429128313f59231fc723cc09260d0a608"
+    },
+    "2022-05-15_fr.pdf": {
+      "date": "2022-05-15",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/PCWaDg8-GOcJ/2022-05-15_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Modification de la loi sur le cinéma",
+        "Modification de la loi sur la transplantation (contre-projet indirect à l’initiative populaire « Pour sauver des vies en favorisant le don d’organes »)",
+        "Reprise du règlement de l’UE relatif au corps européen de garde-frontières et de garde-côtes (développement de l’acquis de Schengen)"
+      ],
+      "sha256": "f9c5d7830a90b9af3b0c8fde853e036a14ca1b111958342bb39ad98576adc308"
+    },
+    "2022-05-15_de.pdf": {
+      "date": "2022-05-15",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/PCWaDg8-GOcJ/2022-05-15_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Übernahme der EU-Verordnung über die Europäische Grenz- und Küstenwache (Weiterentwicklung des Schengen-Besitzstands)",
+        "Änderung des Transplantationsgesetzes (indirekter Gegenvorschlag zur Volksinitiative «Organspende fördern – Leben retten»)",
+        "Änderung des Filmgesetzes"
+      ],
+      "sha256": "c12ea935b73d98790649c3bb8f3f3c5ff967a999a0a4ddc969121b9dd5d47335"
+    },
+    "2022-09-25_fr.pdf": {
+      "date": "2022-09-25",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/SwAIDvDocLte/2022-09-25_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Modification de la loi fédérale sur l’assurance-vieillesse et survivants (AVS 21)",
+        "Initiative populaire « Non à l’élevage intensif en Suisse (initiative sur l’élevage intensif) »",
+        "Modification de la loi fédérale sur l’impôt anticipé",
+        "Financement additionnel de l’AVS par le biais d’un relèvement de la TVA"
+      ],
+      "sha256": "ed311ed79502a5ffb79d33e83d6ed177cb01aa3b9d1fdb9b5e324fadb443ca78"
+    },
+    "2022-09-25_de.pdf": {
+      "date": "2022-09-25",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/SwAIDvDocLte/2022-09-25_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Volksinitiative «Keine Massentierhaltung in der Schweiz (Massentierhaltungsinitiative)»",
+        "Änderung des Bundesgesetzes über die Alters- und Hinterlassenenversicherung (AHV 21)",
+        "Änderung des Bundesgesetzes über die Verrechnungssteuer",
+        "Zusatzfinanzierung der AHV durch eine Erhöhung der Mehrwertsteuer"
+      ],
+      "sha256": "c67c9bce6da1b5587ee25919cff8172d33c45081e10a96f7c0476f49a91d2b97"
+    },
+    "2022-09-25_it.pdf": {
+      "date": "2022-09-25",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/SwAIDvDocLte/2022-09-25_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Modifica della legge federale sull’assicurazione per la vecchiaia e per i superstiti (AVS 21)",
+        "Modifica della legge federale sull’imposta preventiva",
+        "Finanziamento supplementare dell’AVS mediante l’aumento dell’imposta sul valore aggiunto",
+        "Iniziativa popolare «No all’allevamento intensivo in Svizzera (Iniziativa sull’allevamento intensivo)»"
+      ],
+      "sha256": "7889873c9920e2d9d587d52a6067076123d15810065248349f47253fb85c151d"
+    },
+    "2023-06-18_fr.pdf": {
+      "date": "2023-06-18",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/Lv5UWt6X1iUj/2023-06-18_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Loi fédérale sur les objectifs en matière de protection du climat, sur l’innovation et sur le renforcement de la sécurité énergétique (contre-projet indirect à l’initiative pour les glaciers)",
+        "Mise en œuvre du projet de l’OCDE et du G20 sur l’imposition des grands groupes d’entreprises",
+        "Modification du 16 décembre 2022 de la loi COVID-19"
+      ],
+      "sha256": "925a6f553a6f67059cebacccfa7d4efcffc3a31d5441d9c978a57546b6b8bdd6"
+    },
+    "2023-06-18_it.pdf": {
+      "date": "2023-06-18",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/Lv5UWt6X1iUj/2023-06-18_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Legge federale sugli obiettivi in materia di protezione del clima, l’innovazione e il rafforzamento della sicurezza energetica (controprogetto indiretto all’iniziativa per i ghiacciai)",
+        "Modifica del 16 dicembre 2022 della legge COVID-19",
+        "Attuazione del progetto dell’OCSE e del G20 sull’imposizione dei grandi gruppi di imprese"
+      ],
+      "sha256": "1f61954e466f96ae0743dec3791bd68b5a10d7ddfaa3e58a95e9bde3a6d6bc6a"
+    },
+    "2023-06-18_de.pdf": {
+      "date": "2023-06-18",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/Lv5UWt6X1iUj/2023-06-18_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Umsetzung des OECD/G20- Projekts zur Besteuerung grosser Unternehmensgruppen",
+        "Bundesgesetz über die Ziele im Klimaschutz, die Innovation und die Stärkung der Energiesicherheit (indirekter Gegenvorschlag zur Gletscher-Initiative)",
+        "Änderung vom 16. Dezember 2022 des Covid-19-Gesetzes"
+      ],
+      "sha256": "d496622d23589e2c9379d2172e0d8c60eca4bbd119588c656c39d49170862881"
+    },
+    "2024-03-03_fr.pdf": {
+      "date": "2024-03-03",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/In9i5Kp4p64r/2024-03-03_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Initiative populaire « Pour une prévoyance vieillesse sûre et pérenne (initiative sur les rentes) »",
+        "Initiative populaire « Mieux vivre à la retraite (initiative pour une 13e rente AVS) »"
+      ],
+      "sha256": "b28e64fbbdb39c3e9499056e433cbcb763c154799fff775262d0becd86d77cd9"
+    },
+    "2024-03-03_de.pdf": {
+      "date": "2024-03-03",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/In9i5Kp4p64r/2024-03-03_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Volksinitiative «Für ein besseres Leben im Alter (Initiative für eine 13. AHV-Rente)»",
+        "Volksinitiative «Für eine sichere und nachhaltige Altersvorsorge (Renteninitiative)»"
+      ],
+      "sha256": "53c7cc72c28f80969ed56d7813ad8c05e505b1817923418d0dfa45368a6bd07e"
+    },
+    "2024-03-03_it.pdf": {
+      "date": "2024-03-03",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/In9i5Kp4p64r/2024-03-03_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Iniziativa popolare federale «Vivere meglio la pensione (Iniziativa per una 13esima mensilità AVS)»",
+        "Iniziativa popolare «Per una previdenza vecchiaia sicura e sostenibile (Iniziativa sulle pensioni)»"
+      ],
+      "sha256": "3d701765d014b9072a084dcd47ae4dd7bbf798a4b0f382078645b2683a4ce114"
+    },
+    "2024-06-09_fr.pdf": {
+      "date": "2024-06-09",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/z11TVw3xAFqy/2024-06-09_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Loi fédérale relative à un approvisionnement en électricité sûr reposant sur des énergies renouvelables",
+        "Initiative populaire « Pour des primes plus basses. Frein aux coûts dans le système de santé (initiative pour un frein aux coûts) »",
+        "Initiative populaire « Maximum 10 % du revenu pour les primes d’assurance-maladie (initiative d’allègement des primes) »",
+        "Initiative populaire « Pour la liberté et l’intégrité physique »"
+      ],
+      "sha256": "8cedb2df05d10299734c86d6d37d80fbd4bb4a6685044455792c77fc73f2d7f6"
+    },
+    "2024-06-09_it.pdf": {
+      "date": "2024-06-09",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/z11TVw3xAFqy/2024-06-09_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Iniziativa popolare «Per premi più bassi – Freno ai costi nel settore sanitario (Iniziativa per un freno ai costi)»",
+        "Legge federale su un approvvigionamento elettrico sicuro con le energie rinnovabili",
+        "Iniziativa popolare «Al massimo il 10 per cento del reddito per i premi delle casse malati (Iniziativa per premi meno onerosi)»",
+        "Iniziativa popolare «Per la libertà e l’integrità fisica»"
+      ],
+      "sha256": "691ad90ad95cb4983dfc0bf1f7b43750af34ccc7d3f737ad19a48c263ee54676"
+    },
+    "2024-06-09_de.pdf": {
+      "date": "2024-06-09",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/z11TVw3xAFqy/2024-06-09_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Volksinitiative «Für Freiheit und körperliche Unversehrtheit»",
+        "Volksinitiative «Für tiefere Prämien – Kostenbremse im Gesundheitswesen (Kostenbremse-Initiative)»",
+        "Volksinitiative «Maximal 10 % des Einkommens für die Krankenkassenprämien (Prämien-Entlastungs-Initiative)»",
+        "Bundesgesetz über eine sichere Stromversorgung mit erneuerbaren Energien"
+      ],
+      "sha256": "b5ced6e09502bf5956ce6219c8332a1611566b19a8d8ff7ddf3beb6c44924f92"
+    },
+    "2024-09-22_it.pdf": {
+      "date": "2024-09-22",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/iWYLyEPfLvhn/2024-09-22_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Riforma della previdenza professionale",
+        "Iniziativa popolare «Per il futuro della nostra natura e del nostro paesaggio (Iniziativa biodiversità)»"
+      ],
+      "sha256": "581a2c4bdacc8e31bd1d9f854e16918d13f2bf2687971daa886300193de6f327"
+    },
+    "2024-09-22_fr.pdf": {
+      "date": "2024-09-22",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/iWYLyEPfLvhn/2024-09-22_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Réforme de la prévoyance professionnelle",
+        "Initiative populaire « Pour l’avenir de notre nature et de notre paysage (Initiative biodiversité) »"
+      ],
+      "sha256": "e6717534db788bf85e15bc505c5ab6f839cd61396be0f84a5aa035c767de8578"
+    },
+    "2024-09-22_de.pdf": {
+      "date": "2024-09-22",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/iWYLyEPfLvhn/2024-09-22_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Volksinitiative «Für die Zukunft unserer Natur und Landschaft (Biodiversitätsinitiative)»",
+        "Reform der beruflichen Vorsorge"
+      ],
+      "sha256": "d8e0047ae589df3bdaa91c93fcb0f6dd0cbb5e36f7aab00fe293ad996a9bfed4"
+    },
+    "2024-11-24_de.pdf": {
+      "date": "2024-11-24",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/wHXT9BH3VlYQ/2024-11-24_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Änderung des Obligationenrechts (Mietrecht: Kündigung wegen Eigenbedarfs)",
+        "Änderung des Obligationenrechts (Mietrecht: Untermiete)",
+        "Bundesbeschluss über den Ausbauschritt 2023 für die Nationalstrassen",
+        "Änderung des Bundesgesetzes über die Krankenversicherung (KVG) (Einheitliche Finanzierung der Leistungen)"
+      ],
+      "sha256": "9ea4ea66c852f580360e4b0837e0af8b5b201eedb8c2f4639fce9a7420dd4b84"
+    },
+    "2024-11-24_it.pdf": {
+      "date": "2024-11-24",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/wHXT9BH3VlYQ/2024-11-24_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Modifica del Codice delle obbligazioni (Diritto di locazione: disdetta per bisogno personale)",
+        "Modifica della legge federale sull’assicurazione malattie (LAMal) (Finanziamento uniforme delle prestazioni)",
+        "Modifica del diritto di locazione (Diritto di locazione: sublocazione)",
+        "Decreto federale sulla Fase di potenziamento 2023 delle strade nazionali"
+      ],
+      "sha256": "a8d40f5f65411f258a36aa7f64941a8853fe7c23c9cb9d0609d5addd4aa4932a"
+    },
+    "2024-11-24_fr.pdf": {
+      "date": "2024-11-24",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/wHXT9BH3VlYQ/2024-11-24_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Arrêté fédéral sur l’étape d’aménagement 2023 des routes nationales",
+        "Modification du code des obligations (droit du bail : sous-location)",
+        "Modification du code des obligations (droit du bail : résiliation pour besoin propre)",
+        "Modification de la loi fédérale sur l’assurance-maladie (financement uniforme des prestations)"
+      ],
+      "sha256": "39d395833d051d950d37c75003b4ecbea917e221db17eed55e3cb5ffdcd364b1"
+    },
+    "2025-02-09_it.pdf": {
+      "date": "2025-02-09",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/9igLXNhBGtsc/2025-02-09_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Iniziativa popolare «Per un’economia responsabile entro i limiti del pianeta (Iniziativa per la responsabilità ambientale)»"
+      ],
+      "sha256": "68a097ce1c55950e4edb824d40d954c623a2b53112a22db455e1c9af6b419563"
+    },
+    "2025-02-09_de.pdf": {
+      "date": "2025-02-09",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/9igLXNhBGtsc/2025-02-09_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Volksinitiative «Für eine verantwortungsvolle Wirtschaft innerhalb der planetaren Grenzen (Umweltverantwortungsinitiative)»"
+      ],
+      "sha256": "97756edd20157c63956334c8ef563af17fecfd96afa9fd8fba2777b64df36180"
+    },
+    "2025-02-09_fr.pdf": {
+      "date": "2025-02-09",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/9igLXNhBGtsc/2025-02-09_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Initiative populaire « Pour une économie responsable respectant les limites planétaires (initiative pour la responsabilité environnementale) »"
+      ],
+      "sha256": "166db1fcd0587220d3a8f92bad101523a134b77d7a8e2be4b03690c9c16f0fd0"
+    },
+    "2025-09-28_fr.pdf": {
+      "date": "2025-09-28",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/6DaWglL-N7NM/2025-09-28_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Loi fédérale sur l’identité électronique et d’autres moyens de preuves électroniques (loi sur l’e-ID)",
+        "Arrêté fédéral relatif à l’impôt immobilier cantonal sur les résidences secondaires"
+      ],
+      "sha256": "f426e4637a10ecdb7a14296c6455918d47e90b4347a953156be1c00cf1bbfd67"
+    },
+    "2025-09-28_it.pdf": {
+      "date": "2025-09-28",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/6DaWglL-N7NM/2025-09-28_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Legge federale sul mezzo d’identificazione elettronico e altri mezzi di autenticazione elettronici (Legge sull’Id-e)",
+        "Decreto federale concernente l’imposta immobiliare cantonale sulle abitazioni secondarie"
+      ],
+      "sha256": "7b8d069bb8d207a1a8ec9a7af49a765d4c19153dee249b3818261d45bf2d5ed8"
+    },
+    "2025-09-28_de.pdf": {
+      "date": "2025-09-28",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/6DaWglL-N7NM/2025-09-28_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Bundesgesetz über den elektronischen Identitätsnachweis und andere elektronische Nachweise (E-ID-Gesetz)",
+        "Bundesbeschluss über die kantonalen Liegenschaftssteuern auf Zweitliegenschaften"
+      ],
+      "sha256": "39c020145299913685e4d0b6899fa23bb1f94938652a417e0c1da08d316ade8a"
+    },
+    "2025-11-30_de.pdf": {
+      "date": "2025-11-30",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/x6Qn59zt63F7/2025-11-30_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Volksinitiative «Für eine engagierte Schweiz (Service-citoyen-Initiative)»",
+        "Volksinitiative «Für eine soziale Klimapolitik – steuerlich gerecht finanziert (Initiative für eine Zukunft)»"
+      ],
+      "sha256": "4b612b614e65e028c2c0fdaf7bf3d32ddbdcbea060b7540180969c95cf694636"
+    },
+    "2025-11-30_it.pdf": {
+      "date": "2025-11-30",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/x6Qn59zt63F7/2025-11-30_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Iniziativa popolare «Per una politica climatica sociale finanziata in modo fiscalmente equo (Iniziativa per il futuro)»",
+        "Iniziativa popolare «Per una Svizzera che si impegna (Iniziativa Servizio civico)»"
+      ],
+      "sha256": "05a8b22b924597419ba1a89a06e9261a143111944be670260b9e3a0df5c9404a"
+    },
+    "2025-11-30_fr.pdf": {
+      "date": "2025-11-30",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/x6Qn59zt63F7/2025-11-30_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Initiative populaire « Pour une Suisse qui s’engage (initiative service citoyen) »",
+        "Initiative populaire « Pour une politique climatique sociale financée de manière juste fiscalement (initiative pour l’avenir) »"
+      ],
+      "sha256": "137ed9d255ab729265d7cfb765e9befc8a51e3fe5723e88772717ebb59504f8f"
+    },
+    "2026-03-08_fr.pdf": {
+      "date": "2026-03-08",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/MDRXrtFaVPNG/2026-03-08_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Initiative populaire « Oui à une monnaie suisse libre et indépendante sous forme de pièces ou de billets (l’argent liquide, c’est la liberté) » et contre-projet direct (arrêté fédéral sur la monnaie suisse et l’approvisionnement en numéraire)",
+        "Initiative populaire « Pour une politique énergétique et climatique équitable : investir pour la prospérité, le travail et l’environnement (initiative pour un fonds climat) »",
+        "Loi fédérale sur l’imposition individuelle (contre-projet indirect à l’initiative pour des impôts équitables)",
+        "Initiative populaire « 200 francs, ça suffit ! (initiative SSR) »"
+      ],
+      "sha256": "2ec02c4d1e2cffae67f89fc5b07af117fa455f5a925cdcd3db0938e1855d053b"
+    },
+    "2026-03-08_de.pdf": {
+      "date": "2026-03-08",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/MDRXrtFaVPNG/2026-03-08_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Volksinitiative « 200 Franken sind genug! (SRG-Initiative) »",
+        "Bundesgesetz über die Individualbesteuerung (indirekter Gegenvorschlag zur Steuergerechtigkeits-Initiative)",
+        "Volksinitiative « Ja zu einer unabhängigen, freien Schweizer Währung mit Münzen oder Banknoten (Bargeld ist Freiheit) » und direkter Gegenentwurf (Bundesbeschluss über die schweizerische Währung und die Bargeldversorgung)",
+        "Volksinitiative « Für eine gerechte Energie- und Klimapolitik: Investieren für Wohlstand, Arbeit und Umwelt (Klimafonds-Initiative) »"
+      ],
+      "sha256": "d0c794f37d6d2cb25e9969ed058e2a7d7c3e2508f7f03e2b5e90415d364f6170"
+    },
+    "2026-03-08_it.pdf": {
+      "date": "2026-03-08",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/MDRXrtFaVPNG/2026-03-08_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Iniziativa popolare « 200 franchi bastano! (Iniziativa SSR) »",
+        "Iniziativa popolare « Sì a una valuta svizzera indipendente e libera con monete o banconote (Il denaro contante è libertà) » e controprogetto diretto (decreto federale concernente l’unità monetaria svizzera e l’approvvigionamento in numerario)",
+        "Iniziativa popolare « Per una politica energetica e climatica equa: investire per la prosperità, il lavoro e l’ambiente (Iniziativa per un fondo per il clima) »",
+        "Legge federale sull’imposizione individuale (controprogetto indiretto all’iniziativa per imposte eque)"
+      ],
+      "sha256": "a6ff4964b4cfc0a9d82936cb1e1200396201d66ea29331c5c94d312b35b64a1b"
+    },
+    "2026-06-14_fr.pdf": {
+      "date": "2026-06-14",
+      "language": "fr",
+      "url": "https://www.bk.admin.ch/dam/fr/sd-web/WeUrKyC0FyPc/2026-06-14_explications_du_conseil_federal.pdf",
+      "votes": [
+        "Initiative populaire « Pas de Suisse à 10 millions ! (initiative pour la durabilité) »",
+        "Modification de la loi fédérale sur le service civil"
+      ],
+      "sha256": "15391d5fdf2faac51ceff1f4b31f463a7b838587bc1e52ada57e85cc7e6c76d5"
+    },
+    "2026-06-14_de.pdf": {
+      "date": "2026-06-14",
+      "language": "de",
+      "url": "https://www.bk.admin.ch/dam/de/sd-web/WeUrKyC0FyPc/2026-06-14_erlaeuterungen_des_bundesrates.pdf",
+      "votes": [
+        "Änderung des Zivildienstgesetzes",
+        "Volksinitiative «Keine 10-Millionen-Schweiz! (Nachhaltigkeitsinitiative)»"
+      ],
+      "sha256": "13c434202d63d32ca57f03311fb9de5fc7477d5c49ea14b06984f5d3a8591115"
+    },
+    "2026-06-14_it.pdf": {
+      "date": "2026-06-14",
+      "language": "it",
+      "url": "https://www.bk.admin.ch/dam/it/sd-web/WeUrKyC0FyPc/2026-06-14_spiegazioni_del_consigliofederale.pdf",
+      "votes": [
+        "Modifica della legge sul servizio civile",
+        "Iniziativa popolare «No a una Svizzera da 10 milioni! (Iniziativa per la sostenibilità)»"
+      ],
+      "sha256": "b5212bf5086306a5d45058aae56be6cef2af02f76bc963b7f72cf2c71c4b6931"
+    },
+    "2026-09-27_de.pdf": {
+      "date": "2026-09-27",
+      "language": "de",
+      "url": "https://www.admin.ch/dam/de/sd-web/3E6DtQlSES3i/DE-%20Volksabstimmung%20vom%2027.%20September%202026%20-%20Erl%C3%A4uterungen%20des%20Bundesrates.pdf",
+      "votes": [
+        "Volksinitiative «Wahrung der schweizerischen Neutralität (Neutralitätsinitiative)»",
+        "Volksinitiative «Für eine sichere Ernährung – durch Stärkung einer nachhaltigen inländischen Produktion, mehr pflanzliche Lebensmittel und sauberes Trinkwasser (Ernährungsinitiative)»"
+      ],
+      "sha256": "6d27a4c6c5ed0e8583a49864979dcc2ddeeb4c65e895b97a2df3fa1d089dbc15"
+    },
+    "2026-09-27_fr.pdf": {
+      "date": "2026-09-27",
+      "language": "fr",
+      "url": "https://www.admin.ch/dam/fr/sd-web/3E6DtQlSES3i/Votation%20populaire%20du%2027%20septembre%202026%20-%20Explications%20du%20Conseil%20f%C3%A9d%C3%A9ral.pdf",
+      "votes": [
+        "Initiative populaire « Sauvegarder la neutralité suisse (initiative sur la neutralité) »",
+        "Initiative populaire «Pour une alimentation sûre – grâce au renforcement de la production indigène durable, à davantage de denrées alimentaires végétales et à une eau potable propre (initiative sur l’alimentation)»"
+      ],
+      "sha256": "df3b26401da0189ea2872f1d75ed5198e158e84e51c962eb463443aea79e0dfc"
+    },
+    "2026-09-27_it.pdf": {
+      "date": "2026-09-27",
+      "language": "it",
+      "url": "https://www.admin.ch/dam/it/sd-web/3E6DtQlSES3i/Votazione%20popolare%20del%2027%20settembre%202026%20-%20Spiegazioni%20del%20Consiglio%20federale.pdf",
+      "votes": [
+        "Iniziativa popolare «Salvaguardia della neutralità svizzera (Iniziativa sulla neutralità)»",
+        "Iniziativa popolare «Per un’alimentazione sicura – mediante il rafforzamento di una produzione nazionale sostenibile, più derrate alimentari vegetali e acqua potabile pulita (Iniziativa sull’alimentazione)»"
+      ],
+      "sha256": "e7bfa483ffe4623994266cc244d308b8f9eae97815ac0bebcc496f81f5841e00"
+    },
+    "2026-11-29_de.pdf": {
+      "date": "2026-11-29",
+      "language": "de",
+      "url": "https://www.admin.ch/dam/de/sd-web/HXhFMFWOaa6u/BAR_Erlaeuterungen_Nov26_DE_v10.pdf",
+      "votes": [
+        "Bundesbeschluss über die Zusatzfinanzierung der AHV durch eine Erhöhung der Mehrwertsteuer",
+        "Volksinitiative « Für eine Einschränkung von Feuerwerk »",
+        "Volksinitiative « Ja zu fairen Bundessteuern auch für Ehepaare – Diskriminierung der Ehe endlich abschaffen! »",
+        "Änderung des Kriegsmaterialgesetzes"
+      ],
+      "sha256": "391b1f2941820c9859b0fef5ac6dd366e325076ebd125f0c5ecd763fea428be2"
+    },
+    "2026-11-29_fr.pdf": {
+      "date": "2026-11-29",
+      "language": "fr",
+      "url": "https://www.admin.ch/dam/fr/sd-web/HXhFMFWOaa6u/BAR_Erlaeuterungen_Nov26_FR_v10.pdf",
+      "votes": [
+        "Arrêté fédéral sur le financement additionnel de l’AVS par le biais d’un relèvement de la TVA",
+        "Initiative populaire « Pour une limitation des feux d’artifice »",
+        "Initiative populaire « Oui à des impôts fédéraux équitables pour les couples mariés – Pour enfin en finir avec la discrimination du mariage ! »",
+        "Modification de la loi fédérale sur le matériel de guerre"
+      ],
+      "sha256": "45a8599ee538d039f6a3a4169b219446cc6ae4bbb46e7f64401e93edcd97380d"
+    },
+    "2026-11-29_it.pdf": {
+      "date": "2026-11-29",
+      "language": "it",
+      "url": "https://www.admin.ch/dam/it/sd-web/HXhFMFWOaa6u/BAR_Erlaeuterungen_Nov26_IT_v10.pdf",
+      "votes": [
+        "Decreto federale sul finanziamento supplementare dell’AVS mediante un aumento dell’imposta sul valore aggiunto",
+        "Iniziativa popolare «Per una limitazione dei fuochi d’artificio»",
+        "Iniziativa popolare «Sì a imposte federali eque anche per i coniugi – Basta con la discriminazione del matrimonio!»",
+        "Modifica della legge federale sul materiale bellico"
+      ],
+      "sha256": "2a9bb33a75a20e2802ca8f6e10661c38cf24a74300961c213868e42cd0decb55"
+    }
+  }
+}

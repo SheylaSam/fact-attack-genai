@@ -18,12 +18,21 @@ def official_normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 # "Personenfreizü -\ngigkeit" / "Zuwande-\nrung" -> "Personenfreizügigkeit" / "Zuwanderung"
-_HYPHEN_BREAK = re.compile(r"(\w)\s?-\s*\n\s*([a-zäöüàâçéèêëîïôûùœ])")
+_HYPHEN_BREAK = re.compile(r"(\w+)[ \t]*-[ \t]*\n[ \t]*(\w+)")
+_SUSPENDED_CONNECTORS = {"und", "oder", "bzw", "and", "or", "et", "ou", "e", "o"}
 _SENTENCE_END = re.compile(r"(?<=[.!?;:»])\s+(?=[A-ZÄÖÜÀÂÇÉÈÊËÎÏÔÛÙ«\"0-9])")
 
 
 def dehyphenate(text: str) -> str:
-    return _HYPHEN_BREAK.sub(r"\1\2", text)
+    text = re.sub(r"(\w)\u00ad[ \t]*\r?\n[ \t]*(\w)", r"\1\2", text).replace("\u00ad", "")
+    def join(match):
+        left, right = match.groups()
+        if right.casefold() in _SUSPENDED_CONNECTORS:
+            return left + "- " + right
+        if right[0].islower() or (len(left) > 1 and left.isupper() and right.isupper()):
+            return left + right
+        return left + "-" + right  # genuine capitalised compounds, e.g. E-Voting
+    return _HYPHEN_BREAK.sub(join, text)
 
 
 def normalise(text: str) -> str:

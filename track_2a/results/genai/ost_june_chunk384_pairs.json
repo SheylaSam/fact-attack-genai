@@ -1,0 +1,84 @@
+{
+  "source_report": "results/genai/ost_june_chunk384.json",
+  "dataset_sha256": "232a84e32cf8ff5d0c7489d3cd2a63a764820b4b512da323fa677d79feca8459",
+  "comparisons": [
+    {
+      "variant": "vector",
+      "baseline": "bm25_chunks",
+      "group": "all",
+      "paired_case_count": 42,
+      "reference_cluster_count": 24,
+      "lexical_recall_delta_mean": 0.14253422868752028,
+      "cluster_mean_delta": 0.13033665499224076,
+      "higher": 34,
+      "equal": 4,
+      "lower": 4,
+      "interpretation": "Exact reference word-5gram overlap only; descriptive observed-dev comparison, not NLI or semantic evidence quality."
+    },
+    {
+      "variant": "vector",
+      "baseline": "bm25_chunks",
+      "group": "monolingual",
+      "paired_case_count": 15,
+      "reference_cluster_count": 12,
+      "lexical_recall_delta_mean": 0.1268782887101401,
+      "cluster_mean_delta": 0.12089551834074723,
+      "higher": 13,
+      "equal": 2,
+      "lower": 0,
+      "interpretation": "Exact reference word-5gram overlap only; descriptive observed-dev comparison, not NLI or semantic evidence quality."
+    },
+    {
+      "variant": "vector",
+      "baseline": "bm25_chunks",
+      "group": "crosslingual",
+      "paired_case_count": 27,
+      "reference_cluster_count": 17,
+      "lexical_recall_delta_mean": 0.15123197311939818,
+      "cluster_mean_delta": 0.13303055280937473,
+      "higher": 21,
+      "equal": 2,
+      "lower": 4,
+      "interpretation": "Exact reference word-5gram overlap only; descriptive observed-dev comparison, not NLI or semantic evidence quality."
+    },
+    {
+      "variant": "vector_hybrid",
+      "baseline": "bm25_chunks",
+      "group": "all",
+      "paired_case_count": 42,
+      "reference_cluster_count": 24,
+      "lexical_recall_delta_mean": 0.1019541243940774,
+      "cluster_mean_delta": 0.08253777967882288,
+      "higher": 23,
+      "equal": 8,
+      "lower": 11,
+      "interpretation": "Exact reference word-5gram overlap only; descriptive observed-dev comparison, not NLI or semantic evidence quality."
+    },
+    {
+      "variant": "vector_hybrid",
+      "baseline": "bm25_chunks",
+      "group": "monolingual",
+      "paired_case_count": 15,
+      "reference_cluster_count": 12,
+      "lexical_recall_delta_mean": 0.07740719370733731,
+      "cluster_mean_delta": 0.06833088499855516,
+      "higher": 9,
+      "equal": 2,
+      "lower": 4,
+      "interpretation": "Exact reference word-5gram overlap only; descriptive observed-dev comparison, not NLI or semantic evidence quality."
+    },
+    {
+      "variant": "vector_hybrid",
+      "baseline": "bm25_chunks",
+      "group": "crosslingual",
+      "paired_case_count": 27,
+      "reference_cluster_count": 17,
+      "lexical_recall_delta_mean": 0.11559130810893296,
+      "cluster_mean_delta": 0.09501562936749275,
+      "higher": 14,
+      "equal": 6,
+      "lower": 7,
+      "interpretation": "Exact reference word-5gram overlap only; descriptive observed-dev comparison, not NLI or semantic evidence quality."
+    }
+  ]
+}

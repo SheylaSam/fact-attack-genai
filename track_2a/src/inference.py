@@ -5,6 +5,8 @@ page-attributed evidence extraction, and Apertus LLM inference.
 """
 
 import hashlib
+from collections import OrderedDict
+from importlib.metadata import version as distribution_version, PackageNotFoundError
 import json
 import re
 import sys
@@ -12,7 +14,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Union, Dict, Any, List, Tuple
 from pydantic import BaseModel, Field, StrictInt
 
 from src.pdf_parser import PDFParser
@@ -99,7 +101,7 @@ _GLOBAL_BOOKLET_CACHE: Dict[str, Dict[str, Any]] = {}
 _BOOKLET_LOCKS: Dict[Any, threading.Lock] = {}
 _BOOKLET_LOCKS_GUARD = threading.Lock()
 _PROMPT_INPUT_JOURNAL_LOCK = threading.Lock()
-_PARSE_CACHE_VERSION = 7  # bump when parsing or section detection changes (7: PyMuPDF source pages)
+_PARSE_CACHE_VERSION = 9  # whole/quick pages normalize soft wraps and preserve suspended compounds
 
 _COMMITTEE_SECTION = "Arguments of the initiative/referendum committee"
 _FEDERAL_COUNCIL_SECTION = "Arguments of the Federal Council and Parliament"
@@ -142,9 +144,22 @@ _PART_LABELS = {"summary": "Overview / summary", "detail": "Official explanation
                   "legal_text": _LEGAL_TEXT_SECTION}
 
 
+def _parser_cache_signature() -> str:
+    packages = {}
+    for package in ('pypdf', 'PyMuPDF', 'pypdfium2'):
+        try:
+            packages[package] = distribution_version(package)
+        except PackageNotFoundError:
+            packages[package] = 'not-installed'
+    source = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
+              for name in ('pdf_parser.py', 'text_utils.py', 'page_pool.py', 'evidence.py')}
+    identity = {'packages': packages, 'source': source, 'python': sys.version.split()[0]}
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def _cache_name(pdf_path: Path) -> str:
     digest = hashlib.sha1(pdf_path.read_bytes()).hexdigest()[:16]
-    return f"{digest}_p{config.PASSAGE_CHARS}_v{_PARSE_CACHE_VERSION}.json"
+    return f"{digest}_p{config.PASSAGE_CHARS}_v{_PARSE_CACHE_VERSION}_{_parser_cache_signature()}.json"
 
 
 def is_parse_cached(pdf_path: Union[str, Path]) -> bool:
@@ -283,6 +298,7 @@ class ClaimVerificationEngine:
         strategy: str = config.DEFAULT_STRATEGY,
         apertus_client: Optional[ApertusClient] = None,
         prompt_mode: str = config.PROMPT_MODE,
+        max_vector_indexes: int = 3,
     ):
         self.strategy = strategy
         self.prompt_mode = prompt_mode
@@ -291,6 +307,22 @@ class ClaimVerificationEngine:
         self._source_pages = None
         self._source_pages_lock = threading.Lock()
         self._query_translator = None
+        if type(max_vector_indexes) is not int or max_vector_indexes < 1:
+            raise ValueError('max_vector_indexes must be positive')
+        self.max_vector_indexes = max_vector_indexes
+        self._vector_retrievers = OrderedDict()
+        self._vector_encoder = None
+        self._vector_lock = threading.Lock()
+        self._closed = False
+
+    def close(self):
+        """Release optional local vector indexes after an experiment."""
+        with self._vector_lock:
+            self._closed = True
+            for retriever in self._vector_retrievers.values():
+                retriever.close()
+            self._vector_retrievers.clear()
+            self._vector_encoder = None
 
     def _get_booklet_data(self, pdf_path: Union[str, Path]) -> Dict[str, Any]:
         path_str = str(Path(pdf_path).resolve())
@@ -477,22 +509,22 @@ class ClaimVerificationEngine:
         result.evidence = [s.quote for s in result.evidence_sources]
         return result
 
-    def verify_claim(
+    def _select_passages(
         self,
         claim: str,
         booklet_pdf: Union[str, Path],
-        claim_language: Optional[str] = None,
-        strategy: Optional[str] = None,
-        top_k: int = config.DEFAULT_TOP_K,
-        vote: Optional[str] = None,
-        case_id: Optional[str] = None,
-        booklet_language: Optional[str] = None,
-    ) -> PredictionResult:
+        claim_language: Optional[str],
+        strat: str,
+        top_k: int,
+        vote: Optional[str],
+        booklet_language: Optional[str],
+    ) -> Tuple[List[Dict[str, Any]], str, Tuple[int, int], Dict[str, Any], Optional[Dict[str, Any]]]:
         """
-        Verify whether the voting booklet entails, contradicts, or is neutral to the claim.
-        Supports ADVANCED TASK from Hack Apertus: accepts optional 'vote' title to scope proposal.
+        The passages verify_claim gives Apertus for this claim and strategy (part context, query translation,
+        full/vector/hybrid/retrieve strategies, page clipping) and the context string built from them.
+        Returns (candidate_paras, context, translation token usage, query metadata, booklet data); the booklet data
+        is None only when the part's pages were read page by page (QUICK_PARTS) before the full parse.
         """
-        strat = strategy or self.strategy
         retrieval_claim, query_variants = claim, None
         translation_usage, query_metadata = (0, 0), {}
         part_ctx = None
@@ -544,7 +576,36 @@ class ClaimVerificationEngine:
         else:
             # Strategy 2: Retrieve top-k relevant paragraphs (with proposal isolation & vote targeting)
             retriever: PassageRetriever = booklet_data["retriever"]
-            if strat == "hybrid":
+            if strat in ("vector", "vector_hybrid"):
+                # Optional GenAI experiment: explicit strategy, never a default fallback.
+                from src.vector_rag import E5Encoder, VectorRetriever
+                content_hash = hashlib.sha256(json.dumps(booklet_data["paragraphs"], sort_keys=True,
+                    ensure_ascii=False, default=str).encode()).hexdigest()
+                key = content_hash
+                with self._vector_lock:
+                    if self._closed:
+                        raise RuntimeError('Engine is closed; create a new engine before verification')
+                    if key not in self._vector_retrievers:
+                        while len(self._vector_retrievers) >= self.max_vector_indexes:
+                            _, old_retriever = self._vector_retrievers.popitem(last=False)
+                            old_retriever.close()
+                        if self._vector_encoder is None:
+                            self._vector_encoder = E5Encoder()
+                        self._vector_retrievers[key] = VectorRetriever(
+                            booklet_data["paragraphs"], encoder=self._vector_encoder)
+                    self._vector_retrievers.move_to_end(key)
+                    candidate_paras = self._vector_retrievers[key].retrieve(
+                        claim, top_k=top_k, target_vote=vote, mode=strat,
+                        exclude_sections=opposing_sections(claim) if config.SPEAKER_AWARE else None,
+                        ensure_sections={side: config.SPEAKER_BOOST}
+                        if config.SPEAKER_BOOST and (side := attributed_section(claim)) else None,
+                        section_caps={_LEGAL_TEXT_SECTION: config.LEGAL_TEXT_MAX_PAGES}
+                        if config.LEGAL_TEXT_MAX_PAGES else None,
+                    )
+                    query_metadata = {"mode": strat,
+                                      "embedding": self._vector_retrievers[key].metadata,
+                                      "translation_used": False}
+            elif strat == "hybrid":
                 # Strategy 3: booklet-wide BM25(claim) + BM25(vote title), no hard proposal filter
                 candidate_paras = retriever.retrieve_hybrid(
                     retrieval_claim, top_k=top_k, target_vote=vote,
@@ -564,6 +625,26 @@ class ClaimVerificationEngine:
             for p in candidate_paras:
                 context_blocks.append(f"[Page {p['page_number']}] {p['text']}")
             context = "\n\n".join(context_blocks)
+        return candidate_paras, context, translation_usage, query_metadata, booklet_data
+
+    def verify_claim(
+        self,
+        claim: str,
+        booklet_pdf: Union[str, Path],
+        claim_language: Optional[str] = None,
+        strategy: Optional[str] = None,
+        top_k: int = config.DEFAULT_TOP_K,
+        vote: Optional[str] = None,
+        case_id: Optional[str] = None,
+        booklet_language: Optional[str] = None,
+    ) -> PredictionResult:
+        """
+        Verify whether the voting booklet entails, contradicts, or is neutral to the claim.
+        Supports ADVANCED TASK from Hack Apertus: accepts optional 'vote' title to scope proposal.
+        """
+        strat = strategy or self.strategy
+        candidate_paras, context, translation_usage, query_metadata, booklet_data = self._select_passages(
+            claim, booklet_pdf, claim_language, strat, top_k, vote, booklet_language)
 
         # 1. Deterministic Numerical Conflict Check
         num_conflict: Optional[NumericalConflictResult] = detect_numerical_conflict(claim, context)
@@ -691,6 +772,90 @@ class ClaimVerificationEngine:
             latency_ms=nli_output.latency_ms,
             error=nli_output.error,
         ), vote=vote)
+
+    def retrieve_passages(
+        self,
+        claim: str,
+        booklet_pdf: Union[str, Path],
+        vote: Optional[str] = None,
+        claim_language: Optional[str] = None,
+        booklet_language: Optional[str] = None,
+        top_k: int = config.DEFAULT_TOP_K,
+    ) -> List[Dict[str, Any]]:
+        """The passages verify_claim(strategy='hybrid') would give Apertus, in the same order. A cross-lingual claim
+        may cost a query translation, exactly as in verify_claim; its token usage is not returned."""
+        return self._select_passages(claim, booklet_pdf, claim_language, "hybrid", top_k, vote, booklet_language)[0]
+
+    def verify_with_passages(
+        self,
+        claim: str,
+        booklet_pdf: Union[str, Path],
+        passages: List[Dict[str, Any]],
+        vote: Optional[str] = None,
+        claim_language: Optional[str] = None,
+        case_id: Optional[str] = None,
+    ) -> PredictionResult:
+        """
+        Task A check of the claim against exactly these passages (chosen by the caller, e.g. the agent), in their
+        order: numerical conflict check, then the compact/ids prompt. Evidence is built from the booklet's pages.
+        """
+        if not passages:
+            raise ValueError("verify_with_passages needs at least one passage")
+        if self.prompt_mode not in ("ids", "compact"):
+            raise ValueError(f"verify_with_passages supports prompt_mode 'ids' or 'compact', not {self.prompt_mode!r}")
+        context = "\n\n".join(f"[Page {p['page_number']}] {p['text']}" for p in passages)
+        num_conflict = detect_numerical_conflict(claim, context)
+        return self._compact_predict(
+            passages=passages,
+            claim=claim,
+            claim_language=claim_language,
+            vote=vote,
+            case_id=case_id,
+            strategy="agent",
+            booklet_path=str(booklet_pdf),
+            numerical_conflict_msg=num_conflict.explanation if num_conflict else None,
+            task_a=True,
+        )
+
+    def booklet_layout(
+        self, booklet_pdf: Union[str, Path]
+    ) -> Tuple[List[Dict[str, Any]], Optional[List[Dict[str, Any]]]]:
+        """(paragraphs, parts): the parsed booklet's page passages and its votes with the page ranges of their parts
+        (None if the contents page is not readable). Both are the engine's shared cache: read only."""
+        booklet_data = self._get_booklet_data(booklet_pdf)
+        return booklet_data["paragraphs"], self._booklet_parts(booklet_data)
+
+    def source_page_text(self, booklet_pdf: Union[str, Path], page_number: int) -> Optional[str]:
+        """The whole page as PyMuPDF reads it, the text src/evidence.py quotes as evidence; None for an unknown page."""
+        from src.evidence import ParsedSourcePages
+        page = ParsedSourcePages(self._get_booklet_data(booklet_pdf).get("source_pages") or {}).get(None, page_number)
+        return page["text"] if page else None
+
+    def source_page(self, booklet_pdf: Union[str, Path], page_number: int) -> Optional[Dict[str, Any]]:
+        """{"text", "blocks"} of one page as PyMuPDF reads it: the whole page and its text blocks, the two forms
+        src/evidence.py quotes as evidence (EVIDENCE_POLICY raw_pages_and_blocks quotes both). Read like the evidence
+        itself (`_finalize_evidence`): from the quick booklet while the full parse is not ready, else from the source
+        pages stored with the parse; a page neither has is read from the PDF. None for a page the PDF does not have.
+        """
+        if type(page_number) is not int or page_number < 1:
+            return None
+        from src.evidence import ParsedSourcePages, SourcePages
+        page = None
+        ready = self._ready_booklet_data(booklet_pdf)
+        if ready is None and config.QUICK_PARTS:  # booklet still being parsed: its pages one by one
+            from src import quick_booklet
+            from src.quick_booklet import QuickSourcePages
+            page = QuickSourcePages(quick_booklet.booklet(booklet_pdf)).get(None, page_number)
+        else:
+            stored = (ready or self._get_booklet_data(booklet_pdf)).get("source_pages")
+            if stored:
+                page = ParsedSourcePages(stored).get(None, page_number)
+        if page is None:  # e.g. the parse stored no source pages because their extraction failed
+            with self._source_pages_lock:
+                if self._source_pages is None:
+                    self._source_pages = SourcePages(Path("."), lazy=config.SOURCE_PAGES_LAZY)
+            page = self._source_pages.get({"booklet": {"path": str(Path(booklet_pdf).resolve())}}, page_number)
+        return {"text": page.get("text") or "", "blocks": list(page.get("blocks") or [])} if page else None
 
     def verify_premise(
         self,

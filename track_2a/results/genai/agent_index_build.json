@@ -1,0 +1,188 @@
+{
+  "kind": "agent_source_index_build_smoke_not_quality_evaluation",
+  "catalog": "track_2a/data/booklet_catalog.json",
+  "booklets": "track_2a/data/booklets",
+  "index_dir": ".rag-index/agent-sources",
+  "languages": [
+    "de"
+  ],
+  "votes": 64,
+  "sources_indexed": 22,
+  "skipped": [],
+  "votes_per_source": {
+    "2020-02-09_de": 2,
+    "2020-09-27_de": 5,
+    "2020-11-29_de": 2,
+    "2021-03-07_de": 3,
+    "2021-06-13_de": 5,
+    "2021-09-26_de": 2,
+    "2021-11-28_de": 3,
+    "2022-02-13_de": 4,
+    "2022-05-15_de": 3,
+    "2022-09-25_de": 3,
+    "2023-06-18_de": 3,
+    "2024-03-03_de": 2,
+    "2024-06-09_de": 4,
+    "2024-09-22_de": 2,
+    "2024-11-24_de": 4,
+    "2025-02-09_de": 1,
+    "2025-09-28_de": 2,
+    "2025-11-30_de": 2,
+    "2026-03-08_de": 4,
+    "2026-06-14_de": 2,
+    "2026-09-27_de": 2,
+    "2026-11-29_de": 4
+  },
+  "whole_booklet_sources": [],
+  "votes_without_catalog_title": [],
+  "votes_without_pages": [],
+  "model_load_seconds": 9.4,
+  "build_seconds": 33.0,
+  "metadata": {
+    "schema": 1,
+    "index_fingerprint": "c83b51d190a19a3d23c1d28c25278c73631ddf4a1136af7ac73fd1a4b9216229",
+    "languages": [
+      "de"
+    ],
+    "sources": 22,
+    "encoder": {
+      "model": "intfloat/multilingual-e5-small",
+      "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+      "sentence_transformers": "6.2.0",
+      "torch": "2.15.0",
+      "transformers": "5.22.1",
+      "tokenizers": "0.23.3",
+      "prefixes": [
+        "query: ",
+        "passage: "
+      ],
+      "normalized": true,
+      "chunk_tokens": 384,
+      "overlap": 64
+    },
+    "index_reused": false,
+    "chunks": 1572,
+    "votes": 64
+  },
+  "control_queries": [
+    {
+      "query": "Die Mietrechtsvorlage stärkt die Vermieter.",
+      "expected": [
+        {
+          "source_id": "2024-11-24_de",
+          "title_contains": "Mietrecht: Kündigung wegen Eigenbedarfs"
+        },
+        {
+          "source_id": "2024-11-24_de",
+          "title_contains": "Mietrecht: Untermiete"
+        }
+      ],
+      "top": [
+        {
+          "vote_id": "2024-11-24_de#3",
+          "title": "Änderung des Obligationenrechts (Mietrecht: Kündigung wegen Eigenbedarfs)",
+          "score": 0.8674,
+          "hits": 15,
+          "best_page": 40,
+          "snippet": "40 Dritte Vorlage: Kündigung wegen Eigenbedarfs Argumente Bundesrat und Parlament Eigentümerinnen und Eigentümer sollen eine vermietete Wohnung rasch selbst bewohnen oder ein vermietetes Geschäftsloka"
+        },
+        {
+          "vote_id": "2020-02-09_de#1",
+          "title": "Volksinitiativ e «Mehr bezahlbare Wohnungen»",
+          "score": 0.8601,
+          "hits": 13,
+          "best_page": 13,
+          "snippet": "13 Die Initiative verlangt, dass mehr Areale für gemein nützige Wohnungen zur Verfügung stehen. Dafür braucht es vor allem raumplanerische Massnahmen, die sehr wirksam sind. Wohnen gehört zu den Grund"
+        },
+        {
+          "vote_id": "2024-11-24_de#2",
+          "title": "Änderung des Obligationenrechts (Mietrecht: Untermiete)",
+          "score": 0.86,
+          "hits": 14,
+          "best_page": 29,
+          "snippet": "29 Der Text auf dieser Doppelseite stammt vom Referendumskomitee. Es ist für den Inhalt und die Wortwahl verantwortlich. Die Einschränkung der Untermiete ist also nur ein Vorwand, um den Kündigungssch"
+        }
+      ],
+      "expectation_met": true,
+      "missing": []
+    },
+    {
+      "query": "Das E-ID-Gesetz schützt die Daten.",
+      "expected": [
+        {
+          "source_id": "2021-03-07_de",
+          "title_contains": "E-ID-Gesetz"
+        },
+        {
+          "source_id": "2025-09-28_de",
+          "title_contains": "E-ID-Gesetz"
+        }
+      ],
+      "top": [
+        {
+          "vote_id": "2021-03-07_de#2",
+          "title": "Bundesgesetz über elektronische Identifizierungsdienste (E-ID-Gesetz)",
+          "score": 0.9008,
+          "hits": 32,
+          "best_page": 27,
+          "snippet": "27 Das neue Gesetz führt strenge Pflichten zum Umgang mit Daten ein. Persönliche Daten werden nur mit dem ausdrücklichen Einverständnis der betroffenen Person weiterge geben. Zudem werden nur die jewe"
+        },
+        {
+          "vote_id": "2025-09-28_de#2",
+          "title": "Bundesgesetz über den elektronischen Identitätsnachweis und andere elektronische Nachweise (E-ID-Gesetz)",
+          "score": 0.8849,
+          "hits": 17,
+          "best_page": 24,
+          "snippet": "Sicherheit des Systems. Er zieht dafür externe Expertinnen und Experten bei. Das E-ID-Gesetz schreibt keine bestimmte Technologie vor. Entsprechend kann der Bund die Infrastruktur und die E-ID laufend"
+        },
+        {
+          "vote_id": "2021-06-13_de#4",
+          "title": "CO2-Gesetz",
+          "score": 0.8601,
+          "hits": 1,
+          "best_page": 92,
+          "snippet": "die Eidgenössische Zollverwaltung (EZV); g. die Kantone und Gemeinden. 2 Der Bundesrat legt fest, welche Informationen und Personendaten für den Vollzug, die Evaluation und die statistischen Auswertun"
+        }
+      ],
+      "expectation_met": true,
+      "missing": []
+    },
+    {
+      "query": "Der Zivildienst wird schwieriger.",
+      "expected": [
+        {
+          "source_id": "2026-06-14_de",
+          "title_contains": "Zivildienstgesetz"
+        }
+      ],
+      "top": [
+        {
+          "vote_id": "2026-06-14_de#2",
+          "title": "Änderung des Zivildienstgesetzes",
+          "score": 0.8737,
+          "hits": 22,
+          "best_page": 6,
+          "snippet": "6 Zweite Vorlage: Zivildienstgesetz Änderung des Zivildienstgesetzes Wer den Militärdienst nicht mit seinem Gewissen vereinbaren kann, hat die Möglichkeit, Zivildienst zu leisten. Er muss dafür ein Ge"
+        },
+        {
+          "vote_id": "2021-09-26_de#2",
+          "title": "Ehe für alle",
+          "score": 0.8617,
+          "hits": 1,
+          "best_page": 31,
+          "snippet": "§ 31 2 Die Zivilstandsbeamtin oder der Zivilstandsbeamte h ört die Ver lobten an und kann bei anderen Behörden oder bei Drittpersonen Auskünfte einholen. - Art. 98 Abs. 1 1 Die Verlobten stellen das G"
+        },
+        {
+          "vote_id": "2025-11-30_de#1",
+          "title": "Volksinitiative «Für eine engagierte Schweiz (Service-citoyen-Initiative)»",
+          "score": 0.8551,
+          "hits": 12,
+          "best_page": 17,
+          "snippet": "17 Eine Dienstpflicht für Frauen kann als Beitrag zur Gleichstellung von Mann und Frau gesehen werden. Doch würde sie die Mehrfachbelastung vieler Frauen zusätzlich erhöhen, denn heute leisten die Fra"
+        }
+      ],
+      "expectation_met": true,
+      "missing": []
+    }
+  ]
+}

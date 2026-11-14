@@ -11,6 +11,7 @@ COPY tests /app/tests
 COPY .env.example /app/.env.example
 COPY scripts /app/scripts
 COPY data/booklets /app/data/booklets
+COPY data/booklet_catalog.json /app/data/booklet_catalog.json
 COPY data/demo_cases.jsonl /app/data/demo_dataset.jsonl
 COPY app.py entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh

@@ -1,0 +1,160 @@
+{
+  "kind": "real_apertus_tool_calling_smoke_not_quality_study",
+  "complete": true,
+  "stopped_early": null,
+  "created_at": "2026-10-31T21:39:36.758397+00:00",
+  "model": "swiss-ai/Apertus-v1.5-70B-thinking",
+  "endpoint_host": "api.inference.cscs.ch",
+  "temperature": 0,
+  "max_requests": 6,
+  "requests_used": 6,
+  "budget_exceeded": false,
+  "journal": "track_2a/results/genai/agent_tool_smoke.journal.jsonl",
+  "script_sha256": "49ed3359f7159801b88871293a76a8242aa336db6d0bff366ba0cae27b0ddb6b",
+  "prompt": "prompts.system_prompt() of the agent graph; JSON mode appends decider.format_instruction(TOOL_SPECS), native mode passes TOOL_SPECS to bind_tools",
+  "history_source": "Observations are real AgentTools outputs over the real source index (offline), hard-coded",
+  "situations": [
+    {
+      "id": "a_neue_behauptung",
+      "description": "Neue Behauptung, noch keine Suche",
+      "claim": "Die Mietrechtsvorlage stärkt die Vermieter.",
+      "expected_tool": "suche_vorlagen",
+      "history_tools": []
+    },
+    {
+      "id": "b_zwei_gleich_gute_vorlagen",
+      "description": "Beobachtung: zwei gleich gute Mietrecht-Vorlagen",
+      "claim": "Die Mietrechtsvorlage stärkt die Vermieter.",
+      "expected_tool": "rueckfrage",
+      "history_tools": [
+        "suche_vorlagen"
+      ]
+    },
+    {
+      "id": "c_passagen_gefunden",
+      "description": "Beobachtung: Passagen der richtigen Vorlage gefunden",
+      "claim": "Bei der Untermiete müssen Mieterinnen und Mieter künftig die schriftliche Zustimmung der Vermieterin oder des Vermieters einholen.",
+      "expected_tool": "pruefen",
+      "history_tools": [
+        "suche_vorlagen",
+        "suche_passagen"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "situation": "a_neue_behauptung",
+      "mode": "native",
+      "expected_tool": "suche_vorlagen",
+      "tool": null,
+      "tool_chosen": false,
+      "args_valid": false,
+      "valid_action": false,
+      "expected_tool_chosen": false,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "latency_ms": 113.5,
+      "error": "OpenAIInvalidRequestError: Error code: 400 - \"auto\" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set",
+      "raw": ""
+    },
+    {
+      "situation": "a_neue_behauptung",
+      "mode": "json",
+      "expected_tool": "suche_vorlagen",
+      "tool": "suche_vorlagen",
+      "tool_chosen": true,
+      "args_valid": true,
+      "valid_action": true,
+      "expected_tool_chosen": true,
+      "tokens_prompt": 1321,
+      "tokens_completion": 30,
+      "latency_ms": 569.7,
+      "error": null,
+      "raw": "{\"tool\": \"suche_vorlagen\", \"args\": {\"anfrage\": \"Mietrechtsvorlage stärkt Vermieter\"}}",
+      "args": {
+        "anfrage": "Mietrechtsvorlage stärkt Vermieter"
+      }
+    },
+    {
+      "situation": "b_zwei_gleich_gute_vorlagen",
+      "mode": "native",
+      "expected_tool": "rueckfrage",
+      "tool": null,
+      "tool_chosen": false,
+      "args_valid": false,
+      "valid_action": false,
+      "expected_tool_chosen": false,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "latency_ms": 31.2,
+      "error": "OpenAIInvalidRequestError: Error code: 400 - \"auto\" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set",
+      "raw": ""
+    },
+    {
+      "situation": "b_zwei_gleich_gute_vorlagen",
+      "mode": "json",
+      "expected_tool": "rueckfrage",
+      "tool": "suche_passagen",
+      "tool_chosen": true,
+      "args_valid": true,
+      "valid_action": true,
+      "expected_tool_chosen": false,
+      "tokens_prompt": 1921,
+      "tokens_completion": 52,
+      "latency_ms": 919.7,
+      "error": null,
+      "raw": "{\"tool\": \"suche_passagen\", \"args\": {\"vorlage_id\": \"2024-11-24_de#3\", \"anfrage\": \"Die Mietrechtsvorlage stärkt die Vermieter.\"}}",
+      "args": {
+        "vorlage_id": "2024-11-24_de#3",
+        "anfrage": "Die Mietrechtsvorlage stärkt die Vermieter."
+      }
+    },
+    {
+      "situation": "c_passagen_gefunden",
+      "mode": "native",
+      "expected_tool": "pruefen",
+      "tool": null,
+      "tool_chosen": false,
+      "args_valid": false,
+      "valid_action": false,
+      "expected_tool_chosen": false,
+      "tokens_prompt": 0,
+      "tokens_completion": 0,
+      "latency_ms": 30.5,
+      "error": "OpenAIInvalidRequestError: Error code: 400 - \"auto\" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set",
+      "raw": ""
+    },
+    {
+      "situation": "c_passagen_gefunden",
+      "mode": "json",
+      "expected_tool": "pruefen",
+      "tool": "pruefen",
+      "tool_chosen": true,
+      "args_valid": true,
+      "valid_action": true,
+      "expected_tool_chosen": true,
+      "tokens_prompt": 2655,
+      "tokens_completion": 32,
+      "latency_ms": 602.5,
+      "error": null,
+      "raw": "{\"tool\": \"pruefen\", \"args\": {\"vorlage_id\": \"2024-11-24_de#2\"}}",
+      "args": {
+        "vorlage_id": "2024-11-24_de#2"
+      }
+    }
+  ],
+  "decision": {
+    "decision": "json",
+    "rule": "native, wenn alle 3 nativen Läufe ein gültiges Werkzeug liefern; sonst json, wenn alle 3 JSON-Läufe gültig sind; sonst wird die Einschränkung dokumentiert und der Standard bleibt json.",
+    "native_valid": 0,
+    "json_valid": 3,
+    "native_expected_tool": 0,
+    "json_expected_tool": 2,
+    "of": 3
+  },
+  "recommended_tool_mode": "json",
+  "limitations": [
+    "One sample per situation and mode at temperature 0: a reliability smoke, not a quality measurement.",
+    "The rule counts valid tools only; the expected tool is reported but does not decide."
+  ]
+}

@@ -1,0 +1,265 @@
+{
+  "kind": "python312_real_embeddings_injected_nli_integration_smoke",
+  "nli_mock": true,
+  "real_api_calls": 0,
+  "quality_metrics": null,
+  "python": "3.12.13 (main, Mar 20 2026, 00:20:20) [Clang 22.1.1 ]",
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "lock_sha256": "81dd01a69dd030518762da4b97e4387dbd32f6f6aea4423ce7b25a7f40888e35",
+  "source_sha256": {
+    "inference.py": "43c37753e02e0137ab6666335036f6e074e1828fbec983b81db5695978a81cd8",
+    "vector_rag.py": "5fedbf6dc5b4ba6d59f769c968bf4a0ead0325146f9abc45dfdc754391724345",
+    "pdf_parser.py": "a04fceb47664eb84a7ac512abe2d5a0a54f20d73f416932f028ea175ecb1ad71",
+    "evidence.py": "725ac99874cbf4962467db9b8f347e6df0e3f2c15bdeadc5b24827943da41ea0"
+  },
+  "variants": [
+    {
+      "strategy": "vector",
+      "all_evidence_in_original_source": true,
+      "prediction": {
+        "id": "case-0001",
+        "claim": "Le parlement recommande de rejeter l’initiative.",
+        "label": 0,
+        "label_name": "Entailment",
+        "reasoning": "Injected integration response; not a quality result",
+        "evidence": [
+          "Spiegazioni del Consiglio federale\nEdite dalla Cancelleria federale\nChiusura redazionale: 13 marzo 2026",
+          "8                     Primo oggetto: Iniziativa per la sostenibilità\n\nIn dettaglio  Iniziativa popolare\n         «No a una Svizzera da 10 milioni!\n             (Iniziativa per la sostenibilità)»\n\n\n\n\n\n                           Gli argomenti del comitato d’iniziativa                16\n                           Gli argomenti del Consiglio federale\n                    e del Parlamento                                   18\n                                         Il testo in votazione                                20",
+          "2222                    Primo oggetto: Iniziativa per la sostenibilità\n\n\n\n         3 Entro un anno dall’accettazione dell’articolo 73a da parte del Popolo e dei Cantoni,\n           il Consiglio federale emana mediante ordinanza le disposizioni d’esecuzione. L’ordi-\n       nanza ha effetto sino all’entrata in vigore delle disposizioni d’esecuzione emanate\n       dall’Assemblea federale.\n\n       Art. 2\n      L’Assemblea federale raccomanda al Popolo e ai Cantoni di respingere l’iniziativa.",
+          "In dettaglio\nIniziativa popolare \n«No a una Svizzera da 10 milioni! \n(Iniziativa per la sostenibilità)»\n",
+          "24                    Secondo oggetto: Legge sul servizio civile\n\nIn dettaglio  Modifica della legge\n            sul servizio civile\n\n\n\n\n\n                           Gli argomenti del comitato referendario              30\n                           Gli argomenti del Consiglio federale\n                    e del Parlamento                                  32\n                                         Il testo in votazione                               34"
+        ],
+        "evidence_sources": [
+          {
+            "quote": "Spiegazioni del Consiglio federale\nEdite dalla Cancelleria federale\nChiusura redazionale: 13 marzo 2026",
+            "page_number": 2,
+            "proposal_id": 0
+          },
+          {
+            "quote": "8                     Primo oggetto: Iniziativa per la sostenibilità\n\nIn dettaglio  Iniziativa popolare\n         «No a una Svizzera da 10 milioni!\n             (Iniziativa per la sostenibilità)»\n\n\n\n\n\n                           Gli argomenti del comitato d’iniziativa                16\n                           Gli argomenti del Consiglio federale\n                    e del Parlamento                                   18\n                                         Il testo in votazione                                20",
+            "page_number": 8,
+            "proposal_id": 1
+          },
+          {
+            "quote": "2222                    Primo oggetto: Iniziativa per la sostenibilità\n\n\n\n         3 Entro un anno dall’accettazione dell’articolo 73a da parte del Popolo e dei Cantoni,\n           il Consiglio federale emana mediante ordinanza le disposizioni d’esecuzione. L’ordi-\n       nanza ha effetto sino all’entrata in vigore delle disposizioni d’esecuzione emanate\n       dall’Assemblea federale.\n\n       Art. 2\n      L’Assemblea federale raccomanda al Popolo e ai Cantoni di respingere l’iniziativa.",
+            "page_number": 22,
+            "proposal_id": 1
+          },
+          {
+            "quote": "In dettaglio\nIniziativa popolare \n«No a una Svizzera da 10 milioni! \n(Iniziativa per la sostenibilità)»\n",
+            "page_number": 8,
+            "proposal_id": 1
+          },
+          {
+            "quote": "24                    Secondo oggetto: Legge sul servizio civile\n\nIn dettaglio  Modifica della legge\n            sul servizio civile\n\n\n\n\n\n                           Gli argomenti del comitato referendario              30\n                           Gli argomenti del Consiglio federale\n                    e del Parlamento                                  32\n                                         Il testo in votazione                               34",
+            "page_number": 24,
+            "proposal_id": 1
+          }
+        ],
+        "numerical_conflict": null,
+        "p_entail": 0.0,
+        "p_neutral": 0.0,
+        "p_contra": 0.0,
+        "fuzzy_rule": null,
+        "decision_rule": null,
+        "strategy": "vector",
+        "booklet_path": "/Users/sheyla/Documents/ChatGPT/GenAI/work/fact-attack/track_2a/data/booklets/2026-06-14_it.pdf",
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "tokens_total": 0,
+        "latency_ms": 0.0,
+        "error": null,
+        "context_pages": [
+          2,
+          8,
+          22,
+          24,
+          5,
+          40,
+          18,
+          3
+        ],
+        "retrieval_query_metadata": {
+          "mode": "vector",
+          "embedding": {
+            "model": "intfloat/multilingual-e5-small",
+            "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+            "sentence_transformers": "6.2.0",
+            "torch": "2.15.0",
+            "transformers": "5.22.1",
+            "tokenizers": "0.23.3",
+            "prefixes": [
+              "query: ",
+              "passage: "
+            ],
+            "normalized": true,
+            "chunk_tokens": 384,
+            "overlap": 64,
+            "index_fingerprint": "0a0c5c6bc282b26d29d4f46e8d93d577001035f007f4a95b44c934fb7d4b1c89",
+            "chunks": 57,
+            "fusion": "RRF(k=60)",
+            "index_reused": false
+          },
+          "translation_used": false
+        }
+      },
+      "official_output": {
+        "id": "case-0001",
+        "label": 0,
+        "label_name": "entailment",
+        "evidence": [
+          {
+            "page": 2,
+            "text": "Spiegazioni del Consiglio federale\nEdite dalla Cancelleria federale\nChiusura redazionale: 13 marzo 2026"
+          },
+          {
+            "page": 8,
+            "text": "8                     Primo oggetto: Iniziativa per la sostenibilità\n\nIn dettaglio  Iniziativa popolare\n         «No a una Svizzera da 10 milioni!\n             (Iniziativa per la sostenibilità)»\n\n\n\n\n\n                           Gli argomenti del comitato d’iniziativa                16\n                           Gli argomenti del Consiglio federale\n                    e del Parlamento                                   18\n                                         Il testo in votazione                                20"
+          },
+          {
+            "page": 22,
+            "text": "2222                    Primo oggetto: Iniziativa per la sostenibilità\n\n\n\n         3 Entro un anno dall’accettazione dell’articolo 73a da parte del Popolo e dei Cantoni,\n           il Consiglio federale emana mediante ordinanza le disposizioni d’esecuzione. L’ordi-\n       nanza ha effetto sino all’entrata in vigore delle disposizioni d’esecuzione emanate\n       dall’Assemblea federale.\n\n       Art. 2\n      L’Assemblea federale raccomanda al Popolo e ai Cantoni di respingere l’iniziativa."
+          },
+          {
+            "page": 8,
+            "text": "In dettaglio\nIniziativa popolare \n«No a una Svizzera da 10 milioni! \n(Iniziativa per la sostenibilità)»\n"
+          },
+          {
+            "page": 24,
+            "text": "24                    Secondo oggetto: Legge sul servizio civile\n\nIn dettaglio  Modifica della legge\n            sul servizio civile\n\n\n\n\n\n                           Gli argomenti del comitato referendario              30\n                           Gli argomenti del Consiglio federale\n                    e del Parlamento                                  32\n                                         Il testo in votazione                               34"
+          }
+        ],
+        "metrics": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "inference_time_ms": 0
+        }
+      }
+    },
+    {
+      "strategy": "vector_hybrid",
+      "all_evidence_in_original_source": true,
+      "prediction": {
+        "id": "case-0001",
+        "claim": "Le parlement recommande de rejeter l’initiative.",
+        "label": 0,
+        "label_name": "Entailment",
+        "reasoning": "Injected integration response; not a quality result",
+        "evidence": [
+          "2222                    Primo oggetto: Iniziativa per la sostenibilità\n\n\n\n         3 Entro un anno dall’accettazione dell’articolo 73a da parte del Popolo e dei Cantoni,\n           il Consiglio federale emana mediante ordinanza le disposizioni d’esecuzione. L’ordi-\n       nanza ha effetto sino all’entrata in vigore delle disposizioni d’esecuzione emanate\n       dall’Assemblea federale.\n\n       Art. 2\n      L’Assemblea federale raccomanda al Popolo e ai Cantoni di respingere l’iniziativa.",
+          "18                    Primo oggetto: Iniziativa per la sostenibilità\n\nArgomenti   Consiglio federale e Parlamento\n\n                         L’iniziativa mette in pericolo il benessere, il funzionamento\n                      della società, la sicurezza interna e la tradizione umanitaria\n                      della Svizzera. In tempi di instabilità politica il nostro Paese ha\n                   bisogno di partenariati affidabili. Per questo motivo il Consi­\n                       glio federale vuole portare avanti la collaudata via bilaterale\n                   con l’Unione europea. All’aumento della popolazione reagisce\n                   con misure mirate. Il Consiglio federale e il Parlamento respin­\n                 gono l’iniziativa in particolare per i motivi esposti qui di\n                      seguito.\n\nMeno benessere            L’iniziativa nuoce al benessere. Le imprese svizzere dipen­\n                 dono dalla manodopera estera: se la popolazione residente\n                  permanente venisse limitata, le imprese potrebbero assumere\n                    personale proveniente dall’Unione europea soltanto parzial­\n                   mente. L’economia e il benessere della Svizzera ne risentireb-\n                     bero.\n\nProblemi sociali             L’iniziativa mette in pericolo il funzionamento della\n                       società. Gli ospedali e le case di cura non potrebbero più assi­\n                      stere e curare i pazienti e le persone anziane con la consueta\n                       qualità. Anche altri settori, come per esempio l’edilizia, si\n                    troverebbero confrontati con grandi problemi, con conseguen­\n                      te pregiudizio per le infrastrutture.\n\nRelazioni incerte            L’iniziativa mette in pericolo la via bilaterale con l’Unione\ncon l’Unione        europea in un periodo già caratterizzato da incertezze. Il\neuropea             Consiglio federale ritiene molto rischiosa questa prospettiva.\n                    L’Unione europea è il partner politico ed economico più impor­\n                     tante del nostro Paese. Per questo motivo il Consiglio federale\n                    vuole portare avanti la via bilaterale e assicurare così il nostro\n                    benessere a lungo termine.\n\nMeno sicurezza              L’iniziativa renderebbe più difficile la lotta contro la\n                       criminalità e il terrorismo. Se la cooperazione nell’ambito di\n                  Schengen venisse a mancare, la Svizzera non avrebbe infatti\n                     più accesso alle banche dati dell’Unione europea, fondamenta­\n                                      li per la protezione della popolazione.",
+          "                                                                                      5\n\n\nLa domanda che   Volete accettare l’iniziativa popolare\nfigura sulla scheda  «No a una Svizzera da 10 milioni!\n                (Iniziativa per la sostenibilità)»?\n\n\n\n\n\nRaccomandazione\ndel Consiglio      No\nfederale e del\nParlamento               Per il Consiglio federale e il Parlamento l’iniziativa crea\n                      insicurezza e mette in pericolo la stabilità della Svizzera. È\n                  dannosa per l’economia, minaccia il benessere e la sicurezza\n                     interna e causa notevoli costi alla Confederazione e ai Cantoni.\n                        Inoltre, mette in discussione la via bilaterale con l’Unione\n                  europea come pure la tradizione umanitaria del nostro Paese.\n\n                               admin.ch/iniziativa-sostenibilita\n\nRaccomandazione\ndel comitato          Sì\nd’iniziativa\n                          Per il comitato d’iniziativa l’immigrazione attuale è mas­\n                           siccia. Le conseguenze sono penuria di alloggi, aumenti delle\n                       pigioni, cementificazione del paesaggio, ingorghi e treni so­\n                         vraffollati, aumento della criminalità, un settore sanitario in\n                        difficoltà e la diminuzione della qualità dell’istruzione. L’inizia­\n                        tiva limiterebbe l’immigrazione a un livello ragionevole.\n\n                                 iniziativasostenibilita.ch\n\n\n\n\n\nIl voto del Consiglio                                123 no\nnazionale                          67 sì\n                     6 astensioni\n\nIl voto del Consiglio          30 no\ndegli Stati             9 sì\n                    5 astensioni",
+          "3 Entro un anno dall’accettazione dell’articolo 73a da parte del Popolo e dei Cantoni, \nil Consiglio federale emana mediante ordinanza le disposizioni d’esecuzione. L’ordi-\nnanza ha effetto sino all’entrata in vigore delle disposizioni d’esecuzione emanate \ndall’Assemblea federale. \n",
+          "L’Assemblea federale raccomanda al Popolo e ai Cantoni di respingere l’iniziativa. \n"
+        ],
+        "evidence_sources": [
+          {
+            "quote": "2222                    Primo oggetto: Iniziativa per la sostenibilità\n\n\n\n         3 Entro un anno dall’accettazione dell’articolo 73a da parte del Popolo e dei Cantoni,\n           il Consiglio federale emana mediante ordinanza le disposizioni d’esecuzione. L’ordi-\n       nanza ha effetto sino all’entrata in vigore delle disposizioni d’esecuzione emanate\n       dall’Assemblea federale.\n\n       Art. 2\n      L’Assemblea federale raccomanda al Popolo e ai Cantoni di respingere l’iniziativa.",
+            "page_number": 22,
+            "proposal_id": 1
+          },
+          {
+            "quote": "18                    Primo oggetto: Iniziativa per la sostenibilità\n\nArgomenti   Consiglio federale e Parlamento\n\n                         L’iniziativa mette in pericolo il benessere, il funzionamento\n                      della società, la sicurezza interna e la tradizione umanitaria\n                      della Svizzera. In tempi di instabilità politica il nostro Paese ha\n                   bisogno di partenariati affidabili. Per questo motivo il Consi­\n                       glio federale vuole portare avanti la collaudata via bilaterale\n                   con l’Unione europea. All’aumento della popolazione reagisce\n                   con misure mirate. Il Consiglio federale e il Parlamento respin­\n                 gono l’iniziativa in particolare per i motivi esposti qui di\n                      seguito.\n\nMeno benessere            L’iniziativa nuoce al benessere. Le imprese svizzere dipen­\n                 dono dalla manodopera estera: se la popolazione residente\n                  permanente venisse limitata, le imprese potrebbero assumere\n                    personale proveniente dall’Unione europea soltanto parzial­\n                   mente. L’economia e il benessere della Svizzera ne risentireb-\n                     bero.\n\nProblemi sociali             L’iniziativa mette in pericolo il funzionamento della\n                       società. Gli ospedali e le case di cura non potrebbero più assi­\n                      stere e curare i pazienti e le persone anziane con la consueta\n                       qualità. Anche altri settori, come per esempio l’edilizia, si\n                    troverebbero confrontati con grandi problemi, con conseguen­\n                      te pregiudizio per le infrastrutture.\n\nRelazioni incerte            L’iniziativa mette in pericolo la via bilaterale con l’Unione\ncon l’Unione        europea in un periodo già caratterizzato da incertezze. Il\neuropea             Consiglio federale ritiene molto rischiosa questa prospettiva.\n                    L’Unione europea è il partner politico ed economico più impor­\n                     tante del nostro Paese. Per questo motivo il Consiglio federale\n                    vuole portare avanti la via bilaterale e assicurare così il nostro\n                    benessere a lungo termine.\n\nMeno sicurezza              L’iniziativa renderebbe più difficile la lotta contro la\n                       criminalità e il terrorismo. Se la cooperazione nell’ambito di\n                  Schengen venisse a mancare, la Svizzera non avrebbe infatti\n                     più accesso alle banche dati dell’Unione europea, fondamenta­\n                                      li per la protezione della popolazione.",
+            "page_number": 18,
+            "proposal_id": 1
+          },
+          {
+            "quote": "                                                                                      5\n\n\nLa domanda che   Volete accettare l’iniziativa popolare\nfigura sulla scheda  «No a una Svizzera da 10 milioni!\n                (Iniziativa per la sostenibilità)»?\n\n\n\n\n\nRaccomandazione\ndel Consiglio      No\nfederale e del\nParlamento               Per il Consiglio federale e il Parlamento l’iniziativa crea\n                      insicurezza e mette in pericolo la stabilità della Svizzera. È\n                  dannosa per l’economia, minaccia il benessere e la sicurezza\n                     interna e causa notevoli costi alla Confederazione e ai Cantoni.\n                        Inoltre, mette in discussione la via bilaterale con l’Unione\n                  europea come pure la tradizione umanitaria del nostro Paese.\n\n                               admin.ch/iniziativa-sostenibilita\n\nRaccomandazione\ndel comitato          Sì\nd’iniziativa\n                          Per il comitato d’iniziativa l’immigrazione attuale è mas­\n                           siccia. Le conseguenze sono penuria di alloggi, aumenti delle\n                       pigioni, cementificazione del paesaggio, ingorghi e treni so­\n                         vraffollati, aumento della criminalità, un settore sanitario in\n                        difficoltà e la diminuzione della qualità dell’istruzione. L’inizia­\n                        tiva limiterebbe l’immigrazione a un livello ragionevole.\n\n                                 iniziativasostenibilita.ch\n\n\n\n\n\nIl voto del Consiglio                                123 no\nnazionale                          67 sì\n                     6 astensioni\n\nIl voto del Consiglio          30 no\ndegli Stati             9 sì\n                    5 astensioni",
+            "page_number": 5,
+            "proposal_id": 1
+          },
+          {
+            "quote": "3 Entro un anno dall’accettazione dell’articolo 73a da parte del Popolo e dei Cantoni, \nil Consiglio federale emana mediante ordinanza le disposizioni d’esecuzione. L’ordi-\nnanza ha effetto sino all’entrata in vigore delle disposizioni d’esecuzione emanate \ndall’Assemblea federale. \n",
+            "page_number": 22,
+            "proposal_id": 1
+          },
+          {
+            "quote": "L’Assemblea federale raccomanda al Popolo e ai Cantoni di respingere l’iniziativa. \n",
+            "page_number": 22,
+            "proposal_id": 1
+          }
+        ],
+        "numerical_conflict": null,
+        "p_entail": 0.0,
+        "p_neutral": 0.0,
+        "p_contra": 0.0,
+        "fuzzy_rule": null,
+        "decision_rule": null,
+        "strategy": "vector_hybrid",
+        "booklet_path": "/Users/sheyla/Documents/ChatGPT/GenAI/work/fact-attack/track_2a/data/booklets/2026-06-14_it.pdf",
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "tokens_total": 0,
+        "latency_ms": 0.0,
+        "error": null,
+        "context_pages": [
+          22,
+          18,
+          5,
+          11,
+          10,
+          19,
+          4,
+          25
+        ],
+        "retrieval_query_metadata": {
+          "mode": "vector_hybrid",
+          "embedding": {
+            "model": "intfloat/multilingual-e5-small",
+            "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+            "sentence_transformers": "6.2.0",
+            "torch": "2.15.0",
+            "transformers": "5.22.1",
+            "tokenizers": "0.23.3",
+            "prefixes": [
+              "query: ",
+              "passage: "
+            ],
+            "normalized": true,
+            "chunk_tokens": 384,
+            "overlap": 64,
+            "index_fingerprint": "0a0c5c6bc282b26d29d4f46e8d93d577001035f007f4a95b44c934fb7d4b1c89",
+            "chunks": 57,
+            "fusion": "RRF(k=60)",
+            "index_reused": false
+          },
+          "translation_used": false
+        }
+      },
+      "official_output": {
+        "id": "case-0001",
+        "label": 0,
+        "label_name": "entailment",
+        "evidence": [
+          {
+            "page": 22,
+            "text": "2222                    Primo oggetto: Iniziativa per la sostenibilità\n\n\n\n         3 Entro un anno dall’accettazione dell’articolo 73a da parte del Popolo e dei Cantoni,\n           il Consiglio federale emana mediante ordinanza le disposizioni d’esecuzione. L’ordi-\n       nanza ha effetto sino all’entrata in vigore delle disposizioni d’esecuzione emanate\n       dall’Assemblea federale.\n\n       Art. 2\n      L’Assemblea federale raccomanda al Popolo e ai Cantoni di respingere l’iniziativa."
+          },
+          {
+            "page": 18,
+            "text": "18                    Primo oggetto: Iniziativa per la sostenibilità\n\nArgomenti   Consiglio federale e Parlamento\n\n                         L’iniziativa mette in pericolo il benessere, il funzionamento\n                      della società, la sicurezza interna e la tradizione umanitaria\n                      della Svizzera. In tempi di instabilità politica il nostro Paese ha\n                   bisogno di partenariati affidabili. Per questo motivo il Consi­\n                       glio federale vuole portare avanti la collaudata via bilaterale\n                   con l’Unione europea. All’aumento della popolazione reagisce\n                   con misure mirate. Il Consiglio federale e il Parlamento respin­\n                 gono l’iniziativa in particolare per i motivi esposti qui di\n                      seguito.\n\nMeno benessere            L’iniziativa nuoce al benessere. Le imprese svizzere dipen­\n                 dono dalla manodopera estera: se la popolazione residente\n                  permanente venisse limitata, le imprese potrebbero assumere\n                    personale proveniente dall’Unione europea soltanto parzial­\n                   mente. L’economia e il benessere della Svizzera ne risentireb-\n                     bero.\n\nProblemi sociali             L’iniziativa mette in pericolo il funzionamento della\n                       società. Gli ospedali e le case di cura non potrebbero più assi­\n                      stere e curare i pazienti e le persone anziane con la consueta\n                       qualità. Anche altri settori, come per esempio l’edilizia, si\n                    troverebbero confrontati con grandi problemi, con conseguen­\n                      te pregiudizio per le infrastrutture.\n\nRelazioni incerte            L’iniziativa mette in pericolo la via bilaterale con l’Unione\ncon l’Unione        europea in un periodo già caratterizzato da incertezze. Il\neuropea             Consiglio federale ritiene molto rischiosa questa prospettiva.\n                    L’Unione europea è il partner politico ed economico più impor­\n                     tante del nostro Paese. Per questo motivo il Consiglio federale\n                    vuole portare avanti la via bilaterale e assicurare così il nostro\n                    benessere a lungo termine.\n\nMeno sicurezza              L’iniziativa renderebbe più difficile la lotta contro la\n                       criminalità e il terrorismo. Se la cooperazione nell’ambito di\n                  Schengen venisse a mancare, la Svizzera non avrebbe infatti\n                     più accesso alle banche dati dell’Unione europea, fondamenta­\n                                      li per la protezione della popolazione."
+          },
+          {
+            "page": 5,
+            "text": "                                                                                      5\n\n\nLa domanda che   Volete accettare l’iniziativa popolare\nfigura sulla scheda  «No a una Svizzera da 10 milioni!\n                (Iniziativa per la sostenibilità)»?\n\n\n\n\n\nRaccomandazione\ndel Consiglio      No\nfederale e del\nParlamento               Per il Consiglio federale e il Parlamento l’iniziativa crea\n                      insicurezza e mette in pericolo la stabilità della Svizzera. È\n                  dannosa per l’economia, minaccia il benessere e la sicurezza\n                     interna e causa notevoli costi alla Confederazione e ai Cantoni.\n                        Inoltre, mette in discussione la via bilaterale con l’Unione\n                  europea come pure la tradizione umanitaria del nostro Paese.\n\n                               admin.ch/iniziativa-sostenibilita\n\nRaccomandazione\ndel comitato          Sì\nd’iniziativa\n                          Per il comitato d’iniziativa l’immigrazione attuale è mas­\n                           siccia. Le conseguenze sono penuria di alloggi, aumenti delle\n                       pigioni, cementificazione del paesaggio, ingorghi e treni so­\n                         vraffollati, aumento della criminalità, un settore sanitario in\n                        difficoltà e la diminuzione della qualità dell’istruzione. L’inizia­\n                        tiva limiterebbe l’immigrazione a un livello ragionevole.\n\n                                 iniziativasostenibilita.ch\n\n\n\n\n\nIl voto del Consiglio                                123 no\nnazionale                          67 sì\n                     6 astensioni\n\nIl voto del Consiglio          30 no\ndegli Stati             9 sì\n                    5 astensioni"
+          },
+          {
+            "page": 22,
+            "text": "3 Entro un anno dall’accettazione dell’articolo 73a da parte del Popolo e dei Cantoni, \nil Consiglio federale emana mediante ordinanza le disposizioni d’esecuzione. L’ordi-\nnanza ha effetto sino all’entrata in vigore delle disposizioni d’esecuzione emanate \ndall’Assemblea federale. \n"
+          },
+          {
+            "page": 22,
+            "text": "L’Assemblea federale raccomanda al Popolo e ai Cantoni di respingere l’iniziativa. \n"
+          }
+        ],
+        "metrics": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "inference_time_ms": 0
+        }
+      }
+    }
+  ],
+  "indexes_closed_after_run": true,
+  "wall_ms": 16901.71029198973
+}

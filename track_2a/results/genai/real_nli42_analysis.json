@@ -1,0 +1,455 @@
+{
+  "result_sha256": "8eeea81fd1c71463b9857ba151fe6031fee0663938ebe7e303cc0d3302a8a490",
+  "kind": "offline_audit_observed_dev",
+  "per_variant": {
+    "baseline_native": {
+      "confusion_matrix_true_rows_pred_columns_012": [
+        [
+          25,
+          0,
+          0
+        ],
+        [
+          0,
+          11,
+          0
+        ],
+        [
+          0,
+          0,
+          6
+        ]
+      ],
+      "classification": {
+        "0": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 25.0
+        },
+        "1": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 11.0
+        },
+        "2": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 6.0
+        },
+        "accuracy": 1.0,
+        "macro avg": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 42.0
+        },
+        "weighted avg": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 42.0
+        }
+      },
+      "correct": 42
+    },
+    "vector": {
+      "confusion_matrix_true_rows_pred_columns_012": [
+        [
+          22,
+          3,
+          0
+        ],
+        [
+          0,
+          11,
+          0
+        ],
+        [
+          0,
+          2,
+          4
+        ]
+      ],
+      "classification": {
+        "0": {
+          "precision": 1.0,
+          "recall": 0.88,
+          "f1-score": 0.9361702127659575,
+          "support": 25.0
+        },
+        "1": {
+          "precision": 0.6875,
+          "recall": 1.0,
+          "f1-score": 0.8148148148148148,
+          "support": 11.0
+        },
+        "2": {
+          "precision": 1.0,
+          "recall": 0.6666666666666666,
+          "f1-score": 0.8,
+          "support": 6.0
+        },
+        "accuracy": 0.8809523809523809,
+        "macro avg": {
+          "precision": 0.8958333333333334,
+          "recall": 0.8488888888888888,
+          "f1-score": 0.850328342526924,
+          "support": 42.0
+        },
+        "weighted avg": {
+          "precision": 0.9181547619047619,
+          "recall": 0.8809523809523809,
+          "f1-score": 0.884933768621712,
+          "support": 42.0
+        }
+      },
+      "correct": 37
+    },
+    "vector_hybrid": {
+      "confusion_matrix_true_rows_pred_columns_012": [
+        [
+          19,
+          4,
+          2
+        ],
+        [
+          0,
+          11,
+          0
+        ],
+        [
+          0,
+          3,
+          3
+        ]
+      ],
+      "classification": {
+        "0": {
+          "precision": 1.0,
+          "recall": 0.76,
+          "f1-score": 0.8636363636363636,
+          "support": 25.0
+        },
+        "1": {
+          "precision": 0.6111111111111112,
+          "recall": 1.0,
+          "f1-score": 0.7586206896551724,
+          "support": 11.0
+        },
+        "2": {
+          "precision": 0.6,
+          "recall": 0.5,
+          "f1-score": 0.5454545454545454,
+          "support": 6.0
+        },
+        "accuracy": 0.7857142857142857,
+        "macro avg": {
+          "precision": 0.737037037037037,
+          "recall": 0.7533333333333333,
+          "f1-score": 0.7225705329153604,
+          "support": 42.0
+        },
+        "weighted avg": {
+          "precision": 0.841005291005291,
+          "recall": 0.7857142857142857,
+          "f1-score": 0.7906777130915061,
+          "support": 42.0
+        }
+      },
+      "correct": 33
+    }
+  },
+  "wrong_cases": [
+    {
+      "id": "ost-0183",
+      "variant": "vector",
+      "claim": "Si le vote est approuvé, toute personne passant au service civil devra y effectuer au moins 150 jours, quel que soit le nombre de jours de service militaire qu’il lui reste à accomplir.",
+      "pair": "fr->de",
+      "true_label": 0,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": false,
+      "reference_5gram_recall": 0.03209459459459459,
+      "diagnostic_bucket": "incorrect_without_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-0414",
+      "variant": "vector",
+      "claim": "Secondo il Consiglio federale, l’UE è il partner politico ed economico di maggiore importanza per la Svizzera.",
+      "pair": "it->fr",
+      "true_label": 0,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": false,
+      "reference_5gram_recall": 0.20652173913043478,
+      "diagnostic_bucket": "incorrect_without_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-0439",
+      "variant": "vector",
+      "claim": "Il Consiglio federale afferma che l’Unione europea è il principale partner politico ed economico della Svizzera.",
+      "pair": "it->it",
+      "true_label": 0,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": false,
+      "reference_5gram_recall": 0.028933092224231464,
+      "diagnostic_bucket": "incorrect_without_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-1198",
+      "variant": "vector",
+      "claim": "Le Conseil fédéral estime que les hommes suisses devraient pouvoir choisir librement entre le service militaire et le service civil.",
+      "pair": "fr->de",
+      "true_label": 2,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": false,
+      "reference_5gram_recall": 0.0,
+      "diagnostic_bucket": "incorrect_without_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-1235",
+      "variant": "vector",
+      "claim": "Le texte soumis au vote affirme que l’Assemblée fédérale recommande au peuple et aux cantons d’accepter l’initiative.",
+      "pair": "fr->it",
+      "true_label": 2,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": true,
+      "reference_5gram_recall": 0.37598736176935227,
+      "diagnostic_bucket": "incorrect_with_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-0000",
+      "variant": "vector_hybrid",
+      "claim": "Der Bundesrat spricht sich dafür aus, die Volksinitiative « Pas de Suisse à 10 millions ! (initiative pour la durabilité) » abzulehnen.",
+      "pair": "de->fr",
+      "true_label": 0,
+      "predicted": 2,
+      "raw_label": 2,
+      "reference_proxy_hit": false,
+      "reference_5gram_recall": 0.02717391304347826,
+      "diagnostic_bucket": "incorrect_without_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-0159",
+      "variant": "vector_hybrid",
+      "claim": "Laut Zusammenfassung soll die Schweiz den mit der EU geschlossenen Freizügigkeitsvertrag sowie die übrigen Bilateralen I kündigen, wenn die Bevölkerungszahl zehn Millionen überschreitet.",
+      "pair": "de->it",
+      "true_label": 0,
+      "predicted": 2,
+      "raw_label": 2,
+      "reference_proxy_hit": true,
+      "reference_5gram_recall": 0.9242424242424242,
+      "diagnostic_bucket": "incorrect_with_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-0207",
+      "variant": "vector_hybrid",
+      "claim": "Le comité affirme que l’immigration de masse constitue la cause principale de la pénurie de logements en Suisse.",
+      "pair": "fr->it",
+      "true_label": 0,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": false,
+      "reference_5gram_recall": 0.2811881188118812,
+      "diagnostic_bucket": "incorrect_without_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-0266",
+      "variant": "vector_hybrid",
+      "claim": "Le comité affirme que l’immigration de masse constitue la cause principale de la pénurie de logements en Suisse.",
+      "pair": "fr->it",
+      "true_label": 0,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": false,
+      "reference_5gram_recall": 0.2811881188118812,
+      "diagnostic_bucket": "incorrect_without_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-0414",
+      "variant": "vector_hybrid",
+      "claim": "Secondo il Consiglio federale, l’UE è il partner politico ed economico di maggiore importanza per la Svizzera.",
+      "pair": "it->fr",
+      "true_label": 0,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": false,
+      "reference_5gram_recall": 0.35144927536231885,
+      "diagnostic_bucket": "incorrect_without_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-0439",
+      "variant": "vector_hybrid",
+      "claim": "Il Consiglio federale afferma che l’Unione europea è il principale partner politico ed economico della Svizzera.",
+      "pair": "it->it",
+      "true_label": 0,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": false,
+      "reference_5gram_recall": 0.028933092224231464,
+      "diagnostic_bucket": "incorrect_without_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-1198",
+      "variant": "vector_hybrid",
+      "claim": "Le Conseil fédéral estime que les hommes suisses devraient pouvoir choisir librement entre le service militaire et le service civil.",
+      "pair": "fr->de",
+      "true_label": 2,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": false,
+      "reference_5gram_recall": 0.1710914454277286,
+      "diagnostic_bucket": "incorrect_without_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-1208",
+      "variant": "vector_hybrid",
+      "claim": "D’après le texte soumis au vote, l’Assemblée fédérale recommande au peuple et aux cantons d’accepter l’initiative.",
+      "pair": "fr->de",
+      "true_label": 2,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": true,
+      "reference_5gram_recall": 0.3451492537313433,
+      "diagnostic_bucket": "incorrect_with_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    },
+    {
+      "id": "ost-1235",
+      "variant": "vector_hybrid",
+      "claim": "Le texte soumis au vote affirme que l’Assemblée fédérale recommande au peuple et aux cantons d’accepter l’initiative.",
+      "pair": "fr->it",
+      "true_label": 2,
+      "predicted": 1,
+      "raw_label": 1,
+      "reference_proxy_hit": true,
+      "reference_5gram_recall": 0.37598736176935227,
+      "diagnostic_bucket": "incorrect_with_reference_proxy_hit",
+      "warning": "Reference proxy is not proof of retrieval sufficiency; no automatic causal error label."
+    }
+  ],
+  "baseline_evidence_misses": [
+    {
+      "id": "ost-0183",
+      "pair": "fr->de",
+      "evidence": [
+        "Bei einem Wechsel vom Militär- in den Zivildienst müssen neu in jedem Fall noch mindestens 150 Diensttage geleistet werden."
+      ],
+      "exact_quote_in_frozen_context": true
+    },
+    {
+      "id": "ost-0207",
+      "pair": "fr->it",
+      "evidence": [
+        "L’immigration de masse est la principale cause de la pénurie de logements."
+      ],
+      "exact_quote_in_frozen_context": false
+    },
+    {
+      "id": "ost-0266",
+      "pair": "fr->it",
+      "evidence": [
+        "L’immigration de masse est la principale cause de la pénurie de logements."
+      ],
+      "exact_quote_in_frozen_context": false
+    },
+    {
+      "id": "ost-0273",
+      "pair": "fr->it",
+      "evidence": [
+        "La modification prévoit donc que soient prestés en tout cas au moins 150 jours de service civil."
+      ],
+      "exact_quote_in_frozen_context": false
+    },
+    {
+      "id": "ost-0472",
+      "pair": "it->de",
+      "evidence": [
+        "Bundesrat und Parlament empfehlen, die Nachhaltigkeitsinitiative abzulehnen."
+      ],
+      "exact_quote_in_frozen_context": false
+    },
+    {
+      "id": "ost-1235",
+      "pair": "fr->it",
+      "evidence": [
+        "Art. 2 L'Assemblée fédérale recommande au Peuple et aux Cantons de rejeter l'initiative."
+      ],
+      "exact_quote_in_frozen_context": false
+    }
+  ],
+  "deduplication": {
+    "unique_task_inputs": 37,
+    "source_label_counts": {
+      "0": 22,
+      "1": 9,
+      "2": 6
+    },
+    "duplicate_case_groups": [
+      [
+        "ost-0025",
+        "ost-0070"
+      ],
+      [
+        "ost-0055",
+        "ost-0155"
+      ],
+      [
+        "ost-0207",
+        "ost-0266"
+      ],
+      [
+        "ost-0673",
+        "ost-0755"
+      ],
+      [
+        "ost-0679",
+        "ost-0709"
+      ]
+    ],
+    "criterion": "Identical claim, claim language, reference language, booklet file and vote title; all duplicates have equal reference and official label.",
+    "per_variant": {
+      "baseline_native": {
+        "correct": 37,
+        "macro_f1": 1.0
+      },
+      "vector": {
+        "correct": 32,
+        "macro_f1": 0.8364793213149523
+      },
+      "vector_hybrid": {
+        "correct": 29,
+        "macro_f1": 0.7224164724164724
+      }
+    }
+  },
+  "manual_evidence_notes": {
+    "translated_to_claim_language_ids": [
+      "ost-0207",
+      "ost-0266",
+      "ost-0273",
+      "ost-1235"
+    ],
+    "paraphrased_nonverbatim_id": "ost-0472",
+    "verbatim_context_quote_outside_official_reference_match_id": "ost-0183",
+    "scope": "Inspection of this JSON-prompt experiment, not the production passage-ID evidence pipeline."
+  }
+}

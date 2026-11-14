@@ -12,7 +12,7 @@ import threading
 from pathlib import Path
 from typing import List, Dict, Any, Union, Optional, Tuple
 
-from src.text_utils import split_passages
+from src.text_utils import split_passages, normalise
 
 
 # PRIMARY: Numbered voting object headings — these appear exactly once per proposal intro page
@@ -438,7 +438,7 @@ class PDFParser:
             else:
                 raw_chunks = page_text.split("\n\n")
             for chunk in raw_chunks:
-                clean_chunk = " ".join(chunk.split()).strip()
+                clean_chunk = normalise(chunk)
                 if len(clean_chunk) >= min_length:
                     paragraphs.append({
                         "id": para_id,

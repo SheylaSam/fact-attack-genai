@@ -22,3 +22,13 @@ results/*.raw.jsonl
 **/results
 **/docs/evaluation
 **/expected-labels.jsonl
+
+# Local experimental indexes, annotations and private uploaded PDFs
+**/.rag-index
+**/data/genai
+**/data/booklets/custom_*.pdf
+**/data/booklets/.upload-*.tmp
+**/.venv*
+
+# Private local check history
+**/.local-history

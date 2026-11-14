@@ -1,0 +1,22 @@
+{
+  "kind": "offline_ui_correctness_fixes_regression",
+  "full_suite": {
+    "passed": 286,
+    "subtests_passed": 6,
+    "warnings": 8
+  },
+  "real_nli_calls": 0,
+  "quality_metrics": null,
+  "fixed_cases": [
+    "failed recheck clears current stale result",
+    "single result invalidation on PDF content change",
+    "demo fallback requires known PDF SHA-256",
+    "custom PDF has unknown voting date",
+    "displayed evidence snippet comes from actual selected evidence quote"
+  ],
+  "source_sha256": {
+    "track_2a/app.py": "d0927c0e001334b86a69fd5f3d236b5330e912aeca7978f3038c797992c8f30f",
+    "track_2a/src/ui_i18n.py": "46a1766b8cf912f205ac0a115ef325820f07d17c7bce90b426ac584ffe97d5e9",
+    "track_2a/data/booklet_catalog.json": "73cd59c4a8dfe553ec58ff4862e55d11e87237a85656bc433081e7ca47901014"
+  }
+}

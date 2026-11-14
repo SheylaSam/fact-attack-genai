@@ -158,39 +158,42 @@ class BenchmarkEvaluator:
         save: bool = True,
         tag: str = "",
     ) -> Dict[str, Any]:
-        path = Path(dataset_path) if dataset_path else config.BENCHMARK_PATH
-        if not path.exists():
-            raise FileNotFoundError(f"Benchmark dataset not found at: {path}")
+        try:
+            path = Path(dataset_path) if dataset_path else config.BENCHMARK_PATH
+            if not path.exists():
+                raise FileNotFoundError(f"Benchmark dataset not found at: {path}")
 
-        records = load_records(path)
-        if limit:
-            records = stratified_sample(records, limit, seed)
+            records = load_records(path)
+            if limit:
+                records = stratified_sample(records, limit, seed)
 
-        if task == "advanced":
-            missing = sorted({str(r["booklet_pdf"].name) for r in records if not r["booklet_pdf"].exists()})
-            if missing:
-                raise FileNotFoundError(f"Missing booklets (run `python -m src.hf_dataset`): {missing}")
-            # Parse every booklet once up front so PDF parsing is not counted as model latency
-            for pdf in tqdm(sorted({r["booklet_pdf"] for r in records}), desc="Parsing booklets"):
-                self.engine._get_booklet_data(pdf)
+            if task == "advanced":
+                missing = sorted({str(r["booklet_pdf"].name) for r in records if not r["booklet_pdf"].exists()})
+                if missing:
+                    raise FileNotFoundError(f"Missing booklets (run `python -m src.hf_dataset`): {missing}")
+                # Parse every booklet once up front so PDF parsing is not counted as model latency
+                for pdf in tqdm(sorted({r["booklet_pdf"] for r in records}), desc="Parsing booklets"):
+                    self.engine._get_booklet_data(pdf)
 
-        print(f"\nEvaluating {len(records)} samples | task={task} | strategy={strategy} | model={self.engine.client.model_name}")
+            print(f"\nEvaluating {len(records)} samples | task={task} | strategy={strategy} | model={self.engine.client.model_name}")
 
-        started = time.time()
-        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-            preds = list(tqdm(
-                pool.map(lambda r: self._predict(r, task, strategy, top_k), records),
-                total=len(records),
-                desc="Evaluating",
-            ))
-        wall_s = time.time() - started
+            started = time.time()
+            with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+                preds = list(tqdm(
+                    pool.map(lambda r: self._predict(r, task, strategy, top_k), records),
+                    total=len(records),
+                    desc="Evaluating",
+                ))
+            wall_s = time.time() - started
 
-        report = self._build_report(records, preds, task, strategy, top_k, workers, seed, path, wall_s, tag)
-        self.print_report(report)
-        if save:
-            report["saved_to"] = str(self.save_report(report))
-            print(f"Saved -> {report['saved_to']}\n")
-        return report
+            report = self._build_report(records, preds, task, strategy, top_k, workers, seed, path, wall_s, tag)
+            self.print_report(report)
+            if save:
+                report["saved_to"] = str(self.save_report(report))
+                print(f"Saved -> {report['saved_to']}\n")
+            return report
+        finally:
+            self.engine.close()
 
     def _build_report(self, records, preds, task, strategy, top_k, workers, seed, path, wall_s, tag) -> Dict[str, Any]:
         y_true = [r["label"] for r in records]

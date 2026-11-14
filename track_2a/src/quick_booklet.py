@@ -13,6 +13,7 @@ docs/independent_experiments.md). Readers are not thread-safe: one lock per book
 """
 
 import threading
+from src.text_utils import normalise
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -93,7 +94,7 @@ class QuickBooklet:
         """The page-level passage of page n, as extract_paragraphs builds it (first chunk of at least 40 characters)."""
         text = self.text(n)
         for chunk in text.split("\n\n"):
-            clean = " ".join(chunk.split()).strip()
+            clean = normalise(chunk)
             if len(clean) >= 40:
                 return {"page_number": n, "text": clean}
         return None

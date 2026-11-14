@@ -1,0 +1,18 @@
+{
+  "kind": "locked_python312_environment_verification",
+  "python": "3.12.13 (main, Mar 20 2026, 00:20:20) [Clang 22.1.1 ]",
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "lock_sha256": "81dd01a69dd030518762da4b97e4387dbd32f6f6aea4423ce7b25a7f40888e35",
+  "locked_distributions_verified": 89,
+  "core_requirements_modified": false,
+  "all_installed_versions_match_lock": true,
+  "installation_hash_enforcement": true,
+  "docker_reproduced": false,
+  "docker_blocker": "Docker Desktop daemon was not running",
+  "real_nli_calls_in_this_phase": 0,
+  "full_suite": {
+    "passed": 241,
+    "subtests_passed": 6,
+    "warnings": 8
+  }
+}

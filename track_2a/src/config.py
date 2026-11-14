@@ -14,7 +14,15 @@ _RUNTIME_LLM_ENV = {name: os.environ[name] for name in
 BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BASE_DIR.parent
 
-if (BASE_DIR / ".env").exists():
+_explicit_env = os.getenv("FACT_ATTACK_ENV_FILE")
+if os.getenv("FACT_ATTACK_SKIP_DOTENV") == "1":
+    pass  # no .env file at all: the agent's MCP server process must not see any secret (src/agent/mcp_server.py)
+elif _explicit_env:
+    _env_file = Path(_explicit_env).expanduser()
+    if not _env_file.is_file():
+        raise FileNotFoundError("FACT_ATTACK_ENV_FILE points to a missing configuration file")
+    load_dotenv(_env_file)
+elif (BASE_DIR / ".env").exists():
     load_dotenv(BASE_DIR / ".env")
 elif (REPO_ROOT / ".env").exists():
     load_dotenv(REPO_ROOT / ".env")

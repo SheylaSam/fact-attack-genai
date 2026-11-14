@@ -1,0 +1,19 @@
+{
+  "kind": "offline_report_and_history_regression",
+  "full_suite": {
+    "passed": 282,
+    "subtests_passed": 6,
+    "warnings": 8
+  },
+  "real_nli_calls": 0,
+  "quality_metrics": null,
+  "team_test_conducted": false,
+  "team_test_checklist": "docs/genai/TEAM_UI_TEST.md",
+  "report_format": "standalone HTML with print CSS; no generated PDF file",
+  "source_sha256": {
+    "track_2a/app.py": "8090c13d5f61330a70856086c1cebbbfd6171b030140a6298ee093a42152097b",
+    "track_2a/src/check_report.py": "3b82de735298b4c83fb129e35f5bc4948c9f66101b8c2dcdc5b0b34be392f777",
+    "track_2a/src/check_history.py": "72370658e452b69d4969751f125de86a7b33125e09be3ef381eec6bacd231fd9",
+    "track_2a/src/ui_i18n.py": "c05eab4bcb8ac4ac0c4dbe4f3589ad898f832070bd4f8404d0f41186956fcbb2"
+  }
+}
