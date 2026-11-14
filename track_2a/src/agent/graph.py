@@ -4,14 +4,14 @@
                           ├─→ verify → check_evidence ─┬─→ finish → END
                           │                            └─→ nachsuche → decide (one search step) → act
                           │                                  └─→ verify (new passages, once) → check_evidence → finish
-                          ├─→ ask → finish (rueckfrage, from the guard or from the model)
+                          ├─→ ask → finish (rueckfrage, from the guard or from the model; teilaussage_fragen)
                           └─→ finish (quelle_fehlt, technical error)
 
 * `decide` asks the decider for the next action; every answer is one step (`steps`).
-* `act` runs a search tool, or accepts a terminal action (`pruefen`, `rueckfrage`, `quelle_fehlt`) after validating
-  its arguments and resolving every vote id with `AgentTools.check_vote_id`. An invalid action, invalid arguments or a
-  rejected terminal action is fed back to the decider as an observation and is a search step. A failed tool ends the
-  run as `technischer_fehler`.
+* `act` runs a search tool, or accepts a terminal action (`pruefen`, `rueckfrage`, `teilaussage_fragen`,
+  `quelle_fehlt`) after validating its arguments and resolving every vote id with `AgentTools.check_vote_id`. An
+  invalid action, invalid arguments or a rejected terminal action is fed back to the decider as an observation and is
+  a search step. A failed tool ends the run as `technischer_fehler`.
 * The guard sits in `act`: without a fixed vote, before every vote-bound action (`suche_passagen`,
   `suche_passagen_vektor`, `pruefen`, with valid arguments and a known vote id) it looks at the vote ranking of the
   claim's own wording (`AgentTools.claim_assessment`, never the model's query; searched once, then cached). If the
@@ -25,6 +25,10 @@
   vote (`AgentTools.fix_vote`), swaps the system message for the fixed-vote prompt, answers the intercepted action
   with the choice, restores the search budget and continues at `decide`. Everything with side effects sits after the
   `interrupt`: a node that interrupts runs again from its top on resume.
+* `teilaussage_fragen` (a compound claim: which of its 2-4 statements to check) is a question of the model that ends
+  the run in both modes: `ask` sets `rueckfrage` with `statements` and never interrupts. Checking a statement is a new
+  check with it as the claim, never a resume. Unlike `quelle_fehlt` it needs no search before (the claim itself shows
+  whether it is compound), and the guard does not judge it (it names no vote).
 * `quelle_fehlt` is accepted only after a search: without a fixed vote after a `suche_vorlagen` without error, with
   a fixed vote after a passage search. Otherwise it is rejected like any invalid action.
 * At most `max_steps` search steps. After them the decider is asked once more and offered only the terminal tools; if
@@ -50,10 +54,10 @@ Every node emits a `TraceEvent`; an `act` event with a tool result carries its `
 passages and pool status, error kind). Any exception in a node ends the run as `technischer_fehler` with a message.
 Sync only (`invoke`): the request budget counts only synchronous requests.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import re
 import time
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, TypedDict, Union
+from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Tuple, TypedDict, Union
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
@@ -77,6 +81,9 @@ Outcome = Literal["gestuetzt", "widersprochen", "nicht_belegt", "rueckfrage", "q
 LABEL_OUTCOMES: Dict[int, str] = {0: "gestuetzt", 1: "nicht_belegt", 2: "widersprochen"}
 DISCARDED_NOTE = "Urteil ohne prüfbaren Beleg verworfen"
 QUESTION_REASON = "Mehrere Vorlagen passen zur Behauptung, und sie lässt nicht erkennen, welche gemeint ist."
+STATEMENT_REASON = ("Die Behauptung verbindet mehrere Aussagen, die einzeln verschieden ausfallen können. Welche "
+                    "Teilaussage geprüft werden soll, ist offen; jede wird als eigene Behauptung geprüft.")
+STATEMENT_TOOL = "teilaussage_fragen"
 MISMATCH_REASON = ("Die Behauptung passt am besten zur Vorlage «{top}», die Aktion des Modells nennt aber die "
                    "Vorlage «{chosen}». Es ist nicht klar, welche gemeint ist.")
 DISCARDED_REASON = ("Die Prüfung ergab «{verdict}», aber kein Zitat steht so im PDF-Text der angegebenen Seite. "
@@ -137,6 +144,8 @@ class AgentResult:
     steps: int = 0
     asked_by: Optional[Literal["guard", "model"]] = None  # who asked back; only with outcome "rueckfrage"
     checks: int = 0  # evidence checks that ran (verify calls): 0, 1 or 2
+    statements: List[str] = field(default_factory=list)  # teilaussage_fragen: the statements to choose from, else []
+    evidence_validated: bool = True  # False: run with `evidence_check=False`, the quotes were taken over unchecked
 
 
 class _State(TypedDict, total=False):
@@ -168,6 +177,7 @@ class _State(TypedDict, total=False):
     evidence: List[EvidenceItem]
     question: str
     options: List[VoteRef]
+    statements: List[str]  # the statements of teilaussage_fragen: `ask` ends the run with them, it never pauses
     last_vote: VoteRef  # session memory: the person's last chosen vote; the question may be answered with it too
     reasoning: str
     note: str
@@ -201,9 +211,38 @@ def page_texts(engine, pdf, page: int) -> List[str]:
     return [text for text in (official_normalize(t) for t in texts if isinstance(t, str)) if text]
 
 
+def valid_evidence(engine, pdf, vote: VoteRef, quotes: Iterable[Tuple[Any, str]]
+                   ) -> Tuple[List[EvidenceItem], List[int]]:
+    """The evidence check: of the (page, quote) pairs, the quotes found verbatim (after `official_normalize`) in the
+    PDF text of their page or of one of its text blocks (`page_texts`), without duplicates, on a page of `vote.pages`
+    only; and the cited pages without readable PDF text, whose quotes cannot be checked.
+
+    The graph's `check_evidence` keeps a verdict only with at least one such quote and no unreadable page; the
+    evaluation runner applies the same function after the run, to every arm alike."""
+    pages: Dict[int, List[str]] = {}
+    seen, items, unreadable = set(), [], []
+    for page, raw in quotes:
+        if type(page) is not int or page < 1:
+            continue
+        quote = _PAGE_PREFIX.sub("", raw)
+        normalized = official_normalize(quote)
+        if not normalized or (page, normalized) in seen:
+            continue
+        if page not in vote.pages:  # a quote of another vote's page is no evidence for this vote
+            continue
+        if page not in pages:
+            pages[page] = page_texts(engine, pdf, page)
+            if not pages[page]:
+                unreadable.append(page)
+        if any(normalized in text for text in pages[page]):
+            seen.add((page, normalized))
+            items.append(EvidenceItem(page=page, quote=quote))
+    return items, sorted(unreadable)
+
+
 class _Nodes:
     def __init__(self, tools: AgentTools, decider: Decider, engine, tracer: Tracer, max_steps: int, budget: Any,
-                 nachsuche: bool = True, interactive: bool = False):
+                 nachsuche: bool = True, interactive: bool = False, evidence_check: bool = True):
         self.tools = tools
         self.decider = decider
         self.engine = engine
@@ -211,6 +250,7 @@ class _Nodes:
         self.max_steps = max_steps
         self.budget = budget
         self.nachsuche_enabled = nachsuche
+        self.evidence_check = evidence_check  # False: quotes are taken over as the check gave them (arm B2)
         self.interactive = interactive  # a checkpointer is set: `ask` pauses and resumes with the answer
 
     # --- helpers -------------------------------------------------------------------------------------------------
@@ -467,6 +507,11 @@ class _Nodes:
                      "ask_data": {"options": [{"vote_id": o.vote_id, "title": o.title, "date": o.date}
                                               for o in options]}, "route": "ask"},
                     f"Rückfrage mit {len(options)} Optionen: {', '.join(o.vote_id for o in options)}")
+        if action.tool == STATEMENT_TOOL:  # no search needed: the claim itself shows whether it is compound
+            statements = list(args["teilaussagen"])
+            return ({"question": args["frage"], "options": [], "statements": statements, "asked_by": "model",
+                     "ask_data": {"statements": statements}, "ask_reason": STATEMENT_REASON, "route": "ask"},
+                    f"Rückfrage nach der Teilaussage mit {len(statements)} Teilaussagen")
         if self.tools.fixed_vote_id is None and not state.get("vote_searches", 0):
             raise ValueError(NO_SEARCH_YET)
         if self.tools.fixed_vote_id is not None and not state.get("passage_searches", 0):
@@ -476,10 +521,16 @@ class _Nodes:
 
     def ask(self, state: _State) -> dict:
         """The only node that sets the outcome `rueckfrage`; in interactive mode it pauses for the answer and goes on
-        with the chosen vote instead."""
+        with the chosen vote instead. The question for a statement (`statements`) ends the run in both modes."""
         options, step = state["options"], state["steps"]
         asked_by = state.get("asked_by", "model")
         started = time.perf_counter()
+        statements = state.get("statements") or []
+        if statements:  # answered by a new check of the chosen statement, never by a resume: no interrupt
+            self.emit(step, "ask", started, tool=STATEMENT_TOOL, args={"teilaussagen": list(statements)},
+                      data=state.get("ask_data"),
+                      summary=f"Rückfrage (Modell) nach der Teilaussage: {len(statements)} Teilaussagen")
+            return {"outcome": "rueckfrage", "reasoning": state.get("ask_reason", STATEMENT_REASON), "route": "finish"}
         ids = [option.vote_id for option in options]
         if not self.interactive:
             who = "Wächter" if asked_by == "guard" else "Modell"
@@ -533,8 +584,14 @@ class _Nodes:
             self.emit(step, "check_evidence", started, summary="Nicht belegt: kein Zitat zu prüfen")
             return {"outcome": verdict, "evidence": [], "reasoning": prediction.reasoning, "note": None,
                     "route": self._after_not_proven(state)}
-        evidence, unreadable = self._valid_evidence(vote, prediction)
         total = len(prediction.evidence_sources)
+        if not self.evidence_check:  # arm B2: no PDF text is read, nothing is discarded
+            evidence = self._given_evidence(prediction)
+            self.emit(step, "check_evidence", started,
+                      summary=f"Belegprüfung aus: {len(evidence)} von {total} Zitaten ungeprüft übernommen: {verdict}")
+            return {"outcome": verdict, "evidence": evidence, "reasoning": prediction.reasoning, "note": None,
+                    "route": "finish"}
+        evidence, unreadable = self._valid_evidence(vote, prediction)
         if unreadable:  # the check could not be done: technical, never "nicht belegt"
             pages = ("Seite " if len(unreadable) == 1 else "Seiten ") + ", ".join(map(str, unreadable))
             message = UNREADABLE_ERROR.format(pages=pages, source=f"{vote.source_id}.pdf")
@@ -571,34 +628,20 @@ class _Nodes:
         return {"phase": "nachsuche", "checked": list(state["passages"]), "first": first,
                 "messages": list(state["messages"]) + exchange, "route": "decide"}
 
-    def _page_texts(self, pdf, page: int) -> List[str]:
-        return page_texts(self.engine, pdf, page)
+    @staticmethod
+    def _given_evidence(prediction: PredictionResult) -> List[EvidenceItem]:
+        """The quotes of the check as given (evidence check off): only the engine's page prefix is removed, as in
+        `_valid_evidence`, and an item without a page number or without text is no quote at all."""
+        items = []
+        for source in prediction.evidence_sources:
+            page, quote = source.page_number, _PAGE_PREFIX.sub("", source.quote)
+            if type(page) is int and page >= 1 and quote.strip():
+                items.append(EvidenceItem(page=page, quote=quote))
+        return items
 
     def _valid_evidence(self, vote: VoteRef, prediction: PredictionResult) -> Tuple[List[EvidenceItem], List[int]]:
-        """The quotes found verbatim (after `official_normalize`) in the PDF text of their page or of one of its text
-        blocks, without duplicates, on a page of `vote.pages` only; and the cited pages without readable PDF text,
-        whose quotes cannot be checked."""
-        pdf = self.booklet_pdf(vote)
-        pages: Dict[int, List[str]] = {}
-        seen, items, unreadable = set(), [], []
-        for source in prediction.evidence_sources:
-            page = source.page_number
-            if type(page) is not int or page < 1:
-                continue
-            quote = _PAGE_PREFIX.sub("", source.quote)
-            normalized = official_normalize(quote)
-            if not normalized or (page, normalized) in seen:
-                continue
-            if page not in vote.pages:  # a quote of another vote's page is no evidence for this vote
-                continue
-            if page not in pages:
-                pages[page] = self._page_texts(pdf, page)
-                if not pages[page]:
-                    unreadable.append(page)
-            if any(normalized in text for text in pages[page]):
-                seen.add((page, normalized))
-                items.append(EvidenceItem(page=page, quote=quote))
-        return items, sorted(unreadable)
+        return valid_evidence(self.engine, self.booklet_pdf(vote), vote,
+                              [(source.page_number, source.quote) for source in prediction.evidence_sources])
 
     def finish(self, state: _State) -> dict:
         outcome, error = state.get("outcome"), state.get("error")
@@ -610,7 +653,9 @@ class _Nodes:
         if error is not None:
             outcome = "technischer_fehler"
         summary = f"Ergebnis: {outcome}"
-        if outcome == "rueckfrage":
+        if outcome == "rueckfrage" and state.get("statements"):
+            summary += f", {len(state['statements'])} Teilaussagen"
+        elif outcome == "rueckfrage":
             summary += f", {len(state.get('options', []))} Optionen"
         elif outcome in ("gestuetzt", "widersprochen"):
             summary += f", {len(state.get('evidence', []))} Belege"
@@ -623,10 +668,13 @@ def _route(state: _State) -> str:
 
 
 def build_graph(tools: AgentTools, decider: Decider, engine, tracer: Tracer, max_steps: int = settings.MAX_STEPS,
-                *, budget: Any = None, nachsuche: bool = True, checkpointer: Optional[BaseCheckpointSaver] = None):
+                *, budget: Any = None, nachsuche: bool = True, evidence_check: bool = True,
+                checkpointer: Optional[BaseCheckpointSaver] = None):
     """The compiled graph. Its input state needs `claim`, `language` and `messages`; see `run_check`.
 
-    `nachsuche=False` switches the research loop off: the first `nicht_belegt` ends the run (evaluation arm B2).
+    `nachsuche=False` switches the research loop off: the first `nicht_belegt` ends the run. Together with
+    `evidence_check=False` this is the evaluation arm B2: the quotes of the check are taken over as given (no
+    comparison with the PDF text, no discarded verdict), and the results are marked `evidence_validated=False`.
 
     `budget` (a `RequestBudget`, optional): if a request was refused during the run, the result is a technical error
     even when the refusal was swallowed on the way (the engine's query translation returns no translation).
@@ -639,7 +687,7 @@ def build_graph(tools: AgentTools, decider: Decider, engine, tracer: Tracer, max
     if max_steps < 1:
         raise ValueError(f"max_steps must be at least 1, got {max_steps!r}")
     interactive = checkpointer is not None
-    nodes = _Nodes(tools, decider, engine, tracer, max_steps, budget, nachsuche, interactive)
+    nodes = _Nodes(tools, decider, engine, tracer, max_steps, budget, nachsuche, interactive, evidence_check)
     graph = StateGraph(_State)
     for name in ("decide", "act", "ask", "verify", "check_evidence", "nachsuche", "finish"):
         graph.add_node(name, nodes.guarded(name, getattr(nodes, name)))
@@ -661,9 +709,10 @@ def build_graph(tools: AgentTools, decider: Decider, engine, tracer: Tracer, max
     return graph.compile(checkpointer=checkpointer).with_config(recursion_limit=limit)
 
 
-def _result(state: dict, events: List[TraceEvent]) -> AgentResult:
+def _result(state: dict, events: List[TraceEvent], evidence_validated: bool = True) -> AgentResult:
     common = {"vote": state.get("vote"), "prediction": state.get("prediction"), "events": events,
-              "steps": state.get("steps", 0), "checks": state.get("checks", 0)}
+              "steps": state.get("steps", 0), "checks": state.get("checks", 0),
+              "evidence_validated": evidence_validated}
     if state.get("error") is not None or state.get("outcome") in (None, "technischer_fehler"):
         return AgentResult(outcome="technischer_fehler", reasoning=TECHNICAL_REASON,
                            error=state.get("error") or NO_RESULT, **common)
@@ -671,6 +720,7 @@ def _result(state: dict, events: List[TraceEvent]) -> AgentResult:
     return AgentResult(outcome=state["outcome"], evidence=list(state.get("evidence", [])),
                        question=state.get("question") if asked else None,
                        options=list(state.get("options", [])) if asked else [],
+                       statements=list(state.get("statements") or []) if asked else [],
                        reasoning=state.get("reasoning", ""), note=state.get("note"),
                        asked_by=state.get("asked_by") if asked else None, **common)
 
@@ -727,7 +777,8 @@ def prepare(claim: str, tools: AgentTools, tracer: Tracer, claim_language: Optio
 
 
 def run_check(claim: str, *, tools: AgentTools, decider: Decider, engine, tracer: Tracer,
-              claim_language: Optional[str] = None, budget: Any = None, nachsuche: bool = True) -> AgentResult:
+              claim_language: Optional[str] = None, budget: Any = None, nachsuche: bool = True,
+              evidence_check: bool = True) -> AgentResult:
     """One check of `claim`. Raises ValueError only for a claim outside 1-1000 characters; every runtime failure is
     an `AgentResult` with `outcome="technischer_fehler"`.
 
@@ -735,19 +786,27 @@ def run_check(claim: str, *, tools: AgentTools, decider: Decider, engine, tracer
     `quelle_fehlt` before any LLM call (`prepare`). `claim_language` defaults to `guess_language(claim)`. With
     `budget` (the check's `RequestBudget`) a refused request makes the result a technical error even if it was
     swallowed. `EVIDENCE_POLICY=legacy` is refused as a technical error before any LLM call. With `nachsuche=False` a
-    first `nicht_belegt` is final (no research step, no second check). The run is never interactive: a question ends
-    it as `rueckfrage`.
+    first `nicht_belegt` is final (no research step, no second check). With `evidence_check=False` the quotes of the
+    check are taken over unchecked and every result, early and crash results too, has `evidence_validated=False`.
+    The run is never interactive: a question ends it as `rueckfrage`.
     """
     _validate_claim(claim)  # the caller's error: raised, unlike the failures inside the run
     first_event = len(tracer.events)
     try:
         start = prepare(claim, tools, tracer, claim_language)
         if isinstance(start, AgentResult):
-            return start
-        graph = build_graph(tools, decider, engine, tracer, budget=budget, nachsuche=nachsuche)
-        return _result(graph.invoke(start), tracer.events[first_event:])
+            return mark_evidence(start, evidence_check)
+        graph = build_graph(tools, decider, engine, tracer, budget=budget, nachsuche=nachsuche,
+                            evidence_check=evidence_check)
+        return _result(graph.invoke(start), tracer.events[first_event:], evidence_check)
     except Exception as exc:  # outside the nodes (graph runtime, trace file): still a result, never a raise
-        return crash_result(exc, tracer, first_event)
+        return mark_evidence(crash_result(exc, tracer, first_event), evidence_check)
+
+
+def mark_evidence(result: AgentResult, evidence_check: bool) -> AgentResult:
+    """`result` with `evidence_validated` set to whether the run checked its quotes (early and crash results are
+    built outside the graph and do not know the switch)."""
+    return result if result.evidence_validated == evidence_check else replace(result, evidence_validated=evidence_check)
 
 
 def crash_result(exc: BaseException, tracer: Tracer, first_event: int) -> AgentResult:

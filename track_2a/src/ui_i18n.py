@@ -269,6 +269,8 @@ Geprüfte Vorlage: {title}|Objet vérifié : {title}|Oggetto verificato: {title}
 _ROWS += """
 Gesamtes Büchlein|Brochure entière|Opuscolo intero
 Wähle die Vorlage, die du meinst; danach geht die Prüfung weiter.|Choisissez l’objet que vous visez ; la vérification se poursuit ensuite.|Scegli l’oggetto che intendi; poi la verifica prosegue.
+Welche Teilaussage soll geprüft werden?|Quelle partie de l’affirmation faut-il vérifier ?|Quale parte dell’affermazione va verificata?
+Die Behauptung verbindet mehrere Aussagen, die einzeln verschieden ausfallen können. Wähle eine; sie wird als neue Behauptung geprüft.|L’affirmation réunit plusieurs énoncés dont le résultat peut différer. Choisissez-en un ; il sera vérifié comme nouvelle affirmation.|L’affermazione unisce più enunciati il cui esito può essere diverso. Scegline uno; verrà verificato come nuova affermazione.
 Testmodus, kein Apertus-Urteil|Mode test, pas de verdict d’Apertus|Modalità di test, nessun giudizio di Apertus
 Für die Mehrfachprüfung die Quelle unter «Quelle selbst wählen» vorgeben oder ein eigenes PDF laden.|Pour la vérification multiple, imposez la source sous « Choisir la source soi-même » ou chargez un PDF personnel.|Per la verifica multipla, imponi la fonte in «Scegliere la fonte da soli» o carica un PDF personale.
 """

@@ -309,6 +309,39 @@ class WholeBookletTitleTests(unittest.TestCase):
         self.assertIn(agent_ui.TITLE_UPLOAD, agent_ui.TEXT_KEYS)
 
 
+@unittest.skipUnless(HAS_LANGGRAPH, 'needs requirements-agent.txt')
+class StatementQuestionTests(unittest.TestCase):
+    PARTS = ['Die Untermiete braucht eine schriftliche Zustimmung.', 'Die Kündigung wegen Eigenbedarfs wird leichter.']
+
+    def test_statement_question_is_one_ask_row_with_buttons(self):
+        from tests.test_agent_graph import COMPOUND, PresetDecider, act, check, search_votes
+        ask = act('teilaussage_fragen', frage='Welche Teilaussage soll ich prüfen?', teilaussagen=self.PARTS)
+        result, _, _ = check(PresetDecider(search_votes(), ask), claim=COMPOUND)  # the events the graph emits
+        rows = agent_ui.step_rows(result.events)
+        self.assertEqual(marks(rows), ['done', 'ask'])  # the vote search, then the question as one row
+        self.assertEqual(rows[1].title, agent_ui.TITLE_ASK)
+        self.assertIn('2 Teilaussagen', rows[1].detail)
+        self.assertNotIn('Wächter', rows[1].detail)
+        open_row = agent_ui.step_rows(result.events[:3], running=True)  # the decision alone: the open row
+        self.assertEqual(open_row[-1].title, agent_ui.TITLE_ASK)
+        self.assertEqual(agent_ui.statement_choices(result), self.PARTS)  # one button per statement, in order
+        view = agent_ui.outcome_view(result)
+        self.assertEqual((view.kind, view.tone, view.title, view.text),
+                         ('state', 'info', agent_ui.TITLE_STATEMENT, agent_ui.TEXT_STATEMENT))
+        self.assertNotIn('Vorlage', view.title + view.text)  # it does not ask for a vote
+        for key in (agent_ui.TITLE_STATEMENT, agent_ui.TEXT_STATEMENT):
+            self.assertIn(key, agent_ui.TEXT_KEYS)
+
+    def test_only_a_statement_question_has_statement_choices(self):
+        from src.agent.session import Pending
+        vote_question = AgentResult(outcome='rueckfrage', question='Welche?', options=[V1, V2], asked_by='guard')
+        for turn in (None, vote_question, AgentResult(outcome='gestuetzt', vote=V1),
+                     Pending('Welche?', (V1, V2), 'guard'), RuntimeError('x')):
+            with self.subTest(turn=type(turn).__name__):
+                self.assertEqual(agent_ui.statement_choices(turn), [])
+        self.assertEqual(agent_ui.outcome_view(vote_question).title, agent_ui.TITLE_QUESTION)
+
+
 class QuestionTextTests(unittest.TestCase):
     def test_the_mismatch_question_does_not_claim_that_several_votes_fit(self):
         ambiguous = [event(2, 'ask', 'rueckfrage', 'Rückfrage', data={'kind': 'mehrdeutig'})]

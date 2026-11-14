@@ -164,3 +164,33 @@ eigener MCP-Server und fünf gedeckelte echte Läufe.
 
 Ohne Qualitätsaussage: Einzelläufe sind keine Messung; der Testteil des Testsets ist weiter gesperrt. Details,
 Befunde und offene Punkte: [AGENT_STUFE3.md](AGENT_STUFE3.md).
+
+## Agentenschicht Stufe 5: Evaluation B0/B1/B2
+
+14.11.2026: Konfigurationsfreeze bei `7bca92b` (Konfig-Hash `c60b30bce0b6…`). Danach wurde der Testteil des
+gesperrten Testsets einmal je Arm ausgewertet.
+
+**Test (73 Fälle, 64 beantwortbar), Macro-F1 streng:**
+
+| Arm | F1 streng | Fehlurteile | Enthaltungen | Anfragen |
+|---|---|---|---|---|
+| B1 (Agent) | 0.853 | 9 | 1 | 380 |
+| B2 (ohne Nachsuche und Belegkontrolle) | 0.812 | 11 | 2 | 321 |
+| B0 (bewährter Pfad, Orakel-Büchlein) | 0.783 | 14 | 0 | 70 |
+
+- **Unterschiede nicht gesichert:** B1 gegen B0 unterscheiden sich in 8 zu 4 Fällen, B1 gegen B2 in 3 zu 0.
+- **Beleggültigkeit** ist 1.000 in allen Armen.
+- **Regression** auf 42 Dev-Fällen bestanden: B0 und Agent 42 von 42, kein geänderter Fall.
+- **Wichtigste Befunde:**
+  - Prompt Injection: 0 von 2 auf Test in allen Armen, das Urteil stimmt jeweils mit der eingeschleusten
+    Anweisung überein. Ohne Kontrolllauf ist das nicht von gewöhnlichen Fehlern zu trennen. Über alle drei Fälle
+    mit Dev: B1 0 von 3, B0 und B2 je 1 von 3. Planziel nicht erreicht.
+  - 19 unberechtigte gegenüber 3 berechtigten Rückfragen, wahrscheinlich verursacht durch die Wächter-Schwelle (Hypothese, kein Kontrolllauf).
+  - Kein `quelle_fehlt` bei Themen ohne Abstimmung.
+  - Die Teilaussagen-Frage wählte das Modell nie.
+- **Bezahlte Anfragen der Stufe:** 1376. Jeder Lauf hatte ein eigenes OK mit Deckel; kein Deckel wurde erreicht.
+- **Vollständige Suite:** **1119 Tests bestanden**, 413 Subtests, dieselben 8 Warnungen (vor Stufe 5: 994).
+
+Grenzen: kleine Fallzahl, ein Lauf je Arm, ein Modell, Temperatur 0 ohne Determinismus (2 von 67 ersten
+Prüfungen schwankten bei gleicher Eingabe). Zahlen, Fehleranalyse, Integrität des Testteils (auch der Vorfall in
+Task 2) und Kosten: [EVALUATION_AGENT.md](EVALUATION_AGENT.md).

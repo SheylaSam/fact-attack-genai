@@ -1463,10 +1463,18 @@ def _step_line(row) -> str:
     return f"{AGENT_MARKS[row.mark]} {t(row.title)}" + (f" · {row.detail}" if row.detail else "")
 
 
-def _draw_agent_steps(placeholder, check, events, *, question=None) -> Optional[str]:
+def _check_statement(statement: str) -> None:
+    """A clicked statement of a compound claim (before the rerun): it becomes the claim in the input and is checked
+    like a typed claim on «Behauptung prüfen», as a new check with new tools and budget, never as an answer."""
+    st.session_state["claim_input"] = statement
+    st.session_state["agent_check_statement"] = True
+
+
+def _draw_agent_steps(placeholder, check, events, *, question=None, statements=()) -> Optional[str]:
     """Draws the finished step list into `placeholder`, an error row red. With an open `question` (a `Pending`)
     its text and one button per option sit inside the last ask step, plus the "wie zuletzt" button of the question's
-    `last_vote`. Returns the vote id of a clicked button."""
+    `last_vote`. Returns the vote id of a clicked button. With `statements` (the model asked which statement of a
+    compound claim to check) one button per statement sits there instead; a click starts a new check with it."""
     rows = agent_ui.step_rows(events)
     asks = [index for index, row in enumerate(rows) if row.mark == "ask"]
     question_at = asks[-1] if asks else len(rows) - 1
@@ -1486,6 +1494,11 @@ def _draw_agent_steps(placeholder, check, events, *, question=None) -> Optional[
                     if st.button(f"{label} · {_vote_date(option.vote.date)}", width="stretch",
                                  key=f"agent_option_{check.key}_{option.vote.vote_id}"):
                         chosen = option.vote.vote_id
+            if statements and index == question_at:
+                st.markdown(f"**{t(agent_ui.TITLE_STATEMENT)}** {t(agent_ui.TEXT_STATEMENT)}")
+                for number, statement in enumerate(statements):  # the model's text: shown, never rendered
+                    st.button(_md(statement), width="stretch", key=f"agent_statement_{check.key}_{number}",
+                              on_click=_check_statement, args=(statement,))
     return chosen
 
 
@@ -1549,7 +1562,7 @@ def _show_agent_outcome(turn) -> None:
     if isinstance(turn, Exception):
         st.error(t('Die Prüfung konnte nicht abgeschlossen werden ({v0}).').format(v0=_md(turn)))
         return
-    if agent_app.is_question(turn):
+    if agent_app.is_question(turn) or agent_ui.statement_choices(turn):  # the question sits in its step
         return
     view = agent_ui.outcome_view(turn)
     if view.kind != "verdict":
@@ -1586,13 +1599,15 @@ def run_agent_check(steps, verify_clicked: bool, claim: str, claim_lang: str, si
     _adopt_agent_turn(check, save_history)
     turn = st.session_state.get("agent_turn")
     chosen = _draw_agent_steps(steps, check, st.session_state["agent_events"],
-                               question=turn if agent_app.is_question(turn) else None)
+                               question=turn if agent_app.is_question(turn) else None,
+                               statements=agent_ui.statement_choices(turn))
     if chosen is not None and check.session.pending is not None and not check.running:
         st.session_state["last_vote_id"] = chosen  # the memory of this browser session only, never saved
         _run_agent(steps, check, lambda session: session.answer(chosen))
         _adopt_agent_turn(check, save_history)
-        _draw_agent_steps(steps, check, st.session_state["agent_events"])
         turn = st.session_state.get("agent_turn")
+        _draw_agent_steps(steps, check, st.session_state["agent_events"],
+                          statements=agent_ui.statement_choices(turn))
     _show_agent_outcome(turn)
 
 
@@ -1665,6 +1680,8 @@ with tab_factcheck:
     picked_source = bool(st.session_state.pop("agent_pick_source", False)) and agent_mode
     if picked_source:
         st.session_state["agent_own_source"] = True
+    # a clicked statement of a compound claim is in the claim input now: it starts a new check like the button
+    statement_start = bool(st.session_state.pop("agent_check_statement", False)) and agent_mode
     own_upload = agent_mode and uploaded_file is not None  # an own PDF is always the check's fixed source
     own_source = own_upload or (agent_mode and bool(st.session_state.get("agent_own_source")))
     col_in, col_out = st.columns([1, 1.12], gap="large")
@@ -1757,7 +1774,7 @@ with tab_factcheck:
         save_history = st.checkbox(t("Prüfung lokal im Verlauf speichern"), value=True, key="save_history",
                                    help=t("Speichert Behauptung, Quelle und Ergebnis auf diesem Rechner. Der Verlauf ist für Nutzer dieser lokalen App-Installation sichtbar."))
         verify_clicked = st.button(t("Behauptung prüfen"), type="primary", width="stretch", disabled=not claim.strip() or (
-            not agent_mode and no_source_matches and uploaded_file is None))
+            not agent_mode and no_source_matches and uploaded_file is None)) or statement_start
         st.caption(t("Beim Prüfen werden die Behauptung und ausgewählte Textstellen an Apertus auf CSCS gesendet."))
         if not agent_on:
             st.caption(t("Die Agentenschicht ist nicht verfügbar; die Prüfung läuft wie bisher ohne Agenten."))

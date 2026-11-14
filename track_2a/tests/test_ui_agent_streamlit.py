@@ -843,6 +843,78 @@ def test_the_mismatch_question_does_not_say_that_several_votes_fit():
                    for value in markdown(app))
 
 
+# --- stage 5: statements of a compound claim ----------------------------------------------------------------------
+PARTS = ['Die Untermiete braucht eine schriftliche Zustimmung.', 'Die Kündigung wegen Eigenbedarfs wird leichter.']
+
+
+class SessionFakes(Fakes):
+    """Like Fakes, but session n gets the n-th action list (the last one repeats)."""
+
+    def __init__(self, *action_lists, **kwargs):
+        super().__init__(action_lists[0], **kwargs)
+        self.action_lists = list(action_lists)
+
+    def make(self, fixed_vote_id, on_event, session_vote=None):
+        self.actions = list(self.action_lists[min(len(self.sessions), len(self.action_lists) - 1)])
+        return super().make(fixed_vote_id, on_event, session_vote)
+
+
+def statement_question(parts=PARTS):
+    return act('teilaussage_fragen', frage='Welche Teilaussage soll ich prüfen?', teilaussagen=list(parts))
+
+
+def statements(app):
+    return [button for button in app.button if (button.key or '').startswith('agent_statement_')]
+
+
+def test_clicking_a_statement_starts_a_new_check_with_it_as_the_claim():
+    from tests.test_agent_graph import COMPOUND
+    fakes = SessionFakes([search_votes(), statement_question()],
+                         [search_votes(), search_passages(V1), act('pruefen', vorlage_id=V1.vote_id)])
+    with agent_app(fakes) as app:
+        check(app, COMPOUND)
+        buttons = statements(app)
+        assert [button.label.replace('\\', '') for button in buttons] == PARTS  # escaped, see the next test
+        assert len({button.key for button in buttons}) == 2
+        assert not options(app) and not has_verdict(app) and 'last_check' not in app.session_state
+        assert any(agent_ui.TITLE_STATEMENT in value and agent_ui.TEXT_STATEMENT in value for value in markdown(app))
+        assert 'Rückfrage' in '\n'.join(step_texts(app))
+        first_check = app.session_state['agent_session']
+        buttons[1].click().run()
+        assert not app.exception
+        assert fakes.starts == [COMPOUND, PARTS[1]]  # a new check with the statement as its claim ...
+        assert fakes.answers == []  # ... never an answer to the old one
+        assert len(fakes.sessions) == 2 and fakes.sessions[1][1] is not fakes.sessions[0][1]
+        assert fakes.sessions[1][1]._tools is not fakes.sessions[0][1]._tools  # new tools, new budget
+        assert fakes.budgets[1] is not fakes.budgets[0] and fakes.budgets[0].cancelled
+        assert fakes.sessions[1][0] is None  # the agent searches the vote itself, as for a typed claim
+        assert app.session_state['agent_session'] is not first_check
+        assert app.text_area(key='claim_input').value == PARTS[1]  # the input shows what is checked now
+        assert fakes.deciders[1].calls[0]['messages'][1]['content'] == PARTS[1]
+        assert not statements(app)
+        assert has_verdict(app)
+        assert app.session_state['last_check']['result'].label == 0
+        app.run()  # the next rerun keeps the new check: its signature is the statement's
+        assert not app.exception and len(fakes.sessions) == 2 and has_verdict(app)
+
+
+def test_statements_are_escaped():
+    raw = ['**fett** <b>Tag</b> [Link](https://example.com) $x$', 'Zweite Aussage mit `code` und _kursiv_.']
+    fakes = SessionFakes([statement_question(raw)])
+    with agent_app(fakes) as app:
+        check(app, 'Die Vorlage ist **fett** und <b>Tag</b>.')
+        labels = [button.label for button in statements(app)]
+        assert len(labels) == 2
+        assert r'\*\*fett\*\*' in labels[0] and r'\<b\>Tag\</b\>' in labels[0]
+        for label in labels:  # shown as text: no Markdown, HTML or LaTeX of the model reaches the page
+            assert '**fett**' not in label and '](https' not in label and '$x$' not in label
+            assert '`code`' not in label and '<b>' not in label
+        assert not any('<b>Tag</b>' in value for value in markdown(app))
+        statements(app)[0].click().run()
+        assert not app.exception
+        assert fakes.starts[-1] == raw[0]  # the claim of the new check is the statement as written, not escaped
+
+
 def batch_prediction(**kwargs):
     from src.inference import PredictionResult
     return PredictionResult(claim=kwargs['claim'], label=1, label_name='Neutral', reasoning='Injected UI test',

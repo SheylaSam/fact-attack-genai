@@ -5,6 +5,11 @@ Alle bisherigen Daten sind beobachtete Dev-/Regressionsdaten. Das betrifft auch
 den früheren September-Holdout. Neue Testdaten sind noch nicht vorhanden;
 [TESTDATEN_PROTOKOLL.md](TESTDATEN_PROTOKOLL.md) beschreibt Gruppierung und Verschluss.
 
+> **Agentenschicht:** Diese Datei betrifft den Vektor-RAG-Prototyp vom Oktober. Die Evaluation des Agenten
+> liegt in [EVALUATION_AGENT.md](EVALUATION_AGENT.md). Sie umfasst B0/B1/B2 auf dem gesperrten Testset der
+> Agentenschicht, die Regression auf den 42 Dev-Fällen und die Fehleranalyse (Stand 14.11.2026). Auf Test, 64
+> beantwortbare Fälle, Macro-F1 streng: B1 0.853, B2 0.812, B0 0.783.
+
 ## Reproduzieren
 
 Aus `track_2a`, in der vorhandenen Umgebung mit `requirements-rag.txt`:

@@ -207,10 +207,11 @@ class FourRequestsTests(unittest.TestCase):
         self.assertEqual(report['recommended_tool_mode'], 'native')
         self.assertEqual(report['completion_cap']['verdict'], 'angenommen')
         self.assertEqual((report['requests_used'], report['complete']), (4, True))
-        # all six tools are offered in every native situation; the JSON request carries none natively
+        # all seven tools (teilaussage_fragen since stage 5) are offered in every native situation; the JSON request
+        # carries none natively
         self.assertNotIn('tools', endpoint.bodies[0])
         for body in endpoint.bodies[1:]:
-            self.assertEqual(len(body['tools']), 6)
+            self.assertEqual(len(body['tools']), 7)
             self.assertEqual(body['tool_choice'], 'required')
         # the stage-3 history: suche_passagen without anfrage
         history_call = endpoint.bodies[3]['messages'][-2]['tool_calls'][0]['function']

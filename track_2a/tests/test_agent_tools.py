@@ -455,7 +455,8 @@ class VoteIdTests(unittest.TestCase):
         self.assertNotIn('suche_vorlagen', names)
         self.assertNotIn('rueckfrage', names)  # a fixed vote leaves nothing to ask about: it could never be valid
         self.assertIn('quelle_fehlt', names)
-        self.assertEqual(names, ['suche_passagen', 'suche_passagen_vektor', 'pruefen', 'quelle_fehlt'])
+        self.assertEqual(names, ['suche_passagen', 'suche_passagen_vektor', 'pruefen', 'teilaussage_fragen',
+                                 'quelle_fehlt'])
         hidden = tools.run('suche_vorlagen', {'anfrage': 'Miete'})
         self.assertTrue(hidden.error)
         self.assertEqual(index.vote_calls, [])
@@ -576,6 +577,58 @@ class ArgumentValidationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 tools.check_vote_id(unknown)
 
+    def test_teilaussage_fragen_validates_two_to_four_distinct_statements(self):
+        question = 'Welche Teilaussage soll ich prüfen?'
+        statements = ['Streamingdienste müssen 4 Prozent investieren.', 'Die Hälfte des Angebots ist Schweizer Film.',
+                      'Die Vorlage gilt ab 2024.', 'Das Gesetz betrifft auch Fernsehsender.', 'Fünfte Aussage.']
+        for count in (0, 1, 5):
+            with self.subTest(count=count), self.assertRaises(ValueError) as caught:
+                validate_args('teilaussage_fragen', {'frage': question, 'teilaussagen': statements[:count]})
+            self.assertIn('teilaussagen', str(caught.exception))
+        for count in (2, 3, 4):
+            with self.subTest(count=count):
+                clean = validate_args('teilaussage_fragen', {'frage': question, 'teilaussagen': statements[:count]})
+                self.assertEqual(clean, {'frage': question, 'teilaussagen': statements[:count]})
+        padded = validate_args('teilaussage_fragen', {'frage': f' {question} ',
+                                                      'teilaussagen': [f'  {s}\n' for s in statements[:2]]})
+        self.assertEqual(padded, {'frage': question, 'teilaussagen': statements[:2]})  # stripped like the others
+        longest = 'x' * tools_module.MAX_STATEMENT_CHARS
+        self.assertEqual(validate_args('teilaussage_fragen', {'frage': question, 'teilaussagen': [longest, 'y']}),
+                         {'frage': question, 'teilaussagen': [longest, 'y']})
+        bad_lists = ([statements[0], statements[0]],  # the same statement twice
+                     [statements[0], f'  {statements[0].upper()}  '],  # the same after stripping and case
+                     [statements[0], ''], [statements[0], '   '], [statements[0], 7], [statements[0], None],
+                     [statements[0], 'x' * (tools_module.MAX_STATEMENT_CHARS + 1)],
+                     'eine; zwei')  # not a list
+        for bad in bad_lists:
+            with self.subTest(statements=bad), self.assertRaises(ValueError):
+                validate_args('teilaussage_fragen', {'frage': question, 'teilaussagen': bad})
+        for bad_question in ('', '   ', 'x' * (tools_module.MAX_QUESTION_CHARS + 1), 7):
+            with self.subTest(question=bad_question), self.assertRaises(ValueError):
+                validate_args('teilaussage_fragen', {'frage': bad_question, 'teilaussagen': statements[:2]})
+        for extra in ({'optionen': [V1.vote_id, V2.vote_id]}, {'vorlage_id': V1.vote_id}):
+            with self.subTest(extra=extra), self.assertRaises(ValueError) as caught:  # strict: nothing else
+                validate_args('teilaussage_fragen', {'frage': question, 'teilaussagen': statements[:2], **extra})
+            self.assertIn('kein Argument', str(caught.exception))
+        with self.assertRaises(ValueError):
+            validate_args('teilaussage_fragen', {'frage': question})
+
+    def test_teilaussage_fragen_is_offered_with_a_fixed_vote_too(self):
+        # whether a claim is compound does not depend on the vote: the question stays offered when the vote is given
+        free, _, _ = make_tools()
+        fixed, _, _ = make_tools(fixed_vote_id=V1.vote_id)
+        answered, _, _ = make_tools()
+        answered.fix_vote(V2.vote_id)
+        for tools in (free, fixed, answered):
+            with self.subTest(fixed=tools.fixed_vote_id):
+                names = [spec['name'] for spec in tools.available_specs()]
+                self.assertIn('teilaussage_fragen', names)
+        self.assertNotIn('teilaussage_fragen', tools_module.FIXED_VOTE_HIDDEN_TOOLS)
+        self.assertIn('teilaussage_fragen', TERMINAL_TOOLS)
+        obs = free.run('teilaussage_fragen', {'frage': 'f', 'teilaussagen': ['a', 'b']})
+        self.assertTrue(obs.error)  # it ends the run: never executed as a search tool
+        self.assertEqual(obs.data['error_kind'], ERROR_INVALID_ARGS)
+
 
 class RunTests(unittest.TestCase):
     def test_terminal_and_unknown_tools_are_not_run(self):
@@ -633,12 +686,13 @@ class ToolSpecTests(unittest.TestCase):
     EXPECTED = {
         'suche_vorlagen': ['anfrage'], 'suche_passagen': ['vorlage_id'],
         'suche_passagen_vektor': ['vorlage_id', 'anfrage'], 'pruefen': ['vorlage_id'],
-        'rueckfrage': ['frage', 'optionen'], 'quelle_fehlt': ['begruendung'],
+        'rueckfrage': ['frage', 'optionen'], 'teilaussage_fragen': ['frage', 'teilaussagen'],
+        'quelle_fehlt': ['begruendung'],
     }
 
-    def test_specs_name_all_six_tools_in_german(self):
+    def test_specs_name_all_seven_tools_in_german(self):
         self.assertEqual({spec['name']: spec['parameters']['required'] for spec in TOOL_SPECS}, self.EXPECTED)
-        self.assertEqual(len(TOOL_SPECS), 6)
+        self.assertEqual(len(TOOL_SPECS), 7)
         for spec in TOOL_SPECS:
             with self.subTest(tool=spec['name']):
                 self.assertTrue(spec['description'].strip())
@@ -648,7 +702,7 @@ class ToolSpecTests(unittest.TestCase):
         json.dumps(TOOL_SPECS)  # plain JSON: it goes to the API as it is
 
     def test_terminal_tools(self):
-        self.assertEqual(set(TERMINAL_TOOLS), {'pruefen', 'rueckfrage', 'quelle_fehlt'})
+        self.assertEqual(set(TERMINAL_TOOLS), {'pruefen', 'rueckfrage', 'teilaussage_fragen', 'quelle_fehlt'})
 
     def test_schema_limits_match_the_validation(self):
         by_name = {spec['name']: spec['parameters']['properties'] for spec in TOOL_SPECS}
@@ -657,6 +711,10 @@ class ToolSpecTests(unittest.TestCase):
             self.assertEqual(by_name[tool]['anfrage']['maxLength'], 500)
         options = by_name['rueckfrage']['optionen']
         self.assertEqual((options['minItems'], options['maxItems']), (2, 4))
+        statements = by_name['teilaussage_fragen']['teilaussagen']
+        self.assertEqual((statements['minItems'], statements['maxItems']), (2, 4))
+        self.assertEqual((statements['items']['minLength'], statements['items']['maxLength']), (1, 300))
+        self.assertEqual(by_name['teilaussage_fragen']['frage']['maxLength'], 300)
         for name, properties in by_name.items():
             for field, schema in properties.items():
                 with self.subTest(tool=name, field=field):

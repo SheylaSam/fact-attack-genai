@@ -345,12 +345,15 @@ def make_chat_model(budget: RequestBudget, *, transport: Optional[httpx.BaseTran
                       http_async_client=httpx.AsyncClient(transport=_SyncOnlyTransport()))
 
 
-def make_decider(mode: str, budget: RequestBudget, *, fixed_vote_id: Optional[str] = None) -> Decider:
-    """`"native"` | `"json"` | `"scripted"`. The scripted decider needs no chat model and sends nothing."""
+def make_decider(mode: str, budget: RequestBudget, *, fixed_vote_id: Optional[str] = None,
+                 transport: Optional[httpx.BaseTransport] = None) -> Decider:
+    """`"native"` | `"json"` | `"scripted"`. The scripted decider needs no chat model and sends nothing.
+    `transport` goes to `make_chat_model` (the network transport beneath the budget: tests, the evaluation's fault
+    injection); the scripted decider has none."""
     if mode == "scripted":
         return ScriptedDecider(fixed_vote_id=fixed_vote_id)
     if mode == "native":
-        return NativeToolDecider(make_chat_model(budget))
+        return NativeToolDecider(make_chat_model(budget, transport=transport))
     if mode == "json":
-        return JsonActionDecider(make_chat_model(budget))
+        return JsonActionDecider(make_chat_model(budget, transport=transport))
     raise ValueError(f"Unbekannter Entscheider-Modus {mode!r}. Erlaubt: {', '.join(MODES)}.")

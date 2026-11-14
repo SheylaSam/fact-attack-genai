@@ -60,7 +60,7 @@ def _groups(events: List[TraceEvent]) -> List[List[TraceEvent]]:
 def _mark(group: List[TraceEvent]) -> str:
     if any(item.error for item in group):
         return FAILED
-    return QUESTION if any(item.tool == "rueckfrage" for item in group) else OK
+    return QUESTION if any(item.tool in ("rueckfrage", "teilaussage_fragen") for item in group) else OK
 
 
 def _label(group: List[TraceEvent]) -> str:
@@ -151,6 +151,13 @@ def format_result(result: "AgentResult", *, claim: Optional[str] = None, answer_
         if claim is not None and result.outcome == "rueckfrage":
             lines.append("Antworten mit einer neuen Prüfung:")
             lines += [f"  {command}" for command in answer_commands(claim, result.options, answer_args)]
+    if result.statements:
+        lines.append("Teilaussagen:")
+        lines += [f"  - {_flat(statement)}" for statement in result.statements]
+        if claim is not None and result.outcome == "rueckfrage":
+            suffix = "".join(f" {arg}" for arg in answer_args)
+            lines.append("Prüfen mit einer neuen Prüfung der Teilaussage:")
+            lines += [f"  python -m src.agent {shlex.quote(statement)}{suffix}" for statement in result.statements]
     if result.evidence:
         lines.append("Belege:")
         lines += [f"  - S. {item.page}: «{_flat(item.quote)}»" for item in result.evidence]
@@ -188,4 +195,5 @@ def result_to_dict(result: "AgentResult") -> Dict[str, Any]:
         "steps": result.steps,
         "asked_by": result.asked_by,
         "checks": result.checks,
+        "statements": list(result.statements),
     }

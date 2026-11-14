@@ -1,0 +1,22 @@
+{
+  "arm": "b2",
+  "split": "test",
+  "mock": false,
+  "config_hash": "c60b30bce0b66b6047a03bcd3633ce930f54ee5ebdad248ac9a578279cfa7394",
+  "tree_clean": true,
+  "max_requests": 420,
+  "requests_spent": 321,
+  "cases": 73,
+  "finished": 73,
+  "not_run": [],
+  "outcomes": {
+    "gestuetzt": 19,
+    "widersprochen": 21,
+    "nicht_belegt": 28,
+    "quelle_fehlt": 1,
+    "technischer_fehler": 2,
+    "rueckfrage": 2
+  },
+  "freeze": "results/genai/config_freeze.json",
+  "written_at": "2026-11-14T15:49:50.528632+00:00"
+}

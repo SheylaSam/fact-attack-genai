@@ -1,0 +1,20 @@
+{
+  "arm": "b0",
+  "split": "test",
+  "mock": false,
+  "config_hash": "c60b30bce0b66b6047a03bcd3633ce930f54ee5ebdad248ac9a578279cfa7394",
+  "tree_clean": true,
+  "max_requests": 120,
+  "requests_spent": 70,
+  "cases": 73,
+  "finished": 73,
+  "not_run": [],
+  "outcomes": {
+    "gestuetzt": 24,
+    "widersprochen": 21,
+    "nicht_belegt": 25,
+    "nicht_gewertet": 3
+  },
+  "freeze": "results/genai/config_freeze.json",
+  "written_at": "2026-11-14T15:52:16.426339+00:00"
+}

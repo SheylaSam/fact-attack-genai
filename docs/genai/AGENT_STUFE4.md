@@ -272,6 +272,23 @@ Apertus-Läufe aus der Oberfläche erlaubt sind.
     Evaluation B0/B1/B2 gehören in Stufe 5. Ob das Modell mit dem neuen Hinweis (Einschätzung der Behauptung) anders
     antwortet, zeigt erst ein neuer echter Lauf.
 
+### Stand nach Stufe 5 (14.11.2026)
+
+Stufe 5 hat Safeguarding, Regression und die Evaluation gebracht
+([EVALUATION_AGENT.md](EVALUATION_AGENT.md)). Oberfläche, Sitzung und Nebenläufigkeit hat sie nicht angefasst.
+Stand der Punkte oben:
+
+| Punkt | Stand |
+|---|---|
+| 1, 2 (verwaister Worker, `SourceIndex` ohne Sperre) | unverändert offen |
+| 4, 5, 6, 10 | unverändert offen |
+| 7 (alte Hinweiszeile im Verlauf) | Unverändert offen. Die Evaluation prüft es nicht: Jeder Fall startet eine neue Sitzung ohne Gedächtnis, die Hinweiszeile „Zuletzt gewählte Vorlage …“ kommt dort nicht vor. |
+| 8, „weiter offen“ (echter JSON-Entscheider nach der Antwort) | **Erledigt durch Messung:** Der geskriptete Nutzer der Evaluation geht über `AgentSession`, also über Unterbrechen und Fortsetzen wie die Oberfläche. Mit echtem Apertus endeten 20 von 20 beantworteten Rückfragen auf Test und 12 von 12 auf Dev (B1) mit einem Urteil auf der gewählten Vorlage. Die Streamlit-Oberfläche selbst lief dabei nicht. |
+| 11, „keine“-Schwelle | Weiter `None`, die Schwellen blieben bis zum Freeze fest. Die Folge ist jetzt gemessen: In 0 von 3 Fällen ohne Abstimmung kam `quelle_fehlt` (zweimal eine Rückfrage, einmal ein Urteil). |
+| 11, zusammengesetzte Behauptungen | Gebaut in Stufe 5: `teilaussage_fragen` mit Knopf je Teilaussage. Das echte Modell hat die Aktion in keinem Lauf gewählt. |
+| 11, Wirkung des neuen Hinweises | Gemessen: Das Modell folgt der Einschätzung „mehrdeutig“ in 20 von 20 Testfällen und fragt zurück, 17-mal unberechtigt. Wahrscheinliche Ursache ist die Schwelle und nicht das Modell; das ist eine Hypothese ohne Kontrolllauf (EVALUATION_AGENT.md, Klasse A). |
+| 11, Evaluation B0/B1/B2 | erledigt |
+
 ## Fix-Welle nach dem Gesamt-Review
 
 Das Review des ganzen Zweigs fand Fehler, die erst im Zusammenspiel der Tasks sichtbar wurden. Behoben in einem
@@ -294,6 +311,11 @@ Weiter offen aus dem Gesamt-Review: **M2** jede UI-Prüfung schreibt eine Spurda
 **M3** die Schrittliste steht still, solange `check.wait` blockiert; **M5** `agent_available` prüft nur, ob das
 Indexverzeichnis existiert, nicht ob ein vollständiger Index darin liegt; **M6** die Hinweiszeile wird nur im Mock-
 Entscheider abgestreift; **M8** das Budget gilt für Frage und Antwort zusammen. Dazu die offenen Punkte oben.
+
+**Stand nach Stufe 5:**
+- M2, M3, M5 und M6 sind unverändert offen.
+- M8 gilt weiter, war in der Evaluation aber nie ein Problem: Keine Prüfung brauchte mehr als 9 der 12
+  Anfragen, die Antwort auf die Rückfrage eingerechnet (Höchstwert je Lauf in B1 auf Dev und Test).
 
 Im Browser nicht nachgeprüft: Die Fix-Welle ist nur über AppTests und Unit-Tests belegt.
 

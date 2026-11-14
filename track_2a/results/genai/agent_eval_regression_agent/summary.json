@@ -1,0 +1,19 @@
+{
+  "arm": "regression-agent",
+  "split": "regression",
+  "mock": false,
+  "config_hash": "c60b30bce0b66b6047a03bcd3633ce930f54ee5ebdad248ac9a578279cfa7394",
+  "tree_clean": true,
+  "max_requests": 280,
+  "requests_spent": 148,
+  "cases": 42,
+  "finished": 42,
+  "not_run": [],
+  "outcomes": {
+    "gestuetzt": 25,
+    "nicht_belegt": 11,
+    "widersprochen": 6
+  },
+  "freeze": null,
+  "written_at": "2026-11-14T15:30:24.867674+00:00"
+}

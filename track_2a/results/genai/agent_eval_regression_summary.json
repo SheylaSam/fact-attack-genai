@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-11-14T15:52:40+00:00",
+  "campaigns": [],
+  "regression": {
+    "cases": 42,
+    "cases_total": 42,
+    "b0_correct": 42,
+    "agent_correct": 42,
+    "better": 0,
+    "worse": 0,
+    "net_worse": 0,
+    "max_net_worse": 1,
+    "passes": true,
+    "changed": [],
+    "not_covered": 0,
+    "arms": {
+      "regression-b0": {
+        "dir": "results/genai/agent_eval_regression_b0",
+        "cases_total": 42,
+        "finished": 42,
+        "not_run": 0,
+        "mock": false,
+        "technical_errors": 0,
+        "requests_total": 65
+      },
+      "regression-agent": {
+        "dir": "results/genai/agent_eval_regression_agent",
+        "cases_total": 42,
+        "finished": 42,
+        "not_run": 0,
+        "mock": false,
+        "technical_errors": 0,
+        "requests_total": 148
+      }
+    }
+  }
+}

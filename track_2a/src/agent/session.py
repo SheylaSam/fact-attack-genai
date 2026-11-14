@@ -9,6 +9,9 @@
 `interrupt`, nothing is checked yet, and the question comes back as `Pending`. `answer` resumes the paused graph with
 the chosen vote: the vote is fixed in `tools` and the check goes on from the state the pause saved. Every turn that
 does not end in a question is an `AgentResult`; its `events` hold the whole check, from before and after the answer.
+The model's question which statement of a compound claim to check (`teilaussage_fragen`) is no pause: it comes back
+as an `AgentResult` with outcome `rueckfrage` and `statements`, and `answer` does not take it. A chosen statement is
+checked as a new claim, with a new session (new tools, new budget).
 
 One session is one check at a time. `tools`, `decider`, `engine` and `tracer` must stay the same instances from
 `start` to `answer`: the vote pool, the guard's cache, the fixed vote and the template list live in `tools`, not in the
@@ -25,7 +28,7 @@ from langgraph.types import Command
 from src.agent import settings
 from src.agent.decider import Decider
 from src.agent.graph import (AgentResult, _result, _validate_claim, build_graph, crash_result, make_checkpointer,
-                             prepare, usable_last_vote)
+                             mark_evidence, prepare, usable_last_vote)
 from src.agent.source_index import VoteRef
 from src.agent.tools import AgentTools
 from src.agent.trace import TraceEvent, Tracer
@@ -49,12 +52,13 @@ Turn = Union[Pending, AgentResult]
 
 class AgentSession:
     def __init__(self, tools: AgentTools, decider: Decider, engine, tracer: Tracer, *, budget=None,
-                 nachsuche: bool = True, max_steps: int = settings.MAX_STEPS):
+                 nachsuche: bool = True, evidence_check: bool = True, max_steps: int = settings.MAX_STEPS):
         self._tools = tools
         self._tracer = tracer
+        self._evidence_check = evidence_check  # False (with nachsuche=False): evaluation arm B2
         self.budget = budget  # the check's RequestBudget, if any: the app cancels it when it drops the check
         self._graph = build_graph(tools, decider, engine, tracer, max_steps, budget=budget, nachsuche=nachsuche,
-                                  checkpointer=make_checkpointer())
+                                  evidence_check=evidence_check, checkpointer=make_checkpointer())
         self._config: Optional[dict] = None  # the thread of the current check
         self._first_event = len(tracer.events)
         self._pending: Optional[Pending] = None
@@ -86,10 +90,10 @@ class AgentSession:
         try:
             start = prepare(claim, self._tools, self._tracer, claim_language, self._last_vote)
             if isinstance(start, AgentResult):  # an early result: no graph run
-                return start
+                return mark_evidence(start, self._evidence_check)
             return self._turn(self._graph.invoke(start, self._config))
         except Exception as exc:
-            return crash_result(exc, self._tracer, self._first_event)
+            return mark_evidence(crash_result(exc, self._tracer, self._first_event), self._evidence_check)
 
     def answer(self, vote_id: str) -> Turn:
         """Answers the open question with one of its options, or with its `last_vote`, and continues the check.
@@ -107,13 +111,13 @@ class AgentSession:
         try:
             return self._turn(self._graph.invoke(Command(resume=vote_id), self._config))
         except Exception as exc:
-            return crash_result(exc, self._tracer, self._first_event)
+            return mark_evidence(crash_result(exc, self._tracer, self._first_event), self._evidence_check)
 
     def _turn(self, state: dict) -> Turn:
         """A question if the graph paused, else the result of the whole check."""
         interrupts = state.get("__interrupt__")
         if not interrupts:
-            return _result(state, self.events)
+            return _result(state, self.events, self._evidence_check)
         payload = interrupts[0].value
         options = tuple(self._tools.check_vote_id(vote_id) for vote_id in payload["options"])
         self._pending = Pending(payload["question"], options, payload["asked_by"], self._last_vote)

@@ -1,0 +1,20 @@
+{
+  "arm": "b1",
+  "split": "dev",
+  "mock": false,
+  "config_hash": "c60b30bce0b66b6047a03bcd3633ce930f54ee5ebdad248ac9a578279cfa7394",
+  "tree_clean": true,
+  "max_requests": 250,
+  "requests_spent": 194,
+  "cases": 37,
+  "finished": 37,
+  "not_run": [],
+  "outcomes": {
+    "gestuetzt": 9,
+    "widersprochen": 13,
+    "nicht_belegt": 13,
+    "technischer_fehler": 2
+  },
+  "freeze": null,
+  "written_at": "2026-11-14T15:09:35.232028+00:00"
+}
