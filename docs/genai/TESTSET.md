@@ -231,9 +231,38 @@ unverändert. `track_2a/data/genai/testset/manifest.json` hält fest:
 **Ab jetzt:**
 - `load_testset("dev")` liefert 37 Fälle.
 - `load_testset("test")` wirft `PermissionError` bis zum Konfigurationsfreeze in Stufe 5
-  (`allow_test=True`).
+  (`allow_test=True`). Der Freeze war am 14.11.2026 (siehe „Testteil gelesen“).
 - Stufe 3 kalibriert die Schwellenwerte des Wächters nur über `load_testset("dev")`.
 - Ändert sich `cases.jsonl`, lädt `load_testset` nichts mehr, weil der Hash nicht zum Manifest passt.
+
+## Testteil gelesen (Stufe 5)
+
+Der Testteil ist seit dem 14.11.2026 ausgewertet und damit verbraucht. Ergebnisse und Fehleranalyse:
+[EVALUATION_AGENT.md](EVALUATION_AGENT.md).
+
+- **Freeze:** 14.11.2026, 15:30:49 UTC, bei Commit `7bca92b`. Konfig-Hash `c60b30bce0b6…`
+  (`track_2a/results/genai/config_freeze.json`). Er schließt den Testset-SHA `9d356dd1…` ein, denselben wie im
+  Manifest.
+- **Gelesen** nur über den Freeze-Wächter (`scripts/run_agent_eval.py --split test --freeze …`). Jeder Arm lief
+  genau einmal und ohne Wiederaufnahme, alle 73 Fälle:
+
+  | Arm | Start (UTC) |
+  |---|---|
+  | B1 | 15:37:42 |
+  | B2 | 15:44:50 |
+  | B0 | 15:49:58 |
+
+  Marker: `config_freeze.json.test_run.<arm>`.
+- **Auswertung** um 15:52:39 UTC mit `scripts/evaluate_agent_runs.py --freeze …`. Für die Fehleranalyse (Task 7)
+  wurden die Testfälle danach noch einmal über denselben Weg des Auswertungsskripts gelesen, nicht durch Öffnen
+  von `cases.jsonl`.
+- **Unverändert:** Nichts unter `data/genai/testset/` wurde geändert. Der Hash passte bei jedem Laden zum Manifest.
+- **Vorfall vor dem Freeze (Task 2):** Ein `git grep` eines Implementierers druckte zwei Zeilen aus
+  `cases.jsonl` in dessen Kontext, eine davon aus dem Testteil. Verwendet oder geändert wurde nichts, und Sheyla
+  wurde informiert. Seitdem schließt jede Suche die Datei aus. Einzelheiten stehen in EVALUATION_AGENT.md,
+  „Integrität des Testteils“.
+- **Ab jetzt:** Was an diesem Testteil gemessen wurde, gilt nur für die eingefrorene Konfiguration. Eine neue
+  Messung nach einer Änderung braucht ein neues Testset.
 
 ## Prüfskript
 

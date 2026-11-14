@@ -134,6 +134,46 @@ The input/output format is documented in the [overview README](../README.md#offi
 
 ---
 
+## 🤖 Agent layer (GenAI, German claims without a given source)
+
+The agent (`src/agent/`, LangGraph) finds the vote for a free German claim, asks back when it is ambiguous and
+checks the claim with the proven NLI path. It is not part of the competition path or the Docker image. It needs
+the Python 3.12 environment (`requirements-lock.txt`, see [docs/genai/UI_UND_PYTHON312.md](../docs/genai/UI_UND_PYTHON312.md))
+and the local agent index (`scripts/build_agent_index.py`, folder `AGENT_INDEX_DIR`, default `.rag-index/agent-sources`).
+The commands run from `track_2a/`:
+
+```bash
+export HF_HOME=/path/to/model-cache HF_HUB_OFFLINE=1
+
+# CLI, mock (no request leaves the machine)
+../.venv312/bin/python -m src.agent "Die Mietrechtsvorlage stärkt die Vermieter." --mock
+# CLI, real Apertus (key file via FACT_ATTACK_ENV_FILE; at most 12 requests per check)
+../.venv312/bin/python -m src.agent "<Behauptung>" --json --max-requests 12
+
+# Streamlit with the agent in the fact-check tab, mock mode
+FACT_ATTACK_AGENT_MOCK=1 ../.venv312/bin/streamlit run app.py --server.port 8599
+
+# Tests (no network)
+../.venv312/bin/python -m pytest -q
+
+# Evaluation tables from saved result folders (no request; never overwrites; a test folder needs --freeze)
+../.venv312/bin/python scripts/evaluate_agent_runs.py --runs results/genai/agent_eval_dev_b1 --out /tmp/agent_eval
+```
+
+Paid evaluation runs (`scripts/run_agent_eval.py`) need an explicit cap per run, and the test split can be run
+only once per arm after the configuration freeze (`scripts/freeze_config.py`). The test split of stage 5 has been
+used. Documentation (German):
+
+| Document | Content |
+|---|---|
+| [AGENT_STUFE1.md](../docs/genai/AGENT_STUFE1.md) | Graph and tools |
+| [AGENT_STUFE3.md](../docs/genai/AGENT_STUFE3.md) | Guard, Nachsuche, MCP |
+| [AGENT_STUFE4.md](../docs/genai/AGENT_STUFE4.md) | UI, interrupt/resume, open points |
+| [TESTSET.md](../docs/genai/TESTSET.md) | Locked test set |
+| [EVALUATION_AGENT.md](../docs/genai/EVALUATION_AGENT.md) | Results and error analysis of B0/B1/B2 |
+
+---
+
 ## 🐳 Docker submission
 
 ```bash
