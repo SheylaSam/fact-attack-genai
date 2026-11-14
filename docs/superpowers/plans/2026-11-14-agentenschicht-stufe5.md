@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-31-agentenschicht-design.md`, Abschnitte „Ziele“, „Anti-Ziele“, „Memory, Safeguarding, Protokoll“, „Evaluation“ (B0/B1/B2, Wertung der Nicht-Urteile, Metriken, Regression, Kosten), „Stufen“ (Stufe 5, Ziel Do 19.11.2026). Grundlage: `docs/genai/AGENT_STUFE3.md`, `AGENT_STUFE4.md`, `TESTSET.md`, `VALIDIERUNG.md`.
 
-**Branch:** `genai/agent-stufe5` (von `origin/genai/vector-rag` @ `0586172`, Upstream bewusst entfernt). PRs gehen auf `genai/vector-rag`, nie auf `main`.
+**Branch:** `genai/agent-stufe5` (von `origin/genai/vector-rag` @ `0586172`, danach `origin/main` @ `44fda3e` hineingemergt; Upstream bewusst entfernt). Seit dem Merge der GenAI-Linie in `main` (PR #5, 15.11.2026) gehen PRs dieser Stufe auf `main`; `genai/vector-rag` ist abgeschlossen.
 
 **Nicht in Stufe 5:** Embedding-Vergleich (siehe Entscheidungen), MCP in der UI, automatische Quellenfindung FR/IT, mehrere Behauptungen pro Eingabe über den Agenten, öffentlicher Betrieb, jede Änderung an B0 (`src/inference.py`, `apertus_client.py`, `http_chat.py`, Wettbewerbs-CLI).
 
