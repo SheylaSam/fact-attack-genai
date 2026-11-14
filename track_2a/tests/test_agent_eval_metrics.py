@@ -135,6 +135,14 @@ class SourceFindingTest(unittest.TestCase):
         ])
         self.assertEqual(result["false_confidence"], 2)
 
+    def test_false_confidence_counts_any_verdict_on_a_case_without_a_vote(self):
+        no_vote = make_case("sdev-01", group="spezial", kind="ohne_abstimmung", expected="quelle_fehlt",
+                            vote_id=None)
+        for outcome in ("gestuetzt", "widersprochen", "nicht_belegt"):  # final vote None too: still a verdict
+            self.assertEqual(source_finding([make_run(no_vote, outcome, final_vote_id=None)])["false_confidence"], 1)
+        for outcome in ("quelle_fehlt", "rueckfrage", "technischer_fehler"):
+            self.assertEqual(source_finding([make_run(no_vote, outcome, final_vote_id=None)])["false_confidence"], 0)
+
 
 class SpecialCaseTableTest(unittest.TestCase):
     def test_special_cases_accept_the_acceptable_outcomes(self):

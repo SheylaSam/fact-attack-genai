@@ -117,7 +117,7 @@ def source_finding(runs: Sequence[CaseRun]) -> dict:
                 justified += 1
             else:
                 unjustified += 1
-        if _is_verdict(run.outcome) and run.final_vote_id != case.vote_id:
+        if _is_verdict(run.outcome) and (case.vote_id is None or run.final_vote_id != case.vote_id):
             confident += 1
     return {"right_vote": right, "justified_questions": justified, "unjustified_questions": unjustified,
             "false_confidence": confident}
