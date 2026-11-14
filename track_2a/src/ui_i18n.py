@@ -229,6 +229,49 @@ _ROWS += """
 Eigenes PDF|PDF personnel|PDF personale
 Aktive Quelle: eigenes PDF. Das Abstimmungsdatum ist unbekannt; die offizielle Datumsauswahl ist deaktiviert.|Source active : PDF personnel. La date de votation est inconnue ; la sélection de date officielle est désactivée.|Fonte attiva: PDF personale. La data di votazione è sconosciuta; la selezione della data ufficiale è disattivata.
 """
+_ROWS += """
+Rückfrage|Question|Domanda
+Entscheidung|Décision|Decisione
+Nächster Schritt läuft …|L’étape suivante est en cours …|Il passaggio successivo è in corso …
+Vorlagen suchen|Rechercher des objets|Cercare gli oggetti
+Passagen suchen|Rechercher des passages|Cercare i passaggi
+Passagen suchen (Vektor)|Rechercher des passages (vecteurs)|Cercare i passaggi (vettori)
+Prüfung starten|Lancer la vérification|Avviare la verifica
+Quelle fehlt|Source manquante|Fonte mancante
+Start|Début|Inizio
+Urteil von Apertus|Verdict d’Apertus|Giudizio di Apertus
+Belege prüfen|Vérifier les passages|Verificare i passaggi
+Nachsuche|Recherche complémentaire|Ricerca supplementare
+Abbruch|Interruption|Interruzione
+Welche Vorlage ist gemeint?|Quel objet est visé ?|Quale oggetto si intende?
+Mehrere Vorlagen passen zur Behauptung. Wähle die Vorlage, die du meinst; danach geht die Prüfung weiter.|Plusieurs objets correspondent à l’affirmation. Choisissez celui que vous visez ; la vérification se poursuit ensuite.|Più oggetti corrispondono all’affermazione. Scegli quello che intendi; poi la verifica prosegue.
+Quelle selbst wählen|Choisir la source soi-même|Scegliere la fonte da soli
+Die Suche über alle Vorlagen gibt es bisher nur für deutsche Behauptungen. Wähle die Quelle selbst; mit gewählter Quelle wird die Behauptung in jeder Sprache geprüft.|La recherche dans tous les objets n’existe pour l’instant que pour les affirmations en allemand. Choisissez la source vous-même ; avec une source choisie, l’affirmation est vérifiée dans toutes les langues.|La ricerca in tutti gli oggetti esiste finora solo per affermazioni in tedesco. Scegli tu la fonte; con una fonte scelta l’affermazione viene verificata in ogni lingua.
+wie zuletzt: {v0}|comme la dernière fois : {v0}|come l’ultima volta: {v0}
+Keine passende Vorlage gefunden|Aucun objet correspondant trouvé|Nessun oggetto corrispondente trovato
+Zur Behauptung passt keine Vorlage. Wähle die Quelle selbst oder formuliere die Behauptung um.|Aucun objet ne correspond à l’affirmation. Choisissez la source vous-même ou reformulez l’affirmation.|Nessun oggetto corrisponde all’affermazione. Scegli tu la fonte o riformula l’affermazione.
+Die Prüfung konnte nicht abgeschlossen werden|La vérification n’a pas pu être terminée|Non è stato possibile completare la verifica
+Die Prüfung wurde wegen eines technischen Fehlers abgebrochen; es gibt kein Urteil.|La vérification a été interrompue par une erreur technique ; il n’y a pas de verdict.|La verifica è stata interrotta da un errore tecnico; non c’è alcun giudizio.
+"""
+_ROWS += """
+Schritte der Prüfung|Étapes de la vérification|Fasi della verifica
+Der Agent wird vorbereitet …|Préparation de l’agent …|Preparazione dell’agente …
+Die Prüfung läuft noch …|La vérification est encore en cours …|La verifica è ancora in corso …
+Diese Quelle für die Prüfung vorgeben|Imposer cette source pour la vérification|Imporre questa fonte per la verifica
+Ohne Häkchen sucht der Agent die passende Vorlage selbst.|Sans coche, l’agent cherche lui-même l’objet correspondant.|Senza spunta, l’agente cerca da solo l’oggetto corrispondente.
+Der Agent kann die gewählte Quelle nicht prüfen. Wähle eine andere Quelle oder lass den Agenten die Vorlage suchen.|L’agent ne peut pas vérifier la source choisie. Choisissez une autre source ou laissez l’agent chercher l’objet.|L’agente non può verificare la fonte scelta. Scegli un’altra fonte o lascia che l’agente cerchi l’oggetto.
+Die Agentenschicht ist nicht verfügbar; die Prüfung läuft wie bisher ohne Agenten.|La couche agent n’est pas disponible ; la vérification se fait comme avant, sans agent.|Il livello agente non è disponibile; la verifica si svolge come prima, senza agente.
+Das eigene PDF ist die Quelle der Prüfung; der Agent sucht nur darin.|Le PDF personnel est la source de la vérification ; l’agent ne cherche que dedans.|Il PDF personale è la fonte della verifica; l’agente cerca solo al suo interno.
+Dieses PDF kann nicht gelesen werden. Lade eine andere Datei hoch oder entferne sie.|Ce PDF ne peut pas être lu. Chargez un autre fichier ou retirez-le.|Questo PDF non può essere letto. Carica un altro file o rimuovilo.
+Eigenes PDF|PDF personnel|PDF personale
+Geprüfte Vorlage: {title}|Objet vérifié : {title}|Oggetto verificato: {title}
+"""
+_ROWS += """
+Gesamtes Büchlein|Brochure entière|Opuscolo intero
+Wähle die Vorlage, die du meinst; danach geht die Prüfung weiter.|Choisissez l’objet que vous visez ; la vérification se poursuit ensuite.|Scegli l’oggetto che intendi; poi la verifica prosegue.
+Testmodus, kein Apertus-Urteil|Mode test, pas de verdict d’Apertus|Modalità di test, nessun giudizio di Apertus
+Für die Mehrfachprüfung die Quelle unter «Quelle selbst wählen» vorgeben oder ein eigenes PDF laden.|Pour la vérification multiple, imposez la source sous « Choisir la source soi-même » ou chargez un PDF personnel.|Per la verifica multipla, imponi la fonte in «Scegliere la fonte da soli» o carica un PDF personale.
+"""
 TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
 
 

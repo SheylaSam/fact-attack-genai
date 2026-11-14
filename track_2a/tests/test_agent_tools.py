@@ -10,8 +10,8 @@ from src.agent import settings
 from src.agent import tools as tools_module
 from src.agent.search_backend import LocalBackend
 from src.agent.source_index import VoteCandidate, VoteRef
-from src.agent.tools import (ERROR_INVALID_ARGS, ERROR_TOOL_FAILURE, TERMINAL_TOOLS, TOOL_SPECS, AgentTools,
-                             Observation, validate_args)
+from src.agent.tools import (ERROR_INVALID_ARGS, ERROR_TOOL_FAILURE, MAX_ID_CHARS, TERMINAL_TOOLS, TOOL_SPECS,
+                             AgentTools, Observation, validate_args)
 
 
 def installed(*packages):
@@ -473,6 +473,33 @@ class VoteIdTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             make_tools(fixed_vote_id='2024-11-24_de#7')
 
+    def test_fix_vote_hides_the_vote_search_and_keeps_the_pool(self):
+        tools, _, _ = make_tools(engine=FakeEngine([passage(2)]))
+        self.assertIsNone(tools.run('suche_passagen', {'vorlage_id': V1.vote_id}, claim=CLAIM).error)
+        self.assertIn('suche_vorlagen', [spec['name'] for spec in tools.available_specs()])
+        self.assertEqual(tools.fix_vote(V1.vote_id), V1)
+        self.assertEqual(tools.fixed_vote_id, V1.vote_id)
+        self.assertNotIn('suche_vorlagen', [spec['name'] for spec in tools.available_specs()])
+        self.assertNotIn('rueckfrage', [spec['name'] for spec in tools.available_specs()])
+        with self.assertRaises(ValueError):
+            tools.check_vote_id(V2.vote_id)
+        self.assertEqual(tools.check_vote_id(V1.vote_id), V1)
+        self.assertEqual([p['page_number'] for p in tools.passages_for(V1.vote_id)], [2])  # the pool stays
+
+    def test_fix_vote_rejects_unknown_ids_and_a_second_vote(self):
+        tools, _, _ = make_tools()
+        for bad in ('2024-11-24_de#7', None, 7):
+            with self.subTest(vote_id=bad), self.assertRaises(ValueError) as unknown:
+                tools.fix_vote(bad)
+            self.assertIn('Unbekannte Vorlagen-ID', str(unknown.exception))
+            self.assertIsNone(tools.fixed_vote_id)
+        tools.fix_vote(V1.vote_id)
+        with self.assertRaises(ValueError) as second:
+            tools.fix_vote(V2.vote_id)
+        self.assertIn('bereits fest', str(second.exception))
+        self.assertEqual(tools.fixed_vote_id, V1.vote_id)
+        self.assertEqual(tools.fix_vote(V1.vote_id), V1)  # the same vote again changes nothing
+
     def test_all_tools_are_available_without_a_fixed_vote(self):
         tools, _, _ = make_tools()
         self.assertEqual([spec['name'] for spec in tools.available_specs()], [spec['name'] for spec in TOOL_SPECS])
@@ -523,7 +550,7 @@ class ArgumentValidationTests(unittest.TestCase):
                          {'vorlage_id': V1.vote_id, 'anfrage': 'Miete'})
 
     def test_vote_id_must_be_non_empty_short_text(self):
-        for bad in ('', '   ', 'x' * 65, None, 3):
+        for bad in ('', '   ', 'x' * (MAX_ID_CHARS + 1), None, 3):
             with self.subTest(vote_id=bad), self.assertRaises(ValueError):
                 validate_args('pruefen', {'vorlage_id': bad})
 

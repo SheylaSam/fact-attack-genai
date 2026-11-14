@@ -24,7 +24,8 @@ import httpx
 from src import config
 from src.agent import settings
 from src.agent.budget import RequestBudget, budget_http_client
-from src.agent.tools import MAX_QUERY_CHARS, Observation, validate_args
+from src.agent.prompts import fixed_vote_id_in
+from src.agent.tools import MAX_QUERY_CHARS, TOOL_SPECS, Observation, validate_args
 from src.apertus_client import ApertusClient
 
 if TYPE_CHECKING:  # langchain-openai is optional (requirements-agent.txt); make_chat_model imports it when called
@@ -36,7 +37,10 @@ THINKING_START, THINKING_END = "<|inner_prefix|>", "<|inner_suffix|>"  # Apertus
 CUT_OFF_RAW = "(Antwort im Denkanteil abgebrochen; der Denktext wird nicht übernommen.)"  # history entry for it
 CUT_OFF_ERROR = ("Denkanteil abgeschnitten: Die Antwort endete, bevor das Nachdenken abgeschlossen war. Es wurde keine "
                  "Aktion ausgeführt. Antworte knapp mit genau einem JSON-Objekt.")
+LAST_VOTE_HINT_PREFIX = "Zuletzt gewählte Vorlage der Person:"  # starts the one hint line after the claim
+LAST_VOTE_HINT = LAST_VOTE_HINT_PREFIX + " «{title}» ({vote_id})."  # session memory: a hint, never a given vote
 CONNECT_TIMEOUT_S = 10.0
+_TOOL_NAMES = frozenset(spec["name"] for spec in TOOL_SPECS)
 FORMAT_INSTRUCTION = (
     'Antworte ausschließlich mit genau einem JSON-Objekt der Form {"tool": "<Werkzeugname>", "args": {<Argumente>}}. '
     "Schreibe keinen weiteren Text und kein Markdown. Die Argumente müssen genau den Parametern des gewählten "
@@ -221,20 +225,34 @@ class JsonActionDecider:
 
 
 def _claim(messages: List[dict]) -> Optional[str]:
+    """The claim: the first user message without its last-vote hint line (the scripted policy never reads hints)."""
     for message in messages:
         if message.get("role") == "user":
-            return _text(message.get("content")).strip() or None
+            lines = _text(message.get("content")).strip().splitlines()
+            if lines and lines[-1].startswith(LAST_VOTE_HINT_PREFIX) and len(lines) > 1:
+                lines.pop()
+            return "\n".join(lines).strip() or None
+    return None
+
+
+def _given_vote_id(messages: List[dict]) -> Optional[str]:
+    """The vote the system message names as the given source (after the person answered a question), or None. Only
+    the system message counts: the claim is data and could contain the same words."""
+    if messages and messages[0].get("role") == "system":
+        return fixed_vote_id_in(_text(messages[0].get("content")))
     return None
 
 
 class ScriptedDecider:
     """Deterministic policy, no network: find the vote, take rank 1 like the model in run 1 of stage 1, search its
     passages, check. It never asks back: the guard in the graph catches an ambiguous claim, so there is a single
-    source of ambiguity. Reads only the last observation (`history[-1].data`) and the claim.
+    source of ambiguity. Reads the last observation (`history[-1].data`), the claim and the system message.
 
     With `fixed_vote_id` the vote is given: the policy goes straight to `suche_passagen(fixed vote)`; the graph
-    searches with the claim. In the Nachsuche only `suche_passagen_vektor` is offered: the policy runs it for the
-    vote of the latest passage search with the claim as the query.
+    searches with the claim. After the person answered a question the system message names the chosen vote (as it
+    does for a model): from then on the policy behaves as with that vote given, and a passage search counts only if
+    it searched that vote. In the Nachsuche only `suche_passagen_vektor` is offered: the policy runs it for the vote
+    of the latest passage search with the claim as the query.
     """
 
     def __init__(self, fixed_vote_id: Optional[str] = None):
@@ -246,15 +264,21 @@ class ScriptedDecider:
             return AgentAction(error="Keine Nutzernachricht mit der Behauptung gefunden.")
         query = claim[:MAX_QUERY_CHARS].strip()
         offered = _offered(tools)
+        given = self.fixed_vote_id or _given_vote_id(messages)
         if not history:
-            if self.fixed_vote_id is not None:
-                return self._act("suche_passagen", {"vorlage_id": self.fixed_vote_id}, offered)
+            if given is not None:
+                return self._act("suche_passagen", {"vorlage_id": given}, offered)
             return self._act("suche_vorlagen", {"anfrage": query}, offered)
         if offered == ["suche_passagen_vektor"]:
             return self._research(query, history, offered)
         last = history[-1]
         if last.error:
+            if last.tool not in _TOOL_NAMES:  # the graph's record of this policy's own invalid step: no nesting
+                return AgentAction(error=last.error)
             return AgentAction(error=f"Das Werkzeug {last.tool} ist fehlgeschlagen: {last.error}")
+        searched_given = last.tool in ("suche_passagen", "suche_passagen_vektor") and last.data.get("vote_id") == given
+        if given is not None and not searched_given:  # e.g. the vote search before the question
+            return self._act("suche_passagen", {"vorlage_id": given}, offered)
         if last.tool == "suche_vorlagen":
             return self._after_vote_search(last.data, offered)
         if last.tool in ("suche_passagen", "suche_passagen_vektor"):

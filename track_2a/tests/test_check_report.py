@@ -43,6 +43,28 @@ def test_report_keeps_failure_distinct_and_neutral_without_evidence():
     assert 'Im Abstimmungsbüchlein nicht geklärt' in html
 
 
+@pytest.mark.parametrize('language,label', [('de', 'Testmodus, kein Apertus-Urteil'),
+                                            ('fr', 'Mode test, pas de verdict d’Apertus'),
+                                            ('it', 'Modalità di test, nessun giudizio di Apertus')])
+def test_report_marks_a_mock_verdict_as_test_mode_not_as_live(language, label):
+    record = {'origin': 'mock', 'result': {'claim': 'Statement', 'label': 0, 'evidence_sources': []}}
+    html = render_check_report([record], language).decode()
+    assert label in html
+    assert 'Gespeicherte Liveantwort' not in html and 'Liveantwort' not in html
+
+
+def test_report_translates_the_placeholder_vote_titles_only():
+    from src import agent_ui
+    from src.check_report import PLACEHOLDER_TITLES
+    assert PLACEHOLDER_TITLES == (agent_ui.TITLE_WHOLE_BOOKLET, agent_ui.TITLE_UPLOAD)
+    records = [{'vote': title, 'result': {'claim': 'Statement', 'label': 1}}
+               for title in ('Gesamtes Büchlein', 'Eigenes PDF', 'Änderung des Zivildienstgesetzes')]
+    html = render_check_report(records, 'fr').decode()
+    assert 'Brochure entière' in html and 'PDF personnel' in html
+    assert 'Gesamtes Büchlein' not in html
+    assert 'Änderung des Zivildienstgesetzes' in html
+
+
 @pytest.mark.parametrize('url,linked', [
     ('https://www.bk.admin.ch/dam/de/sd-web/x/2026-06-14_erlaeuterungen_des_bundesrates.pdf', True),
     ('https://www.admin.ch/dam/de/sd-web/x/BAR_Erlaeuterungen_Nov26_DE_v10.pdf', True),

@@ -120,6 +120,15 @@ class BudgetTests(unittest.TestCase):
             budget.reserve(b"b")
         self.assertTrue(budget.exceeded)
 
+    def test_cancel_refuses_every_further_request_like_a_spent_budget(self):
+        budget = RequestBudget(limit=5)
+        budget.reserve(b"first")
+        budget.cancel()  # a dropped check: its worker may still run
+        with self.assertRaises(BudgetExceeded):
+            budget.reserve(b"second")
+        self.assertTrue(budget.exceeded)  # the graph sees it like any refused request
+        self.assertEqual(budget.used, 1)
+
     def test_budget_exceeded_is_a_runtime_error(self):
         self.assertTrue(issubclass(BudgetExceeded, RuntimeError))
 

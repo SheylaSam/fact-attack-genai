@@ -24,7 +24,7 @@ if TYPE_CHECKING:  # search_backend imports this module
 
 POOL_LIMIT = 2 * settings.MAX_PASSAGES  # passages the pool stores per vote; `passages_for` hands out MAX_PASSAGES
 MAX_QUERY_CHARS = 500
-MAX_ID_CHARS = 64
+MAX_ID_CHARS = 80  # an upload's id is "custom_" + 64 hex digits + "#0" = 73 characters
 MAX_QUESTION_CHARS = 300
 MAX_REASON_CHARS = 500
 OPTION_RANGE = (2, 4)
@@ -203,6 +203,13 @@ def _passage_key(passage: Dict[str, Any]) -> Tuple[int, str]:
     return int(passage["page_number"]), hashlib.sha256(passage["text"].encode("utf-8")).hexdigest()
 
 
+def _plain(passage: Dict[str, Any]) -> Dict[str, Any]:
+    """A copy whose numpy scalars (the engine's BM25 `retrieval_score`) are Python numbers: pooled passages enter the
+    graph state, which the interactive mode's checkpointer serializes and which refuses numpy types."""
+    return {key: value.item() if type(value).__module__ == "numpy" and hasattr(value, "item") else value
+            for key, value in passage.items()}
+
+
 class AgentTools:
     """The agent's search tools over one `SearchBackend`; one instance per check (it holds the pool).
 
@@ -261,6 +268,18 @@ class AgentTools:
         else:
             hint = "Rufe zuerst suche_vorlagen auf, um gültige IDs zu erhalten."
         raise ValueError(f"Unbekannte Vorlagen-ID {_shown(vote_id)}. {hint}")
+
+    def fix_vote(self, vote_id: str) -> VoteRef:
+        """Fixes the vote after the person answered the question: from now on `available_specs` and `check_vote_id`
+        behave as with a given vote, and the pool stays. ValueError (German) for an unknown id or when another vote
+        is already fixed; the same vote again changes nothing."""
+        if self.fixed_vote_id is not None and vote_id != self.fixed_vote_id:
+            raise ValueError(f"Die Vorlage {self.fixed_vote_id} steht bereits fest; eine zweite Vorlage "
+                             f"({_shown(vote_id)}) kann nicht gewählt werden.")
+        if not isinstance(vote_id, str) or vote_id not in self.votes:
+            raise ValueError(f"Unbekannte Vorlagen-ID {_shown(vote_id)}.")
+        self.fixed_vote_id = vote_id
+        return self.votes[vote_id]
 
     def passages_for(self, vote_id: str) -> List[Dict[str, Any]]:
         """The vote's passages of all searches so far: original text, no duplicates, first found first, capped."""
@@ -357,7 +376,7 @@ class AgentTools:
         """Pools the passages on the pages of `vote`; a passage of another page is shown but never pooled. In the
         Nachsuche (`research`) a new passage is admitted even when the pool is full, and remembered as the
         Nachsuche's."""
-        keyed = [(_passage_key(p), dict(p)) for p in found]  # fails before anything enters the pool
+        keyed = [(_passage_key(p), _plain(p)) for p in found]  # fails before anything enters the pool
         pool = self._pool.setdefault(vote.vote_id, [])
         seen = self._seen.setdefault(vote.vote_id, set())
         added = self._research_keys.setdefault(vote.vote_id, set())

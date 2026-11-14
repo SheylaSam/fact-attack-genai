@@ -46,8 +46,15 @@ class RequestBudget:
         self.limit = limit
         self.used = 0
         self.exceeded = False  # True once a request was refused
+        self.cancelled = False  # True once the check was dropped: every further request is refused
         self.journal_path = Path(journal_path) if journal_path is not None else None
         self._lock = threading.Lock()
+
+    def cancel(self) -> None:
+        """Refuse every further request, as if the budget were spent: the check was dropped while its worker may
+        still run (the app cannot stop a thread)."""
+        with self._lock:
+            self.cancelled = True
 
     def reserve(self, body: bytes) -> None:
         """Count one request or raise `BudgetExceeded`. With a journal, the line is on disk before this returns.
@@ -57,6 +64,10 @@ class RequestBudget:
         """
         body = _as_bytes(body)
         with self._lock:
+            if self.cancelled:
+                self.exceeded = True
+                raise BudgetExceeded(f"Anfrage-Budget gesperrt: die Prüfung wurde verworfen ({self.used} von "
+                                     f"{self.limit} HTTP-Anfragen verbraucht)")
             if self.used >= self.limit:
                 self.exceeded = True
                 raise BudgetExceeded(f"Anfrage-Budget erschöpft: {self.used} von {self.limit} HTTP-Anfragen verbraucht")

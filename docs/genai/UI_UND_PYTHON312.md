@@ -560,3 +560,19 @@ Keine echte Apertus-Anfrage, keine Änderung echter privater Uploads und keine
 neue fachliche Qualitätsmessung. Nachweis: `results/genai/ui_fixes_regression.json`.
 
 ![Erneute Prüfung mit simuliertem Fehler ohne veraltete Antwort](assets/streamlit-recheck-error-fixed.png)
+
+
+## Faktencheck über den Agenten (Stufe 4, 13. November 2026)
+
+Der Tab „Faktencheck“ prüft über die Agentenschicht, wenn sie verfügbar ist: `langgraph` und `httpx` sind
+importierbar (der Hash-Lock enthält beide, `requirements.txt` des Wettbewerbs nicht), der Agentenindex ist vorhanden
+(`AGENT_INDEX_DIR`, sonst `.rag-index/agent-sources`) und `FACT_ATTACK_AGENT` ist nicht `0`. Sonst läuft der Tab wie
+oben beschrieben mit dem bisherigen Ablauf. Der Startbefehl bleibt derselbe; neu sind nur Schalter:
+
+- `FACT_ATTACK_AGENT=0` hält den Tab beim alten Ablauf.
+- `FACT_ATTACK_AGENT_MOCK=1` ersetzt Apertus durch Mock-Client und vorgegebenen Entscheider: kein Netz, keine Anfrage.
+  Die Urteile sind dann vorgegeben und keine Messung.
+
+Beim Start, bei der Beispielauswahl und beim Umschalten der Sprache wird weiterhin keine Anfrage gesendet; nur der
+Prüfen-Button und ein Klick auf eine Rückfrage-Option setzen Apertus-Anfragen ab (höchstens 12 pro Prüfung). Aufbau,
+Grenzen und offene Punkte: [AGENT_STUFE4.md](AGENT_STUFE4.md).

@@ -417,6 +417,28 @@ class ScriptedDeciderTests(unittest.TestCase):
         check = decider.decide(MESSAGES, specs, [passages_observation(V2)])
         self.assertEqual((check.tool, check.args), ('pruefen', {'vorlage_id': V2}))
 
+    @unittest.skipUnless(installed('langgraph'), 'Install requirements-agent.txt')
+    def test_scripted_decider_uses_the_vote_the_person_chose_after_the_answer(self):
+        from src.agent.graph import ANSWER_PROMPT
+        from src.agent.prompts import system_prompt
+        from src.agent.source_index import VoteRef
+        chosen = VoteRef(V2, '2024-11-24_de', '2024-11-24', 'de', 'Eigenbedarf', (4, 5))
+        decider = ScriptedDecider()
+        votes = [votes_observation(vote_candidate(V1, 0.873), vote_candidate(V2, 0.869))]
+        interrupted = decider.decide(MESSAGES, TOOL_SPECS, votes)  # rank 1; the guard asked instead of running it
+        self.assertEqual(interrupted.args, {'vorlage_id': V1})
+        # the messages as the graph's ask node writes them: the prompt of the fixed vote, the claim, the answer
+        answer = Observation('rueckfrage', ANSWER_PROMPT.format(vote_id=V2, title=chosen.title))
+        messages = ([{'role': 'system', 'content': system_prompt(chosen)}, MESSAGES[1]]
+                    + decider.observation_messages(interrupted, answer))
+        search = decider.decide(messages, fixed_vote_specs(), votes)  # the history still ends with the vote search
+        self.assertEqual((search.tool, search.args, search.error), ('suche_passagen', {'vorlage_id': V2}, None))
+        check = decider.decide(messages, fixed_vote_specs(), votes + [passages_observation(V2)])
+        self.assertEqual((check.tool, check.args), ('pruefen', {'vorlage_id': V2}))
+        # a passage search in another vote before the question is no search in the chosen one
+        other = decider.decide(messages, fixed_vote_specs(), votes + [passages_observation(V1)])
+        self.assertEqual((other.tool, other.args), ('suche_passagen', {'vorlage_id': V2}))
+
     def test_scripted_passages_by_vector_search_are_checked_too(self):
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, [passages_observation(V1, tool='suche_passagen_vektor')])
         self.assertEqual((action.tool, action.args), ('pruefen', {'vorlage_id': V1}))
@@ -443,6 +465,13 @@ class ScriptedDeciderTests(unittest.TestCase):
         action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, [failed])
         self.assertIsNone(action.tool)
         self.assertIn('Unbekannte Vorlagen-ID', action.error)
+
+    def test_scripted_repeats_its_own_invalid_step_without_nesting_it(self):
+        # the graph records an invalid decision as an observation of "Werkzeugwahl", no tool of the agent
+        own = Observation('Werkzeugwahl', 'Fehler: ...', {'error_kind': ERROR_INVALID_ARGS},
+                          'Das Werkzeug suche_passagen ist fehlgeschlagen: Unbekannte Vorlagen-ID')
+        action = ScriptedDecider().decide(MESSAGES, TOOL_SPECS, [own])
+        self.assertEqual((action.tool, action.error), (None, own.error))
 
     def test_scripted_clips_a_long_claim_to_the_query_limit(self):
         claim = 'Miete ' * 200

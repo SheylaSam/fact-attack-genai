@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import warnings
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src import config
@@ -39,7 +40,8 @@ if HAS_HTTPX:
     from src.agent.budget import BudgetExceeded, RequestBudget
     from src.agent.decider import AgentAction, ScriptedDecider
 if HAS_LANGGRAPH:
-    from src.agent.graph import EvidenceItem, build_graph, run_check
+    from langgraph.types import Command
+    from src.agent.graph import (EvidenceItem, _result, build_graph, make_checkpointer, prepare, run_check)
     from src.agent.prompts import system_prompt
 
 BOOKLETS = Path('/booklets')
@@ -225,6 +227,25 @@ class TracerTests(unittest.TestCase):
         tracer = Tracer()
         tracer.emit(step=0, node='finish', summary='ok')
         self.assertEqual([e.node for e in tracer.events], ['finish'])
+
+    def test_on_event_is_called_after_the_line_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'trace.jsonl'
+            seen = []
+
+            def on_event(event):
+                # the event is stored and its line is on disk by the time the callback runs
+                seen.append((event, list(tracer.events), path.read_text(encoding='utf-8').splitlines()))
+
+            tracer = Tracer(path, on_event=on_event)
+            first = tracer.emit(step=1, node='decide', summary='eins')
+            second = tracer.emit(step=1, node='act', summary='zwei')
+        self.assertEqual([event for event, _, _ in seen], [first, second])
+        self.assertEqual([len(events) for _, events, _ in seen], [1, 2])
+        self.assertEqual([len(lines) for _, _, lines in seen], [1, 2])
+
+    def test_on_event_is_optional(self):
+        self.assertIsNone(Tracer().on_event)
 
 
 @unittest.skipUnless(HAS_LANGGRAPH, 'Install requirements-agent.txt')
@@ -1173,6 +1194,179 @@ class NachsucheTests(unittest.TestCase):
             'Ergebnis der Prüfung: im Dokument nicht belegt, kein Beleg gefunden. Nachsuche: Du hast genau einen '
             'weiteren Suchschritt. Rufe suche_passagen_vektor für die Vorlage V mit einer anders formulierten '
             'Anfrage auf. Danach wird ein letztes Mal geprüft.'))
+
+
+PAGE_4 = 'Eigenbedarf\n' + QUOTE
+
+
+def v2_engine():
+    """An engine whose passages and verdict belong to V2 (pages 4 and 5)."""
+    engine = FakeEngine(prediction=make_prediction(0, [(4, QUOTE)]), pages={4: PAGE_4})
+    engine.passages = [passage(4, PAGE_4)]
+    return engine
+
+
+def asked_run(decider=None, index=None, engine=None, tracer=None):
+    """An interactive run up to the question of the guard: returns (graph, config, tools, engine, tracer, paused)."""
+    decider = decider or PresetDecider(search_votes(), search_passages(V1), search_passages(V2),
+                                       act('pruefen', vorlage_id=V2.vote_id))
+    engine = engine or v2_engine()
+    tracer = tracer or Tracer()
+    tools = AgentTools(LocalBackend(index or FakeIndex(CLOSE), engine, BOOKLETS), BOOKLETS)
+    state = prepare(CLAIM, tools, tracer)
+    graph = build_graph(tools, decider, engine, tracer, checkpointer=make_checkpointer())
+    cfg = {'configurable': {'thread_id': 'run-1'}}
+    return graph, cfg, tools, engine, tracer, graph.invoke(state, cfg), decider
+
+
+@unittest.skipUnless(HAS_LANGGRAPH, 'Install requirements-agent.txt')
+class InteractiveGraphTests(unittest.TestCase):
+    def test_interactive_graph_pauses_at_the_question_and_resumes_with_the_chosen_vote(self):
+        graph, cfg, tools, engine, tracer, paused, _ = asked_run()
+        [interrupt] = paused['__interrupt__']
+        self.assertEqual(interrupt.value['options'], [V1.vote_id, V2.vote_id])
+        self.assertIn('Welche Vorlage ist gemeint', interrupt.value['question'])
+        self.assertEqual(interrupt.value['asked_by'], 'guard')
+        self.assertEqual(graph.get_state(cfg).next, ('ask',))
+        self.assertEqual(engine.verify_calls, [])
+        self.assertIsNone(tools.fixed_vote_id)
+        state = graph.invoke(Command(resume=V2.vote_id), cfg)
+        self.assertNotIn('__interrupt__', state)
+        result = _result(state, tracer.events)
+        self.assertEqual((result.outcome, result.vote), ('gestuetzt', V2))
+        self.assertEqual(tools.fixed_vote_id, V2.vote_id)
+        self.assertEqual(engine.verify_calls[0]['vote'], V2.title)
+        self.assertEqual(graph.get_state(cfg).next, ())
+
+    def test_the_model_question_pauses_too(self):
+        ask = act('rueckfrage', frage='Welche Mietrechtsvorlage?', optionen=[V1.vote_id, V2.vote_id])
+        decider = PresetDecider(search_votes(), ask, search_passages(V1), act('pruefen', vorlage_id=V1.vote_id))
+        graph, cfg, tools, _, tracer, paused, _ = asked_run(decider=decider, engine=FakeEngine())
+        [interrupt] = paused['__interrupt__']
+        self.assertEqual((interrupt.value['asked_by'], interrupt.value['question']),
+                         ('model', 'Welche Mietrechtsvorlage?'))
+        result = _result(graph.invoke(Command(resume=V1.vote_id), cfg), tracer.events)
+        self.assertEqual((result.outcome, result.vote), ('gestuetzt', V1))
+        self.assertEqual(tools.fixed_vote_id, V1.vote_id)
+
+    def test_resumed_check_shows_exactly_one_ask_event_after_the_answer(self):
+        graph, cfg, _, _, tracer, _, _ = asked_run()
+        self.assertEqual([e for e in tracer.events if e.node == 'ask'], [])  # nothing before the answer
+        graph.invoke(Command(resume=V2.vote_id), cfg)
+        [ask] = [e for e in tracer.events if e.node == 'ask']
+        self.assertEqual(ask.args, {'optionen': [V1.vote_id, V2.vote_id], 'antwort': V2.vote_id})
+        self.assertIn('Rückfrage beantwortet', ask.summary)
+        self.assertIn(V2.vote_id, ask.summary)
+        self.assertEqual(ask.data['kind'], 'mehrdeutig')
+
+    def test_resume_alternates_roles_in_the_transcript(self):
+        graph, cfg, _, _, _, _, decider = asked_run()
+        graph.invoke(Command(resume=V2.vote_id), cfg)
+        for call in decider.calls[2:]:  # every decision after the answer
+            roles = [message['role'] for message in call['messages']]
+            self.assertEqual(roles[:2], ['system', 'user'])
+            for first, second in zip(roles[1:], roles[2:]):
+                self.assertNotEqual(first, second, roles)
+            self.assertEqual(call['messages'][0]['content'], system_prompt(V2))
+            self.assertEqual(call['messages'][1]['content'], CLAIM)
+        answer = decider.calls[2]['messages'][-1]['content']
+        self.assertIn(V2.vote_id, answer)
+        self.assertIn(V2.title, answer)
+
+    def test_resume_offers_only_the_tools_of_a_fixed_vote(self):
+        graph, cfg, _, _, _, _, decider = asked_run()
+        graph.invoke(Command(resume=V2.vote_id), cfg)
+        self.assertEqual(len(decider.calls), 4)
+        self.assertEqual(decider.calls[1]['tools'], ['suche_vorlagen', 'suche_passagen', 'suche_passagen_vektor',
+                                                     'pruefen', 'rueckfrage', 'quelle_fehlt'])
+        self.assertEqual(decider.calls[2]['tools'], ['suche_passagen', 'suche_passagen_vektor', 'pruefen',
+                                                     'quelle_fehlt'])
+
+    def test_an_answer_outside_the_options_is_a_technical_error(self):
+        graph, cfg, tools, engine, tracer, _, _ = asked_run()
+        result = _result(graph.invoke(Command(resume='2024-11-24_de#7'), cfg), tracer.events)
+        self.assertEqual(result.outcome, 'technischer_fehler')
+        self.assertIn('Antwort', result.error)
+        self.assertIsNone(tools.fixed_vote_id)
+        self.assertEqual(engine.verify_calls, [])
+
+    def test_resumed_result_carries_no_stale_question_or_options(self):
+        graph, cfg, _, _, tracer, _, _ = asked_run()
+        result = _result(graph.invoke(Command(resume=V2.vote_id), cfg), tracer.events)
+        self.assertEqual(result.outcome, 'gestuetzt')
+        self.assertIsNone(result.question)  # the question was answered: it is no part of the result
+        self.assertEqual(result.options, [])
+        self.assertIsNone(result.asked_by)
+
+    def test_quelle_fehlt_after_the_answer_needs_a_passage_search_in_the_chosen_vote(self):
+        # V1 is clearly ahead: its passage search runs; the model's question is objected to once, then asked
+        ask = act('rueckfrage', frage='Welche Mietrechtsvorlage?', optionen=[V1.vote_id, V2.vote_id])
+        missing = act('quelle_fehlt', begruendung='Nichts gefunden.')
+        decider = PresetDecider(search_votes(), search_passages(V1), ask, ask, missing, search_passages(V2), missing)
+        engine = FakeEngine()
+        tools = AgentTools(LocalBackend(FakeIndex(CLEAR), engine, BOOKLETS), BOOKLETS)
+        tracer = Tracer()
+        graph = build_graph(tools, decider, engine, tracer, checkpointer=make_checkpointer())
+        cfg = {'configurable': {'thread_id': 'run-1'}}
+        paused = graph.invoke(prepare(CLAIM, tools, tracer), cfg)
+        self.assertEqual(paused['__interrupt__'][0].value['asked_by'], 'model')
+        result = _result(graph.invoke(Command(resume=V2.vote_id), cfg), tracer.events)
+        self.assertEqual(result.outcome, 'quelle_fehlt')
+        # the first quelle_fehlt after the answer was rejected (the passage search of V1 does not count), the search
+        # in V2 ran, and the second one was accepted
+        self.assertEqual(len(decider.calls), 7)
+        self.assertIn('quelle_fehlt erst nach einer Suche', contents(decider.calls[5]['messages'][-1:]))
+        self.assertEqual([call['vote'] for call in engine.retrieve_calls], [V1.title, V2.title])
+
+    def test_checkpointer_serializes_without_unregistered_type_warnings(self):
+        from langgraph.checkpoint.serde import jsonplus
+        # the serializer logs each unregistered (or blocked) type once per process: start from a clean slate
+        with patch.object(jsonplus, '_warned_unregistered_types', set()), \
+                patch.object(jsonplus, '_warned_blocked_types', set()), \
+                self.assertNoLogs(jsonplus.logger, 'WARNING'), warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            graph, cfg, _, _, tracer, _, _ = asked_run()
+            result = _result(graph.invoke(Command(resume=V2.vote_id), cfg), tracer.events)
+        self.assertEqual([str(w.message) for w in caught if 'unregistered type' in str(w.message)], [])
+        self.assertEqual(result.outcome, 'gestuetzt')  # the state came back whole: vote, prediction and evidence
+        self.assertEqual((result.vote, result.evidence), (V2, [EvidenceItem(page=4, quote=QUOTE)]))
+        self.assertEqual(result.prediction.label, 0)
+
+    def test_graph_without_checkpointer_still_ends_with_rueckfrage(self):
+        decider = PresetDecider(search_votes(), search_passages(V1))
+        tools = AgentTools(LocalBackend(FakeIndex(CLOSE), FakeEngine(), BOOKLETS), BOOKLETS)
+        tracer = Tracer()
+        graph = build_graph(tools, decider, FakeEngine(), tracer)
+        state = graph.invoke(prepare(CLAIM, tools, tracer))
+        self.assertNotIn('__interrupt__', state)
+        result = _result(state, tracer.events)
+        self.assertEqual((result.outcome, result.asked_by), ('rueckfrage', 'guard'))
+        [ask] = [e for e in tracer.events if e.node == 'ask']
+        self.assertEqual(ask.args, {'optionen': [V1.vote_id, V2.vote_id]})  # no 'antwort': nobody answered
+        self.assertIsNone(tools.fixed_vote_id)
+
+    def test_prepare_returns_the_early_results_run_check_gave_before(self):
+        tools = AgentTools(LocalBackend(FakeIndex(), FakeEngine(), BOOKLETS), BOOKLETS)
+        foreign = prepare(FRENCH_CLAIM, tools, Tracer(), claim_language='fr')
+        self.assertEqual(foreign.outcome, 'quelle_fehlt')
+        self.assertEqual([e.node for e in foreign.events], ['finish'])
+        with patch.object(config, 'EVIDENCE_POLICY', 'legacy'):
+            legacy = prepare(CLAIM, tools, Tracer())
+        self.assertEqual(legacy.outcome, 'technischer_fehler')
+        self.assertIn('EVIDENCE_POLICY=legacy', legacy.error)
+        with self.assertRaises(ValueError):
+            prepare('', tools, Tracer())
+
+    def test_prepare_returns_the_start_state(self):
+        tools = AgentTools(LocalBackend(FakeIndex(), FakeEngine(), BOOKLETS), BOOKLETS)
+        state = prepare(CLAIM, tools, Tracer())
+        self.assertEqual(set(state), {'claim', 'language', 'messages', 'history', 'steps', 'search_steps'})
+        self.assertEqual((state['claim'], state['language'], state['steps'], state['search_steps']),
+                         (CLAIM, 'de', 0, 0))
+        self.assertEqual(state['messages'], [{'role': 'system', 'content': system_prompt()},
+                                             {'role': 'user', 'content': CLAIM}])
+        fixed = AgentTools(LocalBackend(FakeIndex(), FakeEngine(), BOOKLETS), BOOKLETS, fixed_vote_id=V1.vote_id)
+        self.assertEqual(prepare(CLAIM, fixed, Tracer())['messages'][0]['content'], system_prompt(V1))
 
 
 @unittest.skipUnless(HAS_LANGGRAPH, 'Install requirements-agent.txt')
