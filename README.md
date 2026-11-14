@@ -1,4 +1,14 @@
-> **GenAI-Fortsetzung (31.10.2026):** Optionaler Vektor-RAG-Prototyp auf dem Branch `genai/vector-rag`. [Startanleitung und Versuchsplan](docs/genai/START_VECTOR_RAG.md). Die folgende Hackathon-Dokumentation und Standardkonfiguration bleiben erhalten.
+# Fact Attack – GenAI-Gruppenprojekt
+
+Eigenständige Fortsetzung des Hackathon-Projekts für das Modul Generative KI und Agentensysteme.
+
+**Start hier: [Projektplan und Umsetzungsvorschlag](docs/genai/PROJEKTPLAN.md).**
+
+Freie Abstimmungsbehauptungen mit Rückfragen, begrenzter Agentensteuerung und validierten Quellen prüfen. Der Agent (Stufen 1 bis 4: Suchschleife, Wächter, Rückfrage mit Fortsetzen, Oberfläche im Faktencheck-Tab) ist implementiert, Stand und Grenzen stehen in [docs/genai/AGENT_STUFE4.md](docs/genai/AGENT_STUFE4.md); die Evaluation (Stufe 5) ist in Arbeit. Optionaler Vektor-RAG-Prototyp: [Startanleitung und Versuchsplan](docs/genai/START_VECTOR_RAG.md). Die folgende Dokumentation beschreibt den übernommenen Hackathon-Stand, Standardkonfiguration und Wettbewerbspfad bleiben erhalten.
+
+Ursprung: [JJukic/Apertus-Team-Fact-Attack-2026](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026), übernommen bei `534e4ef`. Git-Historie, Urheberangaben und Lizenz bleiben erhalten. `origin` verweist auf das eigene Repository, `upstream` auf den Ursprung. GitHub Actions sind im neuen Repository zunächst deaktiviert, da die übernommenen Workflows auch Container veröffentlichen.
+
+---
 
 # 🇨🇭 Fact Attack 2026 — Hack Apertus Track 2A (OST)
 ## Multilingual Natural Language Inference over Swiss Official Voting Booklets
