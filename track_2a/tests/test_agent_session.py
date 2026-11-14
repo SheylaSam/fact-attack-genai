@@ -14,7 +14,8 @@ from src.agent.source_index import VoteRef
 from src.agent.tools import AgentTools
 from src.agent.trace import Tracer
 from tests.test_agent_graph import (BOOKLETS, CLAIM, CLEAR, CLOSE, FRENCH_CLAIM, HAS_LANGGRAPH, V1, V2, FakeEngine,
-                                    FakeIndex, PresetDecider, act, search_passages, search_votes, v2_engine)
+                                    FakeIndex, PresetDecider, act, make_prediction, search_passages, search_votes,
+                                    v2_engine)
 
 if HAS_LANGGRAPH:
     from src.agent.budget import BudgetExceeded, RequestBudget
@@ -326,6 +327,21 @@ class LastVoteTests(unittest.TestCase):
         session, _, _ = make_session(ScriptedDecider(), index=index, engine=FakeEngine())
         session.start(CLAIM, last_vote=V2)
         self.assertEqual(index.vote_calls[0], CLAIM)
+
+    def test_the_evidence_switch_reaches_the_session_and_its_answered_result(self):
+        from src.agent.graph import EvidenceItem
+        engine = v2_engine()
+        engine.prediction = make_prediction(0, [(4, 'Dieses Zitat steht nirgends im PDF.')])
+        session, _, _ = make_session(engine=engine, evidence_check=False, nachsuche=False)
+        self.assertIsInstance(session.start(CLAIM), Pending)
+        result = session.answer(V2.vote_id)
+        self.assertEqual((result.outcome, result.evidence_validated, result.note), ('gestuetzt', False, None))
+        self.assertEqual(result.evidence, [EvidenceItem(page=4, quote='Dieses Zitat steht nirgends im PDF.')])
+        default, _, _ = make_session(engine=engine, nachsuche=False)
+        default.start(CLAIM)
+        result = default.answer(V2.vote_id)
+        self.assertEqual((result.outcome, result.evidence_validated, result.note),
+                         ('nicht_belegt', True, 'Urteil ohne prüfbaren Beleg verworfen'))
 
 
 if __name__ == '__main__':

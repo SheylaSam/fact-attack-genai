@@ -1240,6 +1240,78 @@ class NachsucheTests(unittest.TestCase):
 PAGE_4 = 'Eigenbedarf\n' + QUOTE
 
 
+@unittest.skipUnless(HAS_LANGGRAPH, 'Install requirements-agent.txt')
+class EvidenceSwitchTests(unittest.TestCase):
+    """`evidence_check=False` (with `nachsuche=False`: evaluation arm B2) takes the quotes of the check as given."""
+
+    UNCHECKED = [(2, NOT_FOUND), (9, QUOTE)]  # not in the PDF text; on a page outside the vote's pages
+
+    def run_unchecked(self, quotes=UNCHECKED, label=0, **kwargs):
+        engine = FakeEngine(prediction=make_prediction(label, quotes), **kwargs.pop('engine_args', {}))
+        decider = PresetDecider(*prove_and_check())
+        result, engine, _ = check(decider, engine=engine, **kwargs)
+        return result, engine
+
+    def test_evidence_check_off_keeps_the_quote_as_given(self):
+        for label, outcome in ((0, 'gestuetzt'), (2, 'widersprochen')):
+            with self.subTest(outcome=outcome):
+                result, engine = self.run_unchecked(label=label, nachsuche=False, evidence_check=False)
+                self.assertEqual(result.outcome, outcome)
+                self.assertEqual(result.evidence, [EvidenceItem(page=2, quote=NOT_FOUND),
+                                                   EvidenceItem(page=9, quote=QUOTE)])
+                self.assertIsNone(result.note)  # nothing was discarded
+                self.assertIsNone(result.error)
+                self.assertFalse(result.evidence_validated)
+                self.assertEqual(result.reasoning, 'Begründung')
+                self.assertEqual(len(engine.verify_calls), 1)
+                step = next(e for e in result.events if e.node == 'check_evidence')
+                self.assertNotIn('verworfen', step.summary)
+                self.assertIn('ungeprüft', step.summary)
+
+    def test_evidence_check_off_never_reads_the_pdf_text(self):
+        # with the check on, a page without readable text is a technical error; off, nobody looks at the page
+        result, _ = self.run_unchecked([(2, QUOTE)], nachsuche=False, evidence_check=False, engine_args={'pages': {}})
+        self.assertEqual((result.outcome, result.evidence), ('gestuetzt', [EvidenceItem(page=2, quote=QUOTE)]))
+        result, _ = self.run_unchecked([(2, QUOTE)], nachsuche=False, engine_args={'pages': {}})
+        self.assertEqual(result.outcome, 'technischer_fehler')
+
+    def test_evidence_check_off_still_strips_the_engine_page_prefix_and_skips_unusable_items(self):
+        quotes = [(2, '[Seite 2] ' + QUOTE), (None, QUOTE), (0, QUOTE), (2, '  ')]
+        result, _ = self.run_unchecked(quotes, nachsuche=False, evidence_check=False)
+        self.assertEqual(result.evidence, [EvidenceItem(page=2, quote=QUOTE)])
+
+    def test_evidence_check_off_leaves_nicht_belegt_alone(self):
+        result, engine = self.run_unchecked([], label=1, nachsuche=False, evidence_check=False)
+        self.assertEqual((result.outcome, result.evidence, result.note), ('nicht_belegt', [], None))
+        self.assertFalse(result.evidence_validated)
+        self.assertEqual(len(engine.verify_calls), 1)
+
+    def test_evidence_check_off_does_not_switch_the_nachsuche_off(self):
+        decider = PresetDecider(*prove_and_check(), vector_search())
+        engine = FakeEngine(predictions=[NICHT_BELEGT, GESTUETZT])
+        result, _, _ = check(decider, engine=engine, index=FakeIndex(vector=[passage(3, NEW_TEXT)]),
+                             evidence_check=False)
+        self.assertEqual((result.outcome, result.checks), ('gestuetzt', 2))
+
+    def test_evidence_check_on_is_the_default_and_unchanged(self):
+        result, _ = self.run_unchecked(nachsuche=False)
+        self.assertEqual((result.outcome, result.note, result.evidence), ('nicht_belegt', NOTE, []))
+        self.assertTrue(result.evidence_validated)
+        explicit, _ = self.run_unchecked(nachsuche=False, evidence_check=True)
+        self.assertEqual((explicit.outcome, explicit.note, explicit.evidence, explicit.evidence_validated),
+                         (result.outcome, result.note, result.evidence, True))
+        happy, _, _ = check(PresetDecider(*prove_and_check()))
+        self.assertEqual((happy.outcome, happy.evidence, happy.evidence_validated),
+                         ('gestuetzt', [EvidenceItem(page=2, quote=QUOTE)], True))
+        self.assertTrue(AgentResult(outcome='gestuetzt').evidence_validated)
+
+    def test_early_and_crash_results_carry_the_switch_too(self):
+        early, _, _ = check(PresetDecider(), claim=FRENCH_CLAIM, evidence_check=False)  # quelle_fehlt before any LLM
+        self.assertEqual((early.outcome, early.evidence_validated), ('quelle_fehlt', False))
+        crash, _, _ = check(PresetDecider(RuntimeError('boom')), evidence_check=False)
+        self.assertEqual((crash.outcome, crash.evidence_validated), ('technischer_fehler', False))
+
+
 def v2_engine():
     """An engine whose passages and verdict belong to V2 (pages 4 and 5)."""
     engine = FakeEngine(prediction=make_prediction(0, [(4, QUOTE)]), pages={4: PAGE_4})
