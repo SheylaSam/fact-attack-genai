@@ -25,6 +25,10 @@ Arms (`make_arm`), each check with new tools, a new engine, a new budget and a n
   request. `scored(runs)` leaves them out before the metrics.
 * B1: the agent with only the claim; the scripted user answers a vote question once (`scripted_user.drive`).
 * B2: B1 without Nachsuche and without evidence check.
+* Regression arms (`regression-b0`, `regression-agent`, over `regression.RegressionCase`s): the 42 dev cases, B0 on the
+  case's booklet with vote `None` (the production path), the agent with the case's vote fixed in its tools (the
+  search stays in the given source). They make `regression.CaseOutcome`s, which the campaign records, resumes and caps
+  like a `CaseRun`; a case whose vote cannot be built is a technical error with `error`, never a gap.
 * A case with `fault` gets `faults.faulty_transport` beneath its budget; no other case does. A fault case that sent no
   request is recorded as it came out, with `error = FAULT_NOT_TRIGGERED`.
 * `evidence_valid` is computed after the run for `gestuetzt` and `widersprochen` with the graph's own check
@@ -53,7 +57,7 @@ from pathlib import Path
 import re
 import subprocess
 import time
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import httpx
 
@@ -64,6 +68,8 @@ from src.agent.decider import make_decider
 from src.agent.eval_metrics import CaseRun
 from src.agent.faults import faulty_transport
 from src.agent.graph import LABEL_OUTCOMES, valid_evidence
+from src.agent.regression import (REGRESSION_ARMS, CaseOutcome, RegressionCase, fixed_vote_for, outcome_from_record,
+                                  outcome_record)
 from src.agent.scripted_user import drive
 from src.agent.search_backend import LocalBackend
 from src.agent.session import AgentSession, Pending
@@ -92,7 +98,7 @@ FREEZE_SCHEMA = 1
 _SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSW|ENV_FILE|URL|_PATH$|_DIR$")
 _SCALARS = (str, int, float, bool, type(None))
 
-ArmBuilder = Callable[[Any, RequestBudget], CaseRun]
+ArmBuilder = Callable[[Any, RequestBudget], Union[CaseRun, CaseOutcome]]
 
 
 class FreezeError(RuntimeError):
@@ -168,15 +174,15 @@ class Wiring:
         """A new engine per check: the budget is installed on its client only."""
         return self.engine_factory() if self.engine_factory is not None else _default_engine(self.mock)
 
-    def decider(self, budget: RequestBudget, fault: Optional[str]):
+    def decider(self, budget: RequestBudget, fault: Optional[str], fixed_vote_id: Optional[str] = None):
         """Mock: the scripted decider (no request, so no fault can be injected). Otherwise the configured decider;
-        with `fault` its transport is the faulty one, beneath the budget."""
+        with `fault` its transport is the faulty one, beneath the budget. `fixed_vote_id`: the check's vote is given."""
         if self.mock:
-            return make_decider("scripted", budget)
+            return make_decider("scripted", budget, fixed_vote_id=fixed_vote_id)
         inner = self.transport() if self.transport is not None else None
         if fault:
             inner = faulty_transport(inner if inner is not None else httpx.HTTPTransport(), fault)
-        return make_decider(settings.TOOL_MODE, budget, transport=inner)
+        return make_decider(settings.TOOL_MODE, budget, fixed_vote_id=fixed_vote_id, transport=inner)
 
     def write_trace(self, case_id: str, events) -> None:
         if self.trace_dir is None:
@@ -275,6 +281,29 @@ def _agent_case(case, budget: RequestBudget, *, wiring: Wiring, arm: str, nachsu
         _close(engine)
 
 
+def _b0_verdict(engine, budget: RequestBudget, *, claim: str, booklet: Path, claim_language: str,
+                case_id: str):
+    """Today's check path on `booklet` with vote "Automatisch" (None), shared by the B0 arm and the regression's B0:
+    `(prediction, outcome, error, latency_ms)`. The old path raises on some failures: that is technical, never a
+    verdict (prediction None). A refused request, an error of the check and an unknown label are technical too."""
+    started = time.perf_counter()
+    try:
+        prediction = engine.verify_claim(claim=claim, booklet_pdf=booklet, claim_language=claim_language, vote=None,
+                                         case_id=case_id)
+    except Exception as exc:
+        return (None, "technischer_fehler",
+                _short_error(f"Ausnahme in der Prüfung: {type(exc).__name__}: {exc}"),
+                (time.perf_counter() - started) * 1000)
+    latency_ms = (time.perf_counter() - started) * 1000
+    error = prediction.error
+    if error is None and getattr(budget, "exceeded", False):
+        error = "Anfrage-Budget erschöpft: Mindestens eine Anfrage wurde nicht gesendet."
+    if error is None and prediction.label not in LABEL_OUTCOMES:
+        error = f"Prüfung lieferte das unbekannte Label {prediction.label!r}."
+    outcome = "technischer_fehler" if error is not None else LABEL_OUTCOMES[prediction.label]
+    return prediction, outcome, _technical(outcome, error), latency_ms
+
+
 def _b0_case(case, budget: RequestBudget, *, wiring: Wiring, arm: str = "b0") -> CaseRun:
     """B0: today's check path on the oracle booklet of the gold vote, vote "Automatisch" (None)."""
     if case.vote_id is None or getattr(case, "fault", None):
@@ -284,27 +313,70 @@ def _b0_case(case, budget: RequestBudget, *, wiring: Wiring, arm: str = "b0") ->
     try:
         if not wiring.mock:
             install_on_apertus(getattr(engine, "client", None), budget)
-        started = time.perf_counter()
-        try:
-            booklet = wiring.booklets_dir / f"{vote.source_id}.pdf"
-            prediction = engine.verify_claim(claim=case.claim, booklet_pdf=booklet,
-                                             claim_language=guess_language(case.claim), vote=None, case_id=case.id)
-        except Exception as exc:  # the old path raises on some failures: technical, never a verdict
-            return replace(_plain_run(case, arm, "technischer_fehler",
-                                      _short_error(f"Ausnahme in der Prüfung: {type(exc).__name__}: {exc}")),
-                           final_vote_id=vote.vote_id, latency_ms=(time.perf_counter() - started) * 1000)
-        latency_ms = (time.perf_counter() - started) * 1000
-        error = prediction.error
-        if error is None and getattr(budget, "exceeded", False):
-            error = "Anfrage-Budget erschöpft: Mindestens eine Anfrage wurde nicht gesendet."
-        if error is None and prediction.label not in LABEL_OUTCOMES:
-            error = f"Prüfung lieferte das unbekannte Label {prediction.label!r}."
-        outcome = "technischer_fehler" if error is not None else LABEL_OUTCOMES[prediction.label]
+        prediction, outcome, error, latency_ms = _b0_verdict(
+            engine, budget, claim=case.claim, booklet=wiring.booklets_dir / f"{vote.source_id}.pdf",
+            claim_language=guess_language(case.claim), case_id=case.id)
+        if prediction is None:
+            return replace(_plain_run(case, arm, outcome, error), final_vote_id=vote.vote_id, latency_ms=latency_ms)
         quotes = [(source.page_number, source.quote) for source in prediction.evidence_sources]
         return CaseRun(case=case, arm=arm, outcome=outcome, asked=False, options=(), final_vote_id=vote.vote_id,
                        evidence_valid=evidence_validity(outcome, vote, quotes, engine, wiring.booklets_dir),
-                       tokens=prediction.tokens_total, latency_ms=latency_ms, tool_calls=0,
-                       error=_technical(outcome, error))
+                       tokens=prediction.tokens_total, latency_ms=latency_ms, tool_calls=0, error=error)
+    finally:
+        _close(engine)
+
+
+def _plain_outcome(case: RegressionCase, arm: str, outcome: str, error: Optional[str] = None, **fields) -> CaseOutcome:
+    return CaseOutcome(id=case.id, arm=arm, outcome=outcome, label=case.label, error=error, **fields)
+
+
+def _regression_b0_case(case: RegressionCase, budget: RequestBudget, *, wiring: Wiring,
+                        arm: str = "regression-b0") -> CaseOutcome:
+    """Regression B0: the production path (`verify_claim`, vote None) on the case's own booklet."""
+    engine = wiring.new_engine()
+    try:
+        if not wiring.mock:
+            install_on_apertus(getattr(engine, "client", None), budget)
+        prediction, outcome, error, latency_ms = _b0_verdict(
+            engine, budget, claim=case.claim, booklet=wiring.booklets_dir / f"{case.source_id}.pdf",
+            claim_language=case.claim_language, case_id=case.id)
+        return _plain_outcome(case, arm, outcome, error, latency_ms=latency_ms,
+                              tokens=prediction.tokens_total if prediction is not None else 0)
+    finally:
+        _close(engine)
+
+
+def _regression_agent_case(case: RegressionCase, budget: RequestBudget, *, wiring: Wiring,
+                           arm: str = "regression-agent") -> CaseOutcome:
+    """Regression agent: the full agent (as B1) with the case's vote given, so its search stays in the given source:
+    the vote of the title (German booklet) or the whole booklet, registered with the session's backend like the app
+    does. A vote that cannot be built is a technical error naming the case."""
+    engine = wiring.new_engine()
+    try:
+        if not wiring.mock:
+            install_on_apertus(getattr(engine, "client", None), budget)
+        backend = LocalBackend(wiring.index, engine, wiring.booklets_dir, catalog=wiring.catalog)
+        try:
+            vote = fixed_vote_for(case, backend.votes, wiring.booklets_dir, wiring.catalog)
+            if vote.vote_id not in backend.votes:  # a whole booklet the index does not know
+                backend.add_vote(vote)
+            tools = AgentTools(backend, wiring.booklets_dir, fixed_vote_id=vote.vote_id)
+        except ValueError as exc:
+            return _plain_outcome(case, arm, "technischer_fehler",
+                                  _short_error(exc if case.id in str(exc) else f"Fall {case.id}: {exc}"))
+        session = AgentSession(tools, wiring.decider(budget, None, vote.vote_id), engine, Tracer(), budget=budget)
+        started = time.perf_counter()
+        turn = session.start(case.claim, case.claim_language)
+        latency_ms = (time.perf_counter() - started) * 1000
+        events = session.events
+        if isinstance(turn, Pending):  # not expected with a given vote; shown as a question, never as a verdict
+            outcome, error, note = "rueckfrage", None, None
+        else:
+            outcome, error, note = turn.outcome, _technical(turn.outcome, turn.error), turn.note
+        wiring.write_trace(case.id, events)
+        return _plain_outcome(case, arm, outcome, error, vote_id=vote.vote_id, note=note and _short_error(note),
+                              tokens=sum(event.tokens_prompt + event.tokens_completion for event in events),
+                              latency_ms=latency_ms)
     finally:
         _close(engine)
 
@@ -314,6 +386,8 @@ ARMS: Dict[str, Callable[[Wiring], ArmBuilder]] = {
     "b1": lambda wiring: functools.partial(_agent_case, wiring=wiring, arm="b1", nachsuche=True, evidence_check=True),
     "b2": lambda wiring: functools.partial(_agent_case, wiring=wiring, arm="b2", nachsuche=False,
                                            evidence_check=False),
+    "regression-b0": lambda wiring: functools.partial(_regression_b0_case, wiring=wiring),
+    "regression-agent": lambda wiring: functools.partial(_regression_agent_case, wiring=wiring),
 }
 
 
@@ -336,14 +410,29 @@ def scored(runs: Sequence[CaseRun]) -> List[CaseRun]:
 
 # --- campaign ---------------------------------------------------------------------------------------------------------
 
-def _record(run: CaseRun, requests: int) -> dict:
+def _plain(case, arm: str, outcome: str, error: Optional[str] = None) -> Union[CaseRun, CaseOutcome]:
+    """A result without a run (not run, not scored) in the kind of record the case's arm makes."""
+    if isinstance(case, RegressionCase):
+        return _plain_outcome(case, arm, outcome, error)
+    return _plain_run(case, arm, outcome, error)
+
+
+def _run_id(run: Union[CaseRun, CaseOutcome]) -> str:
+    return run.id if isinstance(run, CaseOutcome) else run.case.id
+
+
+def _record(run: Union[CaseRun, CaseOutcome], requests: int) -> dict:
+    if isinstance(run, CaseOutcome):
+        return outcome_record(run, requests)
     return {"id": run.case.id, "arm": run.arm, "outcome": run.outcome, "asked": run.asked,
             "options": list(run.options), "final_vote_id": run.final_vote_id, "evidence_valid": run.evidence_valid,
             "tokens": run.tokens, "latency_ms": run.latency_ms, "tool_calls": run.tool_calls, "error": run.error,
             "requests": requests}
 
 
-def _from_record(case, record: dict) -> CaseRun:
+def _from_record(case, record: dict) -> Union[CaseRun, CaseOutcome]:
+    if isinstance(case, RegressionCase):
+        return outcome_from_record(record)
     return CaseRun(case=case, arm=record["arm"], outcome=record["outcome"], asked=record["asked"],
                    options=tuple(record["options"]), final_vote_id=record["final_vote_id"],
                    evidence_valid=record["evidence_valid"], tokens=record["tokens"], latency_ms=record["latency_ms"],
@@ -430,21 +519,26 @@ def _start(arm: str, ids: List[str], max_requests: int, out_dir: Path, resume: b
 
 
 def run_campaign(arm: str, cases: Sequence[Any], *, build_arm: ArmBuilder, max_requests: int, out_dir: Path,
-                 resume: bool = False) -> List[CaseRun]:
+                 resume: bool = False) -> List[Union[CaseRun, CaseOutcome]]:
     """Runs `build_arm(case, budget)` for every case under a total cap of `max_requests` HTTP requests; returns one
-    `CaseRun` per case, in the order of `cases` (see the module docstring for cap, journal, resume and not-run).
-    Raises FileExistsError for an existing `out_dir` without `resume`, ValueError for an unknown arm, a bad or
+    `CaseRun` per case (a `CaseOutcome` for the regression arms), in the order of `cases` (see the module docstring
+    for cap, journal, resume and not-run). Raises FileExistsError for an existing `out_dir` without `resume`,
+    ValueError for an unknown arm, a regression arm over other cases than `RegressionCase`s (or the reverse), a bad or
     repeated case id or an `out_dir` of another campaign. An exception of `build_arm` ends the campaign: the cases
     finished so far are in `cases.jsonl`, the requests in the journals, and `resume` continues."""
     _check_arm(arm)
     if type(max_requests) is not int or max_requests < 0:
         raise ValueError(f"max_requests muss eine ganze Zahl ab 0 sein, nicht {max_requests!r}")
+    regression_cases = [isinstance(case, RegressionCase) for case in cases]
+    if (arm in REGRESSION_ARMS and not all(regression_cases)) or (arm not in REGRESSION_ARMS and any(regression_cases)):
+        raise ValueError(f"Arm {arm!r} und die Fälle passen nicht zusammen: die Regressionsarme laufen nur über "
+                         "Regressionsfälle, die anderen Arme nie darüber.")
     ids = _case_ids(cases)
     out_dir = Path(out_dir)
     finished = _start(arm, ids, max_requests, out_dir, resume)
     spent = requests_spent(out_dir)
     journal_dir = out_dir / JOURNAL_DIR
-    runs: List[CaseRun] = []
+    runs: List[Union[CaseRun, CaseOutcome]] = []
     not_run: List[dict] = []
     stop_reason: Optional[str] = None
     errors_in_row = 0
@@ -457,7 +551,7 @@ def run_campaign(arm: str, cases: Sequence[Any], *, build_arm: ArmBuilder, max_r
             if stop_reason is None and left <= 0:
                 stop_reason = CAP_REACHED
             if stop_reason is not None:
-                runs.append(_plain_run(case, arm, NOT_RUN, stop_reason))
+                runs.append(_plain(case, arm, NOT_RUN, stop_reason))
                 not_run.append({"id": case_id, "reason": stop_reason})
                 continue
             limit = min(settings.MAX_REQUESTS, left)
@@ -466,7 +560,7 @@ def run_campaign(arm: str, cases: Sequence[Any], *, build_arm: ArmBuilder, max_r
             spent += budget.used
             if budget.exceeded and limit < settings.MAX_REQUESTS:  # cut short by the campaign cap: no result
                 stop_reason = CAP_REACHED
-                runs.append(_plain_run(case, arm, NOT_RUN, stop_reason))
+                runs.append(_plain(case, arm, NOT_RUN, stop_reason))
                 not_run.append({"id": case_id, "reason": stop_reason, "requests": budget.used})
                 continue
             if getattr(case, "fault", None) and budget.used == 0 and run.outcome != NOT_SCORED:
@@ -758,8 +852,8 @@ def test_case_count() -> int:
 
 
 
-def write_summary(out_dir: Path, *, arm: str, split: str, mock: bool, runs: Sequence[CaseRun], max_requests: int,
-                  freeze: Optional[Path] = None) -> dict:
+def write_summary(out_dir: Path, *, arm: str, split: str, mock: bool, runs: Sequence[Union[CaseRun, CaseOutcome]],
+                  max_requests: int, freeze: Optional[Path] = None) -> dict:
     """`summary.json` of a campaign: what ran with which configuration (freeze_config.py reads it)."""
     out_dir = Path(out_dir)
     try:
@@ -773,7 +867,7 @@ def write_summary(out_dir: Path, *, arm: str, split: str, mock: bool, runs: Sequ
     summary = {"arm": arm, "split": split, "mock": mock, "config_hash": current, "tree_clean": clean,
                "max_requests": max_requests, "requests_spent": requests_spent(out_dir), "cases": len(runs),
                "finished": sum(1 for run in runs if run.outcome != NOT_RUN),
-               "not_run": [run.case.id for run in runs if run.outcome == NOT_RUN], "outcomes": outcomes,
+               "not_run": [_run_id(run) for run in runs if run.outcome == NOT_RUN], "outcomes": outcomes,
                "freeze": str(freeze) if freeze else None, "written_at": datetime.now(timezone.utc).isoformat()}
     _write_atomic(out_dir / SUMMARY_NAME, json.dumps(summary, indent=2, ensure_ascii=False) + "\n")
     return summary

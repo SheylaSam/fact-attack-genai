@@ -1,7 +1,8 @@
 """Run one arm of the agent evaluation over a split, under a hard request cap.
 
 Usage (from track_2a/):
-  python scripts/run_agent_eval.py --arm {b0,b1,b2} --split {dev,test,regression} --max-requests N --out DIR
+  python scripts/run_agent_eval.py --arm {b0,b1,b2,regression-b0,regression-agent} --split {dev,test,regression}
+                                   --max-requests N --out DIR
                                    [--resume] [--mock] [--freeze FILE]
 
 * `--mock`: the scripted decider and the mock Apertus client; no request leaves the machine.
@@ -14,7 +15,10 @@ Usage (from track_2a/):
   only resumed (`--resume`, same arm, same DIR, same configuration on a clean tree), never evaluated anew. A mock
   run on the real test split is refused (it would use up the arm's one test run); a mock rehearsal works on a
   synthetic test set only.
-* `--split regression` comes with the regression arms.
+* `--split regression` is the 42 dev cases of `data/genai/ost_june_dev.jsonl` and goes with the two regression arms,
+  `regression-b0` (the production path, vote None) and `regression-agent` (the agent with the case's source given);
+  the two belong to this split alone. It is dev data: no freeze. Run both arms on the same day (the reference is a
+  fresh B0 run) and compare them with `regression.compare_paired`.
 
 Results in DIR: `cases.jsonl` (one record per case), `journals/` (one request journal per check), `traces/`,
 `not_run.json`, `campaign.json`, `summary.json`. Exit code 0 when the campaign ran (also with technical errors or cases
@@ -32,6 +36,7 @@ sys.path.insert(0, str(ROOT))
 from src import config
 from src.agent import eval_runner, settings
 from src.agent import testset as testset_module
+from src.agent.regression import REGRESSION_ARMS, load_regression_cases
 
 EXIT_OK, EXIT_REFUSED = 0, 1
 SPLITS = ("dev", "test", "regression")
@@ -87,8 +92,9 @@ def _check_cap(args: argparse.Namespace, cases: int) -> None:
 
 
 def _run(args: argparse.Namespace) -> int:
-    if args.split == "regression":
-        raise _Abort("--split regression kommt mit den Regressionsarmen (Task 5); noch nicht verfügbar.")
+    if (args.split == "regression") != (args.arm in REGRESSION_ARMS):
+        raise _Abort("--split regression läuft nur mit den Armen regression-b0 und regression-agent, und diese "
+                     "Arme nur mit --split regression.")
     if args.out.exists() and not args.resume:
         raise _Abort(f"{args.out} existiert schon. Ein bestehender Lauf wird nie überschrieben "
                      "(fortsetzen: --resume).")
@@ -112,8 +118,8 @@ def _run(args: argparse.Namespace) -> int:
                 raise _Abort(f"Der Testteil hat {len(cases)} Fälle, das Manifest nennt {expected}.")
             runs = eval_runner.run_campaign(args.arm, cases, build_arm=build, max_requests=args.max_requests,
                                             out_dir=args.out, resume=args.resume)
-    else:
-        cases = eval_runner.load_dev()
+    else:  # dev, or the regression set (dev data too: no freeze)
+        cases = load_regression_cases() if args.split == "regression" else eval_runner.load_dev()
         _check_cap(args, len(cases))
         with open_wiring(args.mock, args.out / eval_runner.TRACE_DIR) as wiring:
             runs = eval_runner.run_campaign(args.arm, cases, build_arm=eval_runner.make_arm(args.arm, wiring),
