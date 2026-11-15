@@ -170,10 +170,12 @@ def test_a_close_claim_shows_the_question_with_one_button_per_option_in_the_ask_
         ask = next(index for index, node in enumerate(nodes)
                    if node.type == 'markdown' and node.value.startswith('<div class="agent-step agent-step-ask'))
         question = next(index for index, node in enumerate(nodes)
-                        if node.type == 'markdown' and node.value.startswith('**Welche Vorlage ist gemeint?**'))
+                        if node.type == 'markdown' and node.value in (agent_ui.TEXT_QUESTION, agent_ui.TEXT_QUESTION_CHOOSE))
         first_option = next(index for index, node in enumerate(nodes)
                             if node.type == 'button' and (node.key or '').startswith('agent_option_'))
         assert ask < question < first_option
+        assert not any('**' in node.value and agent_ui.TITLE_QUESTION in node.value
+                       for node in nodes if node.type == 'markdown')  # the card says it; no bold repeat below
         assert not any(node.value.startswith('<div class="agent-step ') for node in nodes[first_option:] if node.type == 'markdown')
 
 
@@ -979,8 +981,8 @@ def test_the_mismatch_question_does_not_say_that_several_votes_fit():
         check(app)
         assert [button.label.split(' · ')[0] for button in options(app)] == [V1.title, V2.title]
         assert not any('Mehrere Vorlagen passen' in value for value in markdown(app))
-        assert any('Welche Vorlage ist gemeint?' in value and agent_ui.TEXT_QUESTION_CHOOSE in value
-                   for value in markdown(app))
+        assert agent_ui.TEXT_QUESTION_CHOOSE in markdown(app)
+        assert not any(value.startswith('**') and 'Welche Vorlage ist gemeint?' in value for value in markdown(app))
 
 
 # --- stage 5: statements of a compound claim ----------------------------------------------------------------------
@@ -1017,7 +1019,8 @@ def test_clicking_a_statement_starts_a_new_check_with_it_as_the_claim():
         assert [button.label.replace('\\', '') for button in buttons] == PARTS  # escaped, see the next test
         assert len({button.key for button in buttons}) == 2
         assert not options(app) and not has_verdict(app) and 'last_check' not in app.session_state
-        assert any(agent_ui.TITLE_STATEMENT in value and agent_ui.TEXT_STATEMENT in value for value in markdown(app))
+        assert agent_ui.TEXT_STATEMENT in markdown(app)  # under the card: the text only, no bold title repeat
+        assert not any(value.startswith('**') and agent_ui.TITLE_STATEMENT in value for value in markdown(app))
         assert agent_ui.TITLE_STATEMENT in '\n'.join(step_texts(app))
         first_check = app.session_state['agent_session']
         buttons[1].click().run()
@@ -1160,3 +1163,18 @@ def test_cards_use_icons_not_marks():
             assert text[:1] not in ('✓', '✕', '…', '?')
         assert 'So prüft der Agent' in '\n'.join(markdown(app))
         assert not any('Schritte der Prüfung' in value for value in markdown(app))
+
+
+def test_recent_checks_list_the_new_entry_right_after_the_verdict(isolated_history):
+    """The sidebar list is filled after the page saved the check, so the same run already shows it."""
+    from src.check_history import load_checks
+    fakes = close_fakes()
+    with agent_app(fakes) as app:
+        check(app)
+        recent = lambda: [b.key for b in app.sidebar.button if (b.key or '').startswith('recent_')]
+        assert recent() == []
+        next(b for b in options(app) if b.label.startswith(V2.title)).click().run()
+        saved = load_checks(isolated_history)
+        assert len(saved) == 1
+        assert recent() == [f"recent_{saved[0]['id']}"]  # no further interaction needed
+        assert any(e.label == 'Zuletzt geprüft' for e in app.sidebar.expander)

@@ -57,3 +57,15 @@ def test_matrix_cells_use_palette_text_not_fixed_white():
         mix = [round(int(p["blue"][i:i + 2], 16) * 0.34 + int(p["surface"][i:i + 2], 16) * 0.66) for i in (1, 3, 5)]
         cell = "#%02X%02X%02X" % tuple(mix)
         assert contrast(p["text"], cell) >= 4.5
+
+
+def test_page_tag_text_reaches_4_5_on_its_tinted_background():
+    for p in ui_theme.PALETTES.values():
+        def mix(a, b, share):  # color-mix(in srgb, a share%, b)
+            ca, cb = [[int(c.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)] for c in (a, b)]
+            return "#" + "".join(f"{round(x * share + y * (1 - share)):02X}" for x, y in zip(ca, cb))
+        tint = mix(p["blue"], p["surface"], 0.14)
+        css = ui_theme.theme_css("dark")
+        line = next(l for l in css.splitlines() if l.startswith(".tag-page"))
+        token = line.split("color: var(--")[-1].split(")")[0]
+        assert ui_theme.contrast(p[token], tint) >= 4.5, token

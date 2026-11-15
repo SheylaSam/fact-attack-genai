@@ -48,6 +48,13 @@ class StepRowTests(unittest.TestCase):
         self.assertIn('Wächter', rows[1].detail)
         self.assertNotIn(agent_ui.TOOL_TITLES['suche_passagen'], [row.title for row in rows])
 
+    def test_the_check_start_step_has_the_balance_icon_and_running_spins(self):
+        rows = agent_ui.step_rows([event(1, 'decide', 'pruefen', 'pruefen gewählt'),
+                                   event(1, 'act', 'pruefen', 'Prüfung mit 8 Passagen')])
+        self.assertEqual(rows[0].title, agent_ui.TOOL_TITLES['pruefen'])
+        self.assertEqual(agent_ui.STEP_ICONS[rows[0].kind], ('fa-balance-scale', 'blue'))
+        self.assertIn('fa-spin', agent_ui.STEP_ICONS['running'][0].split())
+
     def test_an_open_guard_question_is_already_an_ask_row_before_the_answer(self):
         events = [event(1, 'decide', 'suche_passagen', 'suche_passagen gewählt'),
                   event(1, 'act', 'suche_passagen', 'Wächter: mehrdeutig, a, b gleichauf; suche_passagen nicht ausgeführt',

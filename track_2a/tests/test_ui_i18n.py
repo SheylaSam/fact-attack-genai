@@ -65,3 +65,13 @@ def test_sidebar_and_upload_texts_have_translations():
     assert translate('Eigenes PDF entfernen', 'it') == 'Rimuovi il PDF personale'
     for text in ('Zuletzt geprüft', 'Navigation'):
         assert set(TRANSLATIONS.get(text, {})) == {'fr', 'it'}, text
+
+
+def test_the_section_pills_of_the_verdict_card_are_translated():
+    import re as _re
+    source = (Path(__file__).parent.parent / 'app.py').read_text(encoding='utf-8')
+    block = source[source.index('SECTION_DE = {'):]
+    values = _re.findall(r'": "([^"]+)"', block[:block.index('}')])
+    assert len(values) == 5
+    for value in values:
+        assert value in TRANSLATIONS and set(TRANSLATIONS[value]) == {'fr', 'it'}, value

@@ -7,6 +7,11 @@ _ROWS = '''Faktencheck|Vérifier|Verifica
 Dunkler Modus|Mode sombre|Modalità scura
 Navigation|Navigation|Navigazione
 Zuletzt geprüft|Vérifiées récemment|Verificate di recente
+Argumente des Komitees|Arguments du comité|Argomenti del comitato
+Argumente Bundesrat & Parlament|Arguments du Conseil fédéral et du Parlement|Argomenti del Consiglio federale e del Parlamento
+Abstimmungstext|Texte soumis au vote|Testo in votazione
+Erläuterungen im Detail|Explications détaillées|Spiegazioni dettagliate
+Übersicht|Aperçu|Panoramica
 Eigenes PDF entfernen|Retirer le PDF personnel|Rimuovi il PDF personale
 Prüfverlauf|Historique|Cronologia
 Ergebnisse & Vergleiche|Résultats et comparaisons|Risultati e confronti
@@ -125,7 +130,7 @@ Originalseite {v0} öffnen|Ouvrir la page originale {v0}|Apri la pagina original
 PDF-Seite {v0} · Die gedruckte Seitenzahl kann abweichen.|Page PDF {v0} · Le numéro imprimé peut différer.|Pagina PDF {v0} · Il numero stampato può essere diverso.
 Quelle: {v0} · {v1} · Strategie: {v2}|Source : {v0} · {v1} · Stratégie : {v2}|Fonte: {v0} · {v1} · Strategia: {v2}
 {v0} von {v1} Terminen gefunden · Suche in Vorlagentiteln|{v0} dates sur {v1} trouvées · Recherche dans les titres|{v0} date su {v1} trovate · Ricerca nei titoli
-✓ {v0} geladen|✓ {v0} chargé|✓ {v0} caricato
+{v0} geladen|{v0} chargé|{v0} caricato
 {v0} Abstimmungstermine · {v1} Sprachfassungen lokal verfügbar|{v0} dates de votation · {v1} versions linguistiques disponibles localement|{v0} date di votazione · {v1} versioni linguistiche disponibili localmente
 PDF nicht gefunden: `{v0}`. Bitte `python -m src download` ausführen.|PDF introuvable : `{v0}`. Exécutez `python -m src download`.|PDF non trovato: `{v0}`. Esegui `python -m src download`.
 Behauptung: {v0} · Quelle: {v1} · {v2} von {v3} Quellseiten im Kontext|Affirmation : {v0} · Source : {v1} · {v2} pages sources sur {v3} dans le contexte|Affermazione: {v0} · Fonte: {v1} · {v2} pagine fonte su {v3} nel contesto

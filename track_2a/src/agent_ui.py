@@ -167,7 +167,8 @@ STEP_ICONS: Dict[str, Tuple[str, str]] = {  # kind -> (Font Awesome class, tone)
     "evidence": ("fa-check-double", "green"),
     "source_missing": ("fa-search-minus", "grey"),
     "error": ("fa-exclamation-triangle", "orange"),
-    "running": ("fa-circle-notch", "grey"),
+    "check": ("fa-balance-scale", "blue"),  # the start of the check (tool pruefen) before its result is known
+    "running": ("fa-circle-notch fa-spin", "grey"),
 }
 
 
@@ -265,7 +266,8 @@ def step_rows(events: Sequence[TraceEvent], *, running: bool = False) -> List[St
             act = next((item for item in group if item.node == "act"), None)
             open_step = running and number == len(groups) - 1 and first.node == "decide" and act is None
             sentence = None if open_step else _sentence(group)
-            kind, title, params = sentence if sentence else ("", _title(group), ())
+            plain = "check" if not open_step and any(item.tool == "pruefen" for item in group) else ""
+            kind, title, params = sentence if sentence else (plain, _title(group), ())
             row = StepRow("running" if open_step else "done", title, _flat((act or group[-1]).summary), None,
                           kind, params)
         if error is not None:

@@ -502,14 +502,14 @@ def _draw_agent_steps(placeholder, check, events, *, question=None, statements=(
         for index, row in enumerate(rows):
             st.markdown(_step_card(row), unsafe_allow_html=True)
             if question is not None and index == question_at:
-                st.markdown(f"**{t(agent_ui.TITLE_QUESTION)}** {t(agent_ui.question_text(events))}")
+                st.markdown(t(agent_ui.question_text(events)))  # the card above carries the title
                 for option in agent_ui.options_with_last(question.options, question.last_vote):
                     label = t(agent_ui.TEXT_LAST_VOTE).format(v0=option.label) if option.is_last else option.label
                     if st.button(f"{label} · {_vote_date(option.vote.date)}", width="stretch",
                                  key=f"agent_option_{check.key}_{option.vote.vote_id}"):
                         chosen = option.vote.vote_id
             if statements and index == question_at:
-                st.markdown(f"**{t(agent_ui.TITLE_STATEMENT)}** {t(agent_ui.TEXT_STATEMENT)}")
+                st.markdown(t(agent_ui.TEXT_STATEMENT))
                 for number, statement in enumerate(statements):  # the model's text: shown, never rendered
                     st.button(_md(statement), width="stretch", key=f"agent_statement_{check.key}_{number}",
                               on_click=_check_statement, args=(statement,))
@@ -629,11 +629,8 @@ def run_agent_check(steps, verify_clicked: bool, claim: str, claim_lang: str, si
 # UI LAYOUT
 # =============================================================================
 
-# ── Sidebar: brand, navigation, recent checks, language, dark mode ──────────
-with st.sidebar:
-    st.markdown('<div class="sidebar-brand"><div class="logo-mark">+</div><span class="brand-text">Fact Attack</span></div>',
-                unsafe_allow_html=True)
-    page = st.radio(t("Navigation"), PAGES, key="nav", format_func=t, label_visibility="collapsed")
+# ── Sidebar: recent checks (after the pages, see recent_slot) ───────────────────────────────────────────────
+def _draw_recent_checks() -> None:
     try:
         recent_checks = load_checks(HISTORY_PATH)[:RECENT_CHECKS]  # active entries, newest first
     except (OSError, ValueError, sqlite3.Error):
@@ -651,6 +648,13 @@ with st.sidebar:
                     st.button(f"{short} · {t(agent_ui.OUTCOME_WORDS[label])}" if known else short,
                               key=f"recent_{record['id']}", on_click=_open_saved, args=(record["id"],),
                               type="tertiary", width="stretch", wrap=True)  # the verdict word stays readable
+
+# ── Sidebar: brand, navigation, recent checks, language, dark mode ──────────
+with st.sidebar:
+    st.markdown('<div class="sidebar-brand"><div class="logo-mark">+</div><span class="brand-text">Fact Attack</span></div>',
+                unsafe_allow_html=True)
+    page = st.radio(t("Navigation"), PAGES, key="nav", format_func=t, label_visibility="collapsed")
+    recent_slot = st.sidebar.container()  # filled after the page ran, so a check saved in this run is listed
     st.selectbox("Sprache / Langue / Lingua", list(LANGUAGES), format_func=LANGUAGES.get, key="ui_language",
                  help=t("Die Sprache der Oberfläche ändert weder die Behauptung noch die Quelle. Forschungsnotizen, Beispieltitel und Exporte behalten ihre Originalsprache."))
     st.toggle(t("Dunkler Modus"), key="ui_dark")
@@ -676,6 +680,8 @@ st.markdown(th("""
 if page == PAGES[0]:
     if not BOOKLET_CATALOG:
         st.warning(t("Noch keine offiziellen Büchlein installiert. Bitte im Projektordner `python -m src.booklet_catalog` ausführen."))
+        with recent_slot:
+            _draw_recent_checks()
         st.stop()
     if "ballot" not in st.session_state:
         st.session_state["ballot"] = next((name for name, date in BOOKLET_CATALOG.items()
@@ -801,7 +807,7 @@ if page == PAGES[0]:
                 st.session_state["kept_upload"] = (upload_name, str(pdf_path))
             else:
                 upload_name, pdf_path = kept_upload[0], Path(kept_upload[1])
-            st.success(t('✓ {v0} geladen').format(v0=upload_name))
+            st.success(t('{v0} geladen').format(v0=upload_name))
             st.info(t("Aktive Quelle: eigenes PDF. Das Abstimmungsdatum ist unbekannt; die offizielle Datumsauswahl ist deaktiviert."))
             st.button(t("Eigenes PDF entfernen"), key="remove_upload", on_click=_remove_upload)
 
@@ -1555,6 +1561,9 @@ python -m src benchmark -d data/hf/test.jsonl -t advanced
 
 # Beginner-Task (Behauptung + Referenztext)
 python -m src benchmark -d data/hf/test.jsonl -t beginner""", language="bash")
+
+with recent_slot:
+    _draw_recent_checks()
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)

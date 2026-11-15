@@ -543,7 +543,8 @@ class _Nodes:
         if answer not in ids and not (last is not None and answer == last.vote_id):
             raise ValueError(ANSWER_NOT_AN_OPTION.format(answer=_short(repr(answer), 80), options=", ".join(ids)))
         vote = self.tools.fix_vote(answer)
-        shown = [{"vote_id": o.vote_id, "title": o.title, "date": o.date} for o in [*options, vote]]  # for the UI
+        shown = [{"vote_id": o.vote_id, "title": o.title, "date": o.date}
+                 for o in [*options, *([] if vote.vote_id in ids else [vote])]]  # for the UI; the chosen vote once
         self.emit(step, "ask", started, tool="rueckfrage", args={"optionen": ids, "antwort": vote.vote_id},
                   data={**(state.get("ask_data") or {}), "options": shown}, summary=f"Rückfrage beantwortet: {vote.vote_id} «{vote.title}»")
         # `state["action"]` is the decision the question interrupted (never run): answer it with the choice, so the
