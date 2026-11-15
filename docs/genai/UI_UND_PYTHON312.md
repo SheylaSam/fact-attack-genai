@@ -576,3 +576,37 @@ oben beschrieben mit dem bisherigen Ablauf. Der Startbefehl bleibt derselbe; neu
 Beim Start, bei der Beispielauswahl und beim Umschalten der Sprache wird weiterhin keine Anfrage gesendet; nur der
 Prüfen-Button und ein Klick auf eine Rückfrage-Option setzen Apertus-Anfragen ab (höchstens 12 pro Prüfung). Aufbau,
 Grenzen und offene Punkte: [AGENT_STUFE4.md](AGENT_STUFE4.md).
+
+## Oberfläche ab 15. November 2026
+
+Die Oberfläche ist neu eingekleidet und aufgeräumt (Branch `genai/ui-redesign`). Agent, Sitzung, Rückfrage-Logik,
+B0 und alle Messungen sind unverändert; der Agent legt nur zwei Zahlen zusätzlich in seine Spur
+(`verify`: Label und Zahl der Zitate, `check_evidence`: gültige und gesamte Zitate).
+
+- **Hell und dunkel:** Schalter „Dunkler Modus“ in der Seitenleiste; die App startet hell. Farben und Regeln stehen in
+  `track_2a/src/ui_theme.py` und `track_2a/src/ui_theme.css` (Fließtext mindestens 4.5:1 in beiden Modi, getestet).
+  Icons aus Font Awesome 5.15.4 (per CDN), keine Emojis.
+- **Seitenleiste statt Tabs:** Faktencheck, Prüfverlauf, Ergebnisse & Vergleiche, So funktioniert’s; darunter
+  „Zuletzt geprüft“ (zugeklappt, die letzten 5 Prüfungen, ein Klick öffnet das gespeicherte Ergebnis ohne neue
+  Anfrage), Sprachwahl und Hell/Dunkel. Eingaben, eine offene Rückfrage und ein eigenes PDF bleiben beim
+  Seitenwechsel erhalten. Wer während einer laufenden Prüfung die Seite wechselt, sieht das Ergebnis beim
+  Zurückkehren; eine Prüfung ohne Agent bricht dabei ab.
+- **Faktencheck in einer Spalte** (mit Agent): Eingabe, Knopf, eine Hinweiszeile, dann „Weitere Möglichkeiten“
+  (Quelle selbst wählen, Beispiel, eigenes PDF und Suche, mehrere Aussagen, Sprache der Behauptung, Verlauf
+  speichern). Ohne Agent bleibt der Aufbau in zwei Spalten mit Pflicht-Quellenwahl.
+- **Schritte in Klartext** als Karten („So prüft der Agent“), z. B. „3 passende Vorlagen gefunden“, „Du hast
+  gewählt: …“, „Apertus hat geprüft: gestützt“, „Alle 5 Zitate stehen wörtlich im PDF“. Die Originalzusammenfassung
+  des Agenten steht aufklappbar unter „Details“.
+- **Einheitliche Begriffe:** gestützt, widersprochen, (im Dokument) nicht belegt; Überschriften als Satz
+  („Vom Büchlein gestützt“). Gespeicherte Labels und Exporte sind unverändert.
+
+Echter Lauf am 15.11.2026 mit „Mit dem E-ID-Gesetz stellt der Bund die E-ID selbst aus.“: Der Agent fand die
+beiden E-ID-Gesetze (2021 und 2025) und fragte zurück; nach der Wahl „28. September 2025“ urteilte er „gestützt“
+mit 5 Zitaten, alle im PDF (erstes Zitat Seite 31, Argumente Bundesrat und Parlament). Der Lauf brauchte 5
+Apertus-Anfragen; mit dem Probelauf vom selben Tag sind 10 von 30 freigegebenen Anfragen verbraucht.
+
+![Rückfrage](assets/ui-rueckfrage.png)
+![Ergebnis hell](assets/ui-hell.png)
+![Ergebnis dunkel](assets/ui-dunkel.png)
+
+Start wie oben; der Modellcache liegt auf diesem Rechner unter `HF_HOME=/Users/sheyla/Projects/model-cache`.
