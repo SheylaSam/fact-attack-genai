@@ -278,6 +278,23 @@ def test_agent_page_is_one_column_with_one_more_options_expander():
         assert any('fa-lock' in value for value in markdown(app))
 
 
+AGENT_PLACEHOLDER = ('Hier erscheint dein Ergebnis mit der passenden Belegstelle. Tippe eine Behauptung ein und starte '
+                     'die Prüfung; die Vorlage sucht der Agent selbst.')
+
+
+def test_the_empty_result_in_agent_mode_does_not_ask_to_choose_a_source():
+    with agent_app(clear_fakes()) as app:
+        [placeholder] = [value for value in markdown(app) if 'class="result-placeholder"' in value]
+        assert AGENT_PLACEHOLDER in placeholder and 'wähle die Quelle' not in placeholder
+        assert not any('Weitere Optionen' in item.value for item in app.caption)  # the tab label says it
+        app.selectbox(key='ui_language').set_value('fr').run()
+        [placeholder] = [value for value in markdown(app) if 'class="result-placeholder"' in value]
+        assert 'l’agent cherche lui-même l’objet.' in placeholder
+        app.selectbox(key='ui_language').set_value('it').run()
+        [placeholder] = [value for value in markdown(app) if 'class="result-placeholder"' in value]
+        assert 'l’oggetto lo cerca l’agente.' in placeholder
+
+
 def test_more_options_opens_itself_when_the_source_must_be_picked():
     fakes = clear_fakes()
     with agent_app(fakes) as app:

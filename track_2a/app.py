@@ -379,6 +379,8 @@ AGENT_UNKNOWN_SOURCE = ("Der Agent kann die gewählte Quelle nicht prüfen. "
 AGENT_MOCK_NOTICE = "Testmodus, kein Apertus-Urteil"
 CHECK_HINT = ("Behauptung und Textstellen gehen an Apertus (CSCS). Kein allgemeiner Wahrheitscheck, "
               "keine Abstimmungsempfehlung.")  # the one hint line below the button in agent mode
+AGENT_PLACEHOLDER = ("Hier erscheint dein Ergebnis mit der passenden Belegstelle. Tippe eine Behauptung ein und "
+                     "starte die Prüfung; die Vorlage sucht der Agent selbst.")  # the empty result: no source to pick
 AGENT_BATCH_NEEDS_SOURCE = ("Für die Mehrfachprüfung die Quelle unter «Quelle selbst wählen» vorgeben "
                             "oder ein eigenes PDF laden.")
 
@@ -712,11 +714,10 @@ if page == PAGES[0]:
         source_tab, example_tab, search_tab, batch_tab, lang_tab = more_box.tabs(
             [t(agent_ui.TITLE_PICK_SOURCE), t("Beispiel auswählen"), t("Eigenes PDF & Suche"), t("Mehrere Aussagen"),
              t("Sprache der Behauptung")])
-        # no expander inside an expander: each area is a container in its tab, the old heading a caption
+        # no expander inside an expander: each area is a container in its tab, a longer old heading a caption
         source_box, lang_box = source_tab.container(), lang_tab.container()
         example_box, search_box, batch_box = example_tab.container(), search_tab.container(), batch_tab.container()
         example_box.caption(t("Keine eigene Behauptung? Beispiel auswählen"))
-        search_box.caption(t("Weitere Optionen: Suche & eigenes PDF"))
         batch_box.caption(t("Mehrere Aussagen aus einem Text prüfen"))
         example_note, save_box, retry_box = claim_box, more_box.container(), batch_box
         col_out = st.container()
@@ -828,8 +829,7 @@ if page == PAGES[0]:
                         unsafe_allow_html=True)
         else:
             st.caption(t("Beim Prüfen werden die Behauptung und ausgewählte Textstellen an Apertus auf CSCS gesendet."))
-            if not agent_on:
-                st.caption(t("Die Agentenschicht ist nicht verfügbar; die Prüfung läuft wie bisher ohne Agenten."))
+            st.caption(t("Die Agentenschicht ist nicht verfügbar; die Prüfung läuft wie bisher ohne Agenten."))
             st.markdown(
                 th('<div class="disclaimer">Vergleicht die Aussage mit dem Büchlein. Keine allgemeine Wahrheitsprüfung und keine Abstimmungsempfehlung.</div>'),
                 unsafe_allow_html=True,
@@ -968,7 +968,7 @@ if page == PAGES[0]:
     last_check = st.session_state.get("last_check")
     result = last_check["result"] if last_check and last_check["signature"] == signature else None
 
-    # ── RIGHT: result ────────────────────────────────────────────────────────
+    # ── Result (right column without the agent, below the input with it) ────
     with col_out:
         batch_check = st.session_state.get("batch_check")
         current_batch = batch_check if batch_check and batch_check["signature"] == batch_signature else None
@@ -1016,6 +1016,7 @@ if page == PAGES[0]:
             <div class="result-placeholder">
                 <div class="claim-stage-label">{'Eingabe geändert · erneut prüfen' if stale else 'Dein Ergebnis'}</div>
                 <p class="verdict-reasoning">{'«Behauptung prüfen» klicken, um das Ergebnis zu aktualisieren.' if stale else
+                AGENT_PLACEHOLDER if agent_mode else
                 'Hier erscheint dein Ergebnis mit der passenden Belegstelle. Gib eine Behauptung ein, wähle die Quelle und starte die Prüfung.'}</p>
                 <div class="outcome-row"><i class="fas fa-check-circle tone-green" aria-hidden="true"></i><strong>{t(agent_ui.OUTCOME_WORDS[0])}</strong> {t("— passende Aussage gefunden")}</div>
                 <div class="outcome-row"><i class="fas fa-minus-circle tone-grey" aria-hidden="true"></i><strong>{t(agent_ui.OUTCOME_WORDS[1])}</strong> {t("— im geprüften Kontext offen")}</div>

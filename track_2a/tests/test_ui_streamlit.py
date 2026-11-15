@@ -740,3 +740,12 @@ def test_footer_links_main_not_the_old_branch():
         app.selectbox(key='ui_language').set_value('it').run()
         footer = app.main.caption[-1].value
         assert 'Progetto originale' in footer and 'github.com/SheylaSam/fact-attack-genai)' in footer
+
+
+def test_the_empty_result_without_the_agent_still_asks_to_choose_the_source():
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')):
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        [placeholder] = [item.value for item in app.markdown if 'class="result-placeholder"' in item.value]
+        assert ('Hier erscheint dein Ergebnis mit der passenden Belegstelle. Gib eine Behauptung ein, wähle die Quelle '
+                'und starte die Prüfung.') in placeholder
+        assert 'sucht der Agent selbst' not in placeholder

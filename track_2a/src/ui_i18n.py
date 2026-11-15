@@ -303,6 +303,9 @@ Mehrere Aussagen|Plusieurs affirmations|Più affermazioni
 Behauptung und Textstellen gehen an Apertus (CSCS). Kein allgemeiner Wahrheitscheck, keine Abstimmungsempfehlung.|L’affirmation et les passages sont envoyés à Apertus (CSCS). Ni vérification générale de la vérité, ni recommandation de vote.|L’affermazione e i passaggi vengono inviati ad Apertus (CSCS). Nessuna verifica generale della verità, nessuna raccomandazione di voto.
 Fact Attack · GenAI-Modulprojekt · Team Fact Attack · [Repository](https://github.com/SheylaSam/fact-attack-genai) · [Originalprojekt](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)|Fact Attack · Projet du module GenAI · Équipe Fact Attack · [Dépôt](https://github.com/SheylaSam/fact-attack-genai) · [Projet original](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)|Fact Attack · Progetto del modulo GenAI · Team Fact Attack · [Repository](https://github.com/SheylaSam/fact-attack-genai) · [Progetto originale](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)
 """
+_ROWS += """
+Hier erscheint dein Ergebnis mit der passenden Belegstelle. Tippe eine Behauptung ein und starte die Prüfung; die Vorlage sucht der Agent selbst.|Ici s’affiche votre résultat avec le passage correspondant. Saisissez une affirmation et lancez la vérification ; l’agent cherche lui-même l’objet.|Qui appare il tuo risultato con il passaggio corrispondente. Scrivi un’affermazione e avvia la verifica; l’oggetto lo cerca l’agente.
+"""
 TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
 
 
