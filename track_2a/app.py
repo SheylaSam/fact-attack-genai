@@ -321,16 +321,25 @@ def _short_claim(text: str) -> str:
     return textwrap.shorten(text, width=42, placeholder=" …")
 
 
+def _upload_key() -> str:
+    """Key of the PDF uploader. Popping the key does not empty an uploader that still shows its file: the browser
+    sends the file again with the next rerun. Forgetting an upload therefore moves on to a new key, a new and empty
+    uploader."""
+    return f"uploaded_pdf_{st.session_state.get('upload_round', 0)}"
+
+
 def _remove_upload() -> None:
-    """Button callback «Eigenes PDF entfernen»: forgets the own PDF, also the copy kept for page switches."""
+    """Forgets the own PDF: the uploader (by a new key) and the copy kept for page switches. Button callback of
+    «Eigenes PDF entfernen»; choosing an example calls it too."""
     st.session_state.pop("kept_upload", None)
-    st.session_state.pop("uploaded_pdf", None)
+    st.session_state.pop(_upload_key(), None)
+    st.session_state["upload_round"] = st.session_state.get("upload_round", 0) + 1
 
 
 def _upload_changed() -> None:
     """The user emptied the uploader with its own control: the kept upload goes too. (A page switch empties the
     uploader without this callback, so the kept upload stays.)"""
-    if st.session_state.get("uploaded_pdf") is None:
+    if st.session_state.get(_upload_key()) is None:
         st.session_state.pop("kept_upload", None)
 
 
@@ -348,8 +357,7 @@ def _apply_case(case: dict, set_active: bool = True) -> None:
     st.session_state["claim_input"] = case["claim"]
     st.session_state["claim_lang"] = case["claim_language"].upper()
     st.session_state["active_case"] = case["id"] if set_active else None
-    st.session_state.pop("uploaded_pdf", None)  # an example's source is its official booklet, never an upload
-    st.session_state.pop("kept_upload", None)
+    _remove_upload()  # an example's source is its official booklet, never an upload
     st.session_state["agent_own_source"] = True  # and in agent mode that booklet is the given source
     _reset_source_filters()
 
@@ -677,7 +685,7 @@ if page == PAGES[0]:
     if st.session_state.get("ballot") not in BOOKLET_CATALOG:
         st.session_state["ballot"] = next(iter(BOOKLET_CATALOG))
     agent_on = agent_app.agent_available()
-    uploaded_file = st.session_state.get("uploaded_pdf")
+    uploaded_file = st.session_state.get(_upload_key())
     # A page switch empties the uploader (it cannot persist its value). The stored copy of the last own PDF stays the
     # source until the user removes it, so a result or open question on it survives the switch.
     kept_upload = st.session_state.get("kept_upload")  # (file name, stored path) of the own PDF
@@ -809,7 +817,7 @@ if page == PAGES[0]:
                 st.caption(t("Experimentelle Suche. Im bisherigen Dev-Vergleich war die Standardstrategie besser."))
                 if not rag_available():
                     st.info(t("Die lokale Vektorsuche ist in dieser Installation noch nicht verfügbar."))
-            st.file_uploader(t("Eigenes PDF laden"), type=["pdf"], key="uploaded_pdf", on_change=_upload_changed,
+            st.file_uploader(t("Eigenes PDF laden"), type=["pdf"], key=_upload_key(), on_change=_upload_changed,
                 help=t("Die Datei wird lokal gespeichert; beim Prüfen werden ausgewählte Textstellen an Apertus gesendet."))
 
         with st.expander(t("Mehrere Aussagen aus einem Text prüfen"), expanded=False):

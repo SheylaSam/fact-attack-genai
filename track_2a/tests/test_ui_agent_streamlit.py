@@ -29,6 +29,7 @@ pytestmark = pytest.mark.skipif(not HAS_LANGGRAPH, reason='Install requirements-
 APP = Path(__file__).parents[1] / 'app.py'
 VOTES = {V1.vote_id: V1, V2.vote_id: V2}
 VERIFY = 'Behauptung prüfen'
+UPLOADER = 'uploaded_pdf_0'  # the uploader's first key; removing the PDF moves on to uploaded_pdf_1
 
 
 @pytest.fixture(autouse=True)
@@ -492,7 +493,7 @@ def uploaded_pdf(contents):
     original_get = SessionStateProxy.get
 
     def session_get(self, key, default=None):
-        return upload if key == 'uploaded_pdf' else original_get(self, key, default)
+        return upload if key == UPLOADER else original_get(self, key, default)
 
     try:
         with patch.object(SessionStateProxy, 'get', session_get):
@@ -514,7 +515,7 @@ def switchable_upload(contents):
     original_get = SessionStateProxy.get
 
     def session_get(self, key, default=None):
-        if key == 'uploaded_pdf' and held['upload'] is not None:
+        if key == UPLOADER and held['upload'] is not None:
             return held['upload']
         return original_get(self, key, default)
 

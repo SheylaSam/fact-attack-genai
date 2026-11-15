@@ -8,6 +8,7 @@ from streamlit.testing.v1 import AppTest
 from src.ui_strategies import STANDARD,DENSE,FUSED
 
 APP=Path(__file__).parents[1]/'app.py'
+UPLOADER='uploaded_pdf_0'  # the uploader's first key; removing the PDF moves on to uploaded_pdf_1
 
 
 def goto(app, page):
@@ -430,7 +431,7 @@ def test_uploaded_pdf_has_no_official_date_in_history_or_report(tmp_path, isolat
     upload = SimpleNamespace(name='mein-dokument.pdf', getbuffer=lambda: memoryview(pdf))
     original_get = SessionStateProxy.get
     def session_get(self, key, default=None):
-        return upload if key == 'uploaded_pdf' else original_get(self, key, default)
+        return upload if key == UPLOADER else original_get(self, key, default)
     result = PredictionResult(claim='Une affirmation personnelle.', label=1, label_name='Neutral', reasoning='Injected',
                               evidence=[], strategy='hybrid', booklet_path=str(source), tokens_prompt=0,
                               tokens_completion=0, tokens_total=0, latency_ms=0)
@@ -654,7 +655,7 @@ def test_an_uploaded_pdf_and_its_result_survive_a_page_switch_until_removed(tmp_
     held = {'upload': SimpleNamespace(name='mein-dokument.pdf', getbuffer=lambda: memoryview(pdf))}
     original_get = SessionStateProxy.get
     def session_get(self, key, default=None):
-        if key == 'uploaded_pdf' and held['upload'] is not None:
+        if key == UPLOADER and held['upload'] is not None:
             return held['upload']
         return original_get(self, key, default)
     result = PredictionResult(claim='Une affirmation personnelle.', label=1, label_name='Neutral', reasoning='Injected',
@@ -683,4 +684,45 @@ def test_an_uploaded_pdf_and_its_result_survive_a_page_switch_until_removed(tmp_
         assert not app.selectbox(key='ballot').disabled
         assert not any('<div class="verdict-card' in item.value for item in app.markdown)
         assert not any(button.key == 'remove_upload' for button in app.button)
+    st.cache_resource.clear()
+
+
+def test_removing_the_pdf_while_the_uploader_still_shows_it_is_final(tmp_path):
+    """The browser sends the file of an uploader that still shows it again with every rerun. Removing the PDF (by
+    the button or by choosing an example) moves on to a new, empty uploader, so the file cannot come back."""
+    import hashlib
+    import streamlit as st
+    from types import SimpleNamespace
+    from streamlit.runtime.state.session_state_proxy import SessionStateProxy
+    pdf = (APP.parent / 'data/booklets/2026-06-14_fr.pdf').read_bytes()
+    source = tmp_path / f'custom_{hashlib.sha256(pdf).hexdigest()}.pdf'
+    source.write_bytes(pdf)
+    upload = SimpleNamespace(name='mein-dokument.pdf', getbuffer=lambda: memoryview(pdf))
+    asked = []
+    original_get = SessionStateProxy.get
+    def session_get(self, key, default=None):
+        if isinstance(key, str) and key.startswith('uploaded_pdf'):
+            asked.append(key)
+        return upload if key == UPLOADER else original_get(self, key, default)  # the old uploader keeps its file
+    st.cache_resource.clear()
+    with patch.object(SessionStateProxy, 'get', session_get), \
+         patch('src.ui_strategies.store_uploaded_source', return_value=source), \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')):
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        assert any('Aktive Quelle: eigenes PDF' in item.value for item in app.info)
+        app.button(key='remove_upload').click().run()
+        app.text_area(key='claim_input').set_value('Eine neue Behauptung.').run()  # any rerun
+        assert not app.exception
+        assert not any('Aktive Quelle: eigenes PDF' in item.value for item in app.info)
+        assert not app.selectbox(key='ballot').disabled
+        assert app.session_state['upload_round'] == 1 and asked[-1] == 'uploaded_pdf_1'
+        assert 'kept_upload' not in app.session_state
+        asked.clear()
+        app.session_state['upload_round'] = 0  # the first uploader shows its file again
+        app.run()
+        assert any('Aktive Quelle: eigenes PDF' in item.value for item in app.info)
+        next(button for button in app.button if button.key.startswith('story_')).click().run()
+        app.run()
+        assert not any('Aktive Quelle: eigenes PDF' in item.value for item in app.info)
+        assert app.session_state['upload_round'] == 1 and asked[-1] == 'uploaded_pdf_1'
     st.cache_resource.clear()
