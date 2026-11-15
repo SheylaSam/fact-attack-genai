@@ -336,7 +336,6 @@ def find_cached_case(claim: str, booklet_file: str, vote: Optional[str]) -> Opti
 
 # ── Agent check in the fact-check tab ────────────────────────────────────────
 AGENT_KEYS = ("agent_session", "agent_turn", "agent_signature", "agent_events")
-AGENT_MARKS = {"done": "✓", "ask": "?", "error": "✕", "running": "…"}
 AGENT_BAD_UPLOAD = "Dieses PDF kann nicht gelesen werden. Lade eine andere Datei hoch oder entferne sie."
 AGENT_UNKNOWN_SOURCE = ("Der Agent kann die gewählte Quelle nicht prüfen. "
                         "Wähle eine andere Quelle oder lass den Agenten die Vorlage suchen.")
@@ -415,8 +414,28 @@ def _new_agent_check(own_source: bool, pdf_path: Path, vote: Optional[str], uplo
         return None
 
 
-def _step_line(row) -> str:
-    return f"{AGENT_MARKS[row.mark]} {agent_ui.row_text(row, t, _vote_date)}" + (f" · {row.detail}" if row.detail else "")
+def _step_icon(row) -> tuple:
+    """(Font Awesome class, tone) of a step: by its kind; rows of the old titles by their mark."""
+    if row.kind in agent_ui.STEP_ICONS:
+        return agent_ui.STEP_ICONS[row.kind]
+    if row.mark in agent_ui.STEP_ICONS:  # error, running
+        return agent_ui.STEP_ICONS[row.mark]
+    return ("fa-question", "yellow") if row.mark == "ask" else ("fa-circle", "grey")
+
+
+def _step_card(row) -> str:
+    """One step as a card: its icon in the tone of its kind, the sentence, the agent's own text folded away, an error
+    in full. Everything from the trace or the model is escaped; the markup has no blank line (it stays one block)."""
+    icon, tone = _step_icon(row)
+    body = f'<div class="step-title">{html.escape(agent_ui.row_text(row, t, _vote_date))}</div>'
+    if row.detail:
+        body += (f'<details class="step-details"><summary>{html.escape(t("Details"))}</summary>'
+                 f'<div>{html.escape(row.detail)}</div></details>')
+    if row.error:
+        body += f'<div class="step-text step-error">{html.escape(row.error)}</div>'
+    return (f'<div class="agent-step agent-step-{row.mark} step-card" data-kind="{html.escape(row.kind)}">'
+            f'<i class="fas {html.escape(icon)} tone-{html.escape(tone)}" aria-hidden="true"></i>'
+            f'<div class="step-body">{body}</div></div>')
 
 
 def _check_statement(statement: str) -> None:
@@ -436,13 +455,9 @@ def _draw_agent_steps(placeholder, check, events, *, question=None, statements=(
     question_at = asks[-1] if asks else len(rows) - 1
     chosen = None
     with placeholder.container():
-        st.markdown("#### " + t("Schritte der Prüfung"))
+        st.markdown("#### " + t("So prüft der Agent"))
         for index, row in enumerate(rows):
-            if row.mark == "error":
-                st.error(f"{_md(_step_line(row))}\n\n{_md(row.error)}")
-            else:
-                st.markdown(f'<div class="agent-step agent-step-{row.mark}">{html.escape(_step_line(row))}</div>',
-                            unsafe_allow_html=True)
+            st.markdown(_step_card(row), unsafe_allow_html=True)
             if question is not None and index == question_at:
                 st.markdown(f"**{t(agent_ui.TITLE_QUESTION)}** {t(agent_ui.question_text(events))}")
                 for option in agent_ui.options_with_last(question.options, question.last_vote):
@@ -461,10 +476,8 @@ def _draw_agent_steps(placeholder, check, events, *, question=None, statements=(
 def _draw_live_steps(placeholder, events) -> None:
     """The step list while the check runs, as one element: a container redrawn with fewer children keeps the
     surplus ones of its previous drawing, a single element is replaced whole."""
-    lines = "".join(f'<div class="agent-step agent-step-{row.mark}">{html.escape(_step_line(row))}'
-                    + (f'<br>{html.escape(row.error)}' if row.error else "") + "</div>"
-                    for row in agent_ui.step_rows(events, running=True))
-    placeholder.markdown(f'<div class="agent-steps-live"><h4>{html.escape(t("Schritte der Prüfung"))}</h4>{lines}</div>',
+    lines = "".join(_step_card(row) for row in agent_ui.step_rows(events, running=True))
+    placeholder.markdown(f'<div class="agent-steps-live"><h4>{html.escape(t("So prüft der Agent"))}</h4>{lines}</div>',
                          unsafe_allow_html=True)
 
 

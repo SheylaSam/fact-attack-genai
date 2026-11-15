@@ -139,9 +139,9 @@ def test_a_clear_claim_shows_the_steps_and_the_result_card():
     with agent_app(fakes) as app:
         check(app)
         steps = '\n'.join(step_texts(app))
-        for title in ('passende Vorlagen gefunden', 'Textstellen im Büchlein gefunden', 'Prüfung starten', 'wörtlich im PDF'):
-            assert title in steps
-        assert 'Rückfrage' not in steps
+        for kind in ('votes', 'passages', 'verify', 'evidence'):
+            assert f'data-kind="{kind}"' in steps
+        assert 'data-kind="ask"' not in steps
         assert 'agent-step-running' not in steps  # the finished list has no running row left from the live one
         assert not options(app)
         assert has_verdict(app)
@@ -177,7 +177,7 @@ def test_clicking_an_option_continues_the_check_and_shows_the_result():
         assert not app.exception
         assert fakes.answers == [V2.vote_id] and len(fakes.sessions) == 1
         steps = '\n'.join(step_texts(app))
-        assert 'passende Vorlagen gefunden' in steps and 'Du hast gewählt' in steps and 'wörtlich im PDF' in steps
+        assert 'data-kind="votes"' in steps and 'Du hast gewählt' in steps and 'data-kind="evidence"' in steps
         assert 'agent-step-running' not in steps
         assert not any('Welche Vorlage ist gemeint?' in value for value in markdown(app))
         assert not options(app)
@@ -328,7 +328,8 @@ def test_technical_error_is_red_in_its_step_and_there_is_no_verdict(isolated_his
     with agent_app(fakes) as app:
         check(app)
         errors = [item.value for item in app.error]
-        assert any('Urteil von Apertus' in value and 'Apertus nicht erreichbar' in value for value in errors)
+        assert any('agent-step-error' in value and 'fa-exclamation-triangle' in value and 'Apertus nicht erreichbar' in value
+                   for value in step_texts(app))  # the error card carries the escaped error text
         assert any('Die Prüfung konnte nicht abgeschlossen werden' in value for value in errors)
         assert not has_verdict(app) and 'last_check' not in app.session_state
         assert not load_checks(isolated_history)
@@ -505,7 +506,7 @@ def test_uploaded_pdf_check_has_the_same_steps_and_card(isolated_history):
         assert fakes.sessions[0][0] == upload.vote_id
         assert fakes.index.vote_calls == []
         steps = '\n'.join(step_texts(app))
-        for title in ('Textstellen im Büchlein gefunden', 'Prüfung starten', 'wörtlich im PDF'):
+        for title in ('data-kind="passages"', 'data-kind="verify"', 'data-kind="evidence"'):
             assert title in steps
         assert 'Rückfrage' not in steps and not options(app)
         assert has_verdict(app)
@@ -976,3 +977,47 @@ print("loaded without the agent layer")
                             capture_output=True, text=True, timeout=600)
     assert result.returncode == 0, result.stderr[-3000:]
     assert 'loaded without the agent layer' in result.stdout
+
+
+def test_step_cards_escape_titles_and_agent_text():
+    import dataclasses
+    evil = dataclasses.replace(V2, title='<b>Gesetz</b> & «Test»')
+    fakes = Fakes([search_votes(), search_passages(V1), search_passages(evil), act('pruefen', vorlage_id=evil.vote_id)],
+                  index=FakeIndex([candidate(V1, 0.873), candidate(evil, 0.869)], votes=(V1, evil)), engine=v2_engine())
+    with agent_app(fakes, votes={V1.vote_id: V1, evil.vote_id: evil}) as app:
+        check(app)
+        next(button for button in options(app) if button.label.startswith('<b>Gesetz')).click().run()
+        assert not app.exception
+        steps = '\n'.join(step_texts(app))
+        assert '&lt;b&gt;Gesetz&lt;/b&gt; &amp;' in steps and '<b>Gesetz' not in steps
+
+
+def test_live_step_list_is_one_element():
+    from streamlit.delta_generator import DeltaGenerator
+    original = DeltaGenerator.markdown
+    live = []
+
+    def spy(self, body, *args, **kwargs):
+        if 'agent-steps-live' in str(body):
+            live.append(str(body))
+        return original(self, body, *args, **kwargs)
+
+    with agent_app(clear_fakes()) as app, patch.object(DeltaGenerator, 'markdown', spy):
+        check(app)
+        assert len(live) >= 3  # one redraw per event, all through the one placeholder element
+        assert all(body.count('class="agent-steps-live"') == 1 for body in live)
+        assert 'class="fas ' in live[-1]
+        assert not any('agent-steps-live' in value for value in markdown(app))
+
+
+def test_cards_use_icons_not_marks():
+    with agent_app(clear_fakes()) as app:
+        check(app)
+        cards = step_texts(app)
+        assert cards
+        for card in cards:
+            assert 'class="fas ' in card and '<i class="fas ' in card and 'aria-hidden="true"' in card
+            text = card.split('</i>', 1)[1].lstrip()
+            assert text[:1] not in ('✓', '✕', '…', '?')
+        assert 'So prüft der Agent' in '\n'.join(markdown(app))
+        assert not any('Schritte der Prüfung' in value for value in markdown(app))

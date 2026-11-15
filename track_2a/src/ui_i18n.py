@@ -271,7 +271,8 @@ Die Prüfung konnte nicht abgeschlossen werden|La vérification n’a pas pu êt
 Die Prüfung wurde wegen eines technischen Fehlers abgebrochen; es gibt kein Urteil.|La vérification a été interrompue par une erreur technique ; il n’y a pas de verdict.|La verifica è stata interrotta da un errore tecnico; non c’è alcun giudizio.
 """
 _ROWS += """
-Schritte der Prüfung|Étapes de la vérification|Fasi della verifica
+So prüft der Agent|Comment l’agent vérifie|Come verifica l’agente
+Details|Détails|Dettagli
 Der Agent wird vorbereitet …|Préparation de l’agent …|Preparazione dell’agente …
 Die Prüfung läuft noch …|La vérification est encore en cours …|La verifica è ancora in corso …
 Diese Quelle für die Prüfung vorgeben|Imposer cette source pour la vérification|Imporre questa fonte per la verifica
