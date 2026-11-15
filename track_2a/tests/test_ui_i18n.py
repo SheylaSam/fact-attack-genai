@@ -52,3 +52,9 @@ def test_new_rows_keep_placeholders():
         for language, value in TRANSLATIONS[key].items():
             assert set(re.findall(r'\{\w+\}', value)) == expected, (language, key)
             assert '|' not in key and '|' not in value
+
+
+def test_new_verdict_terms_have_translations():
+    for text in ('Vom Büchlein gestützt', 'Im Büchlein nicht belegt', 'Widerspricht dem Büchlein',
+                 'Für ein nicht belegtes Ergebnis wird keine Belegstelle markiert.', '{n} weitere Belege', 'Seite {n}'):
+        assert set(TRANSLATIONS.get(text, {})) == {'fr', 'it'}, text

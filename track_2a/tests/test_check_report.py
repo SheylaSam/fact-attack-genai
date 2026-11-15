@@ -40,7 +40,7 @@ def test_report_keeps_failure_distinct_and_neutral_without_evidence():
     assert 'Technischer Fehler – keine Einordnung' in html
     assert 'Prüfversuche: 2' in html
     assert 'Do not show this' not in html
-    assert 'Im Abstimmungsbüchlein nicht geklärt' in html
+    assert 'Im Büchlein nicht belegt' in html
 
 
 @pytest.mark.parametrize('language,label', [('de', 'Testmodus, kein Apertus-Urteil'),

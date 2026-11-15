@@ -42,7 +42,7 @@ from src import agent_app, agent_ui, ui_theme  # without langgraph: the agent la
 # Page Configuration
 st.set_page_config(
     page_title="Fact Attack 2026",
-    page_icon="🇨🇭",
+    page_icon=":material/fact_check:",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -162,17 +162,17 @@ def generate_fact_card_svg(
     """Generates a high-resolution, vector SVG Fact-Card for social media & sharing."""
     if label == 0:
         verdict_color = "#10b981"
-        verdict_text = "GESTÜTZT · ENTAILMENT"
+        verdict_text = "GESTÜTZT"
         verdict_icon = "✓"
         bg_glow = "rgba(16, 185, 129, 0.15)"
     elif label == 1:
         verdict_color = "#f59e0b"
-        verdict_text = "NICHT GEKLÄRT · NEUTRAL"
+        verdict_text = "NICHT BELEGT"
         verdict_icon = "?"
         bg_glow = "rgba(245, 158, 11, 0.15)"
     else:
         verdict_color = "#ef4444"
-        verdict_text = "WIDERSPRUCH · CONTRADICTION"
+        verdict_text = "WIDERSPROCHEN"
         verdict_icon = "✗"
         bg_glow = "rgba(239, 68, 68, 0.15)"
 
@@ -253,13 +253,14 @@ VOTE_AUTO = "Automatisch erkennen"
 
 # Wording describes the relationship to the booklet, never a verdict on truth (OST ethics guideline)
 VERDICTS = {
-    0: ("entailment", "✓", "Vom Abstimmungsbüchlein gestützt",
+    0: ("supported", "fa-check-circle", "Vom Büchlein gestützt",
         "Das Büchlein enthält Aussagen, die diese Behauptung stützen."),
-    1: ("neutral", "?", "Im Abstimmungsbüchlein nicht geklärt",
+    1: ("not-proven", "fa-minus-circle", "Im Büchlein nicht belegt",
         "Im geprüften Kontext wurde keine Aussage gefunden, die diese Behauptung bestätigt oder widerlegt."),
-    2: ("contradiction", "✗", "Widerspricht dem Abstimmungsbüchlein",
+    2: ("contradicted", "fa-times-circle", "Widerspricht dem Büchlein",
         "Das Büchlein enthält Aussagen, die dieser Behauptung widersprechen."),
 }
+VERDICT_TONES = {0: "green", 1: "grey", 2: "red"}
 
 SECTION_DE = {
     "Arguments of the initiative/referendum committee": "Argumente des Komitees",
@@ -932,9 +933,9 @@ with tab_factcheck:
                 <div class="claim-stage-label">{'Eingabe geändert · erneut prüfen' if stale else 'Dein Ergebnis'}</div>
                 <p class="verdict-reasoning">{'«Behauptung prüfen» klicken, um das Ergebnis zu aktualisieren.' if stale else
                 'Hier erscheint dein Ergebnis mit der passenden Belegstelle. Gib eine Behauptung ein, wähle die Quelle und starte die Prüfung.'}</p>
-                <div class="outcome-row"><span class="outcome-dot dot-entailment"></span><strong>Gestützt</strong> — passende Aussage gefunden</div>
-                <div class="outcome-row"><span class="outcome-dot dot-neutral"></span><strong>Nicht geklärt</strong> — im geprüften Kontext offen</div>
-                <div class="outcome-row"><span class="outcome-dot dot-contradiction"></span><strong>Widerspruch</strong> — das Büchlein sagt etwas anderes</div>
+                <div class="outcome-row"><span class="outcome-dot dot-supported"></span><strong>{t(agent_ui.OUTCOME_WORDS[0])}</strong> {t("— passende Aussage gefunden")}</div>
+                <div class="outcome-row"><span class="outcome-dot dot-not-proven"></span><strong>{t(agent_ui.OUTCOME_WORDS[1])}</strong> {t("— im geprüften Kontext offen")}</div>
+                <div class="outcome-row"><span class="outcome-dot dot-contradicted"></span><strong>{t(agent_ui.OUTCOME_WORDS[2])}</strong> {t("— das Büchlein sagt etwas anderes")}</div>
                 <div class="disclaimer">Bei gestützten oder widersprochenen Aussagen kannst du die Belegstelle direkt nachlesen.</div>
             </div>
             """), unsafe_allow_html=True)
@@ -942,7 +943,7 @@ with tab_factcheck:
             if result.strategy in ("vector", "vector_hybrid"):
                 st.caption("Experimentelles Ergebnis · " + ("Vektorsuche" if result.strategy == "vector" else "BM25 + Vektor"))
             if last_check.get("notice"):
-                st.markdown(f'<div class="notice-box">ℹ️ {t(last_check["notice"])}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="notice-box"><i class="fas fa-info-circle tone-blue" aria-hidden="true"></i> {t(last_check["notice"])}</div>', unsafe_allow_html=True)
             # an agent result names its own booklet and vote; the old flow's is the selection
             card_pdf, card_date, card_lang, card_vote = last_check.get("source") or (pdf_path, source_date, lang_code, vote)
             discarded = last_check.get("discarded", False)  # its probabilities and number check belong to a dropped label
@@ -958,14 +959,31 @@ with tab_factcheck:
             def fmt(n: int) -> str:
                 return f"{n:,}".replace(",", "'")
 
+            pages_by_no = {p["page_number"]: p for p in b_data["pages"]}
+            section_by_page = {p["page_number"]: p.get("section") for p in b_data["paragraphs"]}
+            evidence = result.evidence_sources if result.label != 1 else []
+            snippets = [best_snippet(src.quote, claim) for src in evidence]
+            card_extra = ""
+            if evidence:
+                first = evidence[0]
+                pills = ""
+                if first.page_number:
+                    pills += f'<span class="pill"><i class="fas fa-file-alt" aria-hidden="true"></i> {t("Seite {n}").format(n=first.page_number)}</span>'
+                section = SECTION_DE.get(section_by_page.get(first.page_number))
+                if section:
+                    pills += f'<span class="pill">{t(section)}</span>'
+                if len(evidence) > 1:
+                    pills += f'<span class="pill">{t("{n} weitere Belege").format(n=len(evidence) - 1)}</span>'
+                card_extra = f'<div class="quote">«{html.escape(snippets[0])}»</div><div class="pill-row">{pills}</div>'
             st.markdown(f"""
-            <div class="verdict-container verdict-{v_cls} animate-in">
-                <div class="verdict-label verdict-label-{v_cls}">
-                    <span class="verdict-icon icon-{v_cls}">{v_icon}</span>
-                    {t("Abgleich mit dem offiziellen Büchlein")}
+            <div class="verdict-card verdict-card-{v_cls} animate-in">
+                <div class="verdict-card-head">
+                    <i class="fas {v_icon} tone-{VERDICT_TONES[result.label]}" aria-hidden="true"></i>
+                    <div class="verdict-card-kicker">{t("Abgleich mit dem offiziellen Büchlein")}</div>
                 </div>
-                <h3 class="verdict-title">{v_title}</h3>
-                <p class="verdict-reasoning">{v_desc}</p>
+                <h3 class="verdict-card-title">{v_title}</h3>
+                <p class="verdict-card-text">{v_desc}</p>
+                {card_extra}
             </div>
             """, unsafe_allow_html=True)
 
@@ -983,13 +1001,11 @@ with tab_factcheck:
             if getattr(result, "numerical_conflict", None) and not discarded:
                 st.markdown(f"""
                 <div class="guardrail-banner guardrail-vac animate-in">
-                    <span class="guardrail-icon">🔢</span>
+                    <i class="fas fa-calculator tone-orange guardrail-icon" aria-hidden="true"></i>
                     <div class="guardrail-text"><strong>Hinweis Zahlenabgleich:</strong> {html.escape(result.numerical_conflict)}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-            pages_by_no = {p["page_number"]: p for p in b_data["pages"]}
-            section_by_page = {p["page_number"]: p.get("section") for p in b_data["paragraphs"]}
             primary_quote, primary_page = "", None
 
             def evidence_html(src, snippet: str) -> str:
@@ -1001,14 +1017,8 @@ with tab_factcheck:
                         f'<p class="evidence-quote">«{html.escape(snippet)}»</p></div>')
 
             if result.label != 1 and result.evidence_sources:
-                st.markdown('<div class="claim-stage-label">Belegstellen im Abstimmungsbüchlein</div>', unsafe_allow_html=True)
-                snippets = []
-                for src in result.evidence_sources:
-                    page_obj = pages_by_no.get(src.page_number)
-                    snippets.append(best_snippet(src.quote, claim))
                 first = result.evidence_sources[0]
                 primary_quote, primary_page = snippets[0], first.page_number
-                st.markdown(evidence_html(first, snippets[0]), unsafe_allow_html=True)
                 if first.page_number in pages_by_no:
                     show_original_page(card_pdf, first, snippets[0], result.label,
                                        pages_by_no[first.page_number]["text"])
@@ -1094,8 +1104,10 @@ with tab_history:
     with st.expander(t("Verlauf durchsuchen"), expanded=True):
         history_query = st.text_input(t("Text in Prüfungen suchen"), key="history_query",
                                      help=t("Sucht lokal in Behauptungen, Vorlagentiteln und gespeicherten Belegzitaten."))
+        if st.session_state.get("history_label") not in ("Alle Ergebnisse", *agent_ui.OUTCOME_WORDS.values()):
+            st.session_state["history_label"] = "Alle Ergebnisse"  # a value from before the terms were unified
         history_label = st.selectbox(t("Ergebnis filtern"),
-                                    ["Alle Ergebnisse", "Gestützt", "Nicht geklärt", "Widerspruch"],
+                                    ["Alle Ergebnisse", *agent_ui.OUTCOME_WORDS.values()],
                                     key="history_label", format_func=t)
         history_origin = st.selectbox(t("Antwortart"), ["Alle Antwortarten", "Liveantworten", "Demoantworten"],
                                       key="history_origin", format_func=t)
@@ -1108,7 +1120,7 @@ with tab_history:
             history_end = st.date_input(t("Prüfdatum bis (UTC)"), value=None, key="history_end")
         if history_start and history_end and history_start > history_end:
             st.warning(t("Das Startdatum liegt nach dem Enddatum. Bitte korrigiere den Zeitraum."))
-        labels = {"Alle Ergebnisse": None, "Gestützt": 0, "Nicht geklärt": 1, "Widerspruch": 2}
+        labels = {"Alle Ergebnisse": None, **{word: label for label, word in agent_ui.OUTCOME_WORDS.items()}}
         history = filter_checks(all_history, query=history_query, label=labels[history_label],
                                 start=history_start, end=history_end,
                                 origin={"Alle Antwortarten": None, "Liveantworten": "live", "Demoantworten": "saved_demo"}[history_origin])
@@ -1371,7 +1383,7 @@ with tab_benchmark:
                         "Sprachpaar": r["pair"].upper(),
                         "True": r["true_label"],
                         "Pred": r["pred_label"],
-                        "✓": "✅" if r["correct"] else "❌",
+                        "✓": "✓" if r["correct"] else "✗",
                         "Tokens": r["tokens_prompt"] + r["tokens_completion"],
                         "Latenz": f"{r['latency_ms']:.0f} ms",
                     }

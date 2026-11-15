@@ -127,7 +127,7 @@ def markdown(app):
 
 
 def has_verdict(app):
-    return any('<div class="verdict-container' in value for value in markdown(app))
+    return any('class="verdict-card' in value for value in markdown(app))
 
 
 def step_texts(app):
@@ -145,6 +145,8 @@ def test_a_clear_claim_shows_the_steps_and_the_result_card():
         assert 'agent-step-running' not in steps  # the finished list has no running row left from the live one
         assert not options(app)
         assert has_verdict(app)
+        card = next(value for value in markdown(app) if 'class="verdict-card' in value)
+        assert 'fa-check-circle' in card and 'Vom Büchlein gestützt' in card
         assert app.session_state['last_check']['result'].label == 0
         assert any('class="conf-bar-fill"' in value for value in markdown(app))
         assert any(V1.title in item.value for item in app.caption)

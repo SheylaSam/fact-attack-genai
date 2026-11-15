@@ -25,8 +25,8 @@ def render_check_report(records, language='de', generated_at=None):
         return escape(str(value if value is not None else t('Nicht verfügbar')))
     generated_at = generated_at or datetime.now(timezone.utc).isoformat()
     sections = []
-    verdicts = {0: 'Vom Abstimmungsbüchlein gestützt', 1: 'Im Abstimmungsbüchlein nicht geklärt',
-                2: 'Widerspricht dem Abstimmungsbüchlein'}
+    verdicts = {0: 'Vom Büchlein gestützt', 1: 'Im Büchlein nicht belegt',
+                2: 'Widerspricht dem Büchlein'}
     for index, record in enumerate(records, 1):
         result = record.get('result') or {}
         error = record.get('error')

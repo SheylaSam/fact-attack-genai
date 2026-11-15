@@ -43,11 +43,11 @@ NODE_TITLES = {
     "nachsuche": "Nachsuche",
     "finish": "Abbruch",
 }
-TITLE_SUPPORTED = "Vom Abstimmungsbüchlein gestützt"
+TITLE_SUPPORTED = "Vom Büchlein gestützt"
 TEXT_SUPPORTED = "Das Büchlein enthält Aussagen, die diese Behauptung stützen."
-TITLE_NOT_PROVEN = "Im Abstimmungsbüchlein nicht geklärt"
+TITLE_NOT_PROVEN = "Im Büchlein nicht belegt"
 TEXT_NOT_PROVEN = "Im geprüften Kontext wurde keine Aussage gefunden, die diese Behauptung bestätigt oder widerlegt."
-TITLE_CONTRADICTED = "Widerspricht dem Abstimmungsbüchlein"
+TITLE_CONTRADICTED = "Widerspricht dem Büchlein"
 TEXT_CONTRADICTED = "Das Büchlein enthält Aussagen, die dieser Behauptung widersprechen."
 TITLE_QUESTION = "Welche Vorlage ist gemeint?"
 TEXT_QUESTION = "Mehrere Vorlagen passen zur Behauptung. Wähle die Vorlage, die du meinst; danach geht die Prüfung weiter."

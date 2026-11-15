@@ -44,6 +44,6 @@ def render_evidence_page(pdf_bytes, page_number, quote, label, scale=1.5):
                     highlighted = True
                     reason = 'Markiert ist der angezeigte Belegauszug auf der Originalseite.'
         if label == 1:
-            reason = 'Für ein nicht geklärtes Ergebnis wird keine Belegstelle markiert.'
+            reason = 'Für ein nicht belegtes Ergebnis wird keine Belegstelle markiert.'
         return PagePreview(page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False).tobytes('png'),
                            highlighted, reason)

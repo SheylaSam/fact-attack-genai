@@ -52,19 +52,19 @@ Dein Ergebnis|Votre résultat|Il tuo risultato
 Eingabe geändert · erneut prüfen|Saisie modifiée · vérifier à nouveau|Testo modificato · verifica di nuovo
 «Behauptung prüfen» klicken, um das Ergebnis zu aktualisieren.|Cliquez sur « Vérifier l’affirmation » pour actualiser le résultat.|Fai clic su « Verifica l’affermazione » per aggiornare il risultato.
 Hier erscheint dein Ergebnis mit der passenden Belegstelle. Gib eine Behauptung ein, wähle die Quelle und starte die Prüfung.|Le résultat et son passage justificatif apparaîtront ici. Saisissez une affirmation, choisissez la source et lancez la vérification.|Qui appariranno il risultato e il relativo passaggio. Inserisci un’affermazione, scegli la fonte e avvia la verifica.
-Gestützt|Étayée|Supportata
-Nicht geklärt|Non déterminée|Non chiarita
-Widerspruch|Contradiction|Contraddizione
 — passende Aussage gefunden|— passage correspondant trouvé|— trovato un passaggio corrispondente
 — im geprüften Kontext offen|— non déterminée dans le contexte examiné|— non chiarita nel contesto esaminato
 — das Büchlein sagt etwas anderes|— la brochure dit autre chose|— l’opuscolo dice altro
 Bei gestützten oder widersprochenen Aussagen kannst du die Belegstelle direkt nachlesen.|Pour une affirmation étayée ou contredite, vous pouvez consulter directement le passage justificatif.|Per un’affermazione supportata o contraddetta puoi consultare direttamente il passaggio.
-Vom Abstimmungsbüchlein gestützt|Étayée par la brochure de votation|Supportata dall’opuscolo di votazione
+Vom Büchlein gestützt|Étayée par la brochure de votation|Supportata dall’opuscolo di votazione
 Das Büchlein enthält Aussagen, die diese Behauptung stützen.|La brochure contient des passages qui étayent cette affirmation.|L’opuscolo contiene passaggi che supportano questa affermazione.
-Im Abstimmungsbüchlein nicht geklärt|Non déterminée dans la brochure de votation|Non chiarita nell’opuscolo di votazione
+Im Büchlein nicht belegt|Non établie dans la brochure|Non provata nell’opuscolo
 Im geprüften Kontext wurde keine Aussage gefunden, die diese Behauptung bestätigt oder widerlegt.|Aucun passage confirmant ou réfutant cette affirmation n’a été trouvé dans le contexte examiné.|Nel contesto esaminato non è stato trovato un passaggio che confermi o smentisca questa affermazione.
-Widerspricht dem Abstimmungsbüchlein|Contredit la brochure de votation|Contraddice l’opuscolo di votazione
+Widerspricht dem Büchlein|Contredit la brochure de votation|Contraddice l’opuscolo di votazione
 Das Büchlein enthält Aussagen, die dieser Behauptung widersprechen.|La brochure contient des passages qui contredisent cette affirmation.|L’opuscolo contiene passaggi che contraddicono questa affermazione.
+Seite {n}|Page {n}|Pagina {n}
+{n} weitere Belege|{n} autres preuves|{n} altre prove
+Für ein nicht belegtes Ergebnis wird keine Belegstelle markiert.|Aucun passage n’est surligné pour un résultat non établi.|Per un risultato non provato non viene evidenziato alcun passaggio.
 Abgleich mit dem offiziellen Büchlein|Comparaison avec la brochure officielle|Confronto con l’opuscolo ufficiale
 Belegstellen im Abstimmungsbüchlein|Passages justificatifs dans la brochure|Passaggi a sostegno nell’opuscolo
 Details zur Prüfung|Détails de la vérification|Dettagli della verifica

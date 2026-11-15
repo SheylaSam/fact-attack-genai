@@ -252,7 +252,7 @@ def test_history_search_filters_dates_labels_and_reset_without_api(isolated_hist
         app.text_input(key='history_query').set_value('Mietrecht').run()
         assert not app.exception
         assert len(app.selectbox(key='history_selected').options) == 1
-        app.selectbox(key='history_label').set_value('Widerspruch').run()
+        app.selectbox(key='history_label').set_value('widersprochen').run()
         assert any('Keine Prüfung passt' in info.value for info in app.info)
         assert not any(widget.key == 'history_selected' for widget in app.selectbox)
         app.button(key='reset_history_filters').click().run()
@@ -353,7 +353,7 @@ def test_failed_recheck_does_not_show_previous_success(isolated_history):
         assert 'last_check' in app.session_state
         next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
         assert not app.exception and 'last_check' not in app.session_state
-        assert app.error and not any('<div class="verdict-container' in item.value for item in app.markdown)
+        assert app.error and not any('<div class="verdict-card' in item.value for item in app.markdown)
         assert len(load_checks(isolated_history)) == 1
     st.cache_resource.clear()
 
@@ -374,7 +374,7 @@ def test_changed_pdf_invalidates_single_result_and_demo_fallback(tmp_path):
         with source.open('ab') as stream:
             stream.write(b'\n% test content change\n')
         app.run()
-        assert not any('<div class="verdict-container' in item.value for item in app.markdown)
+        assert not any('<div class="verdict-card' in item.value for item in app.markdown)
         next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
         assert not app.exception and 'last_check' not in app.session_state
         assert app.error
@@ -403,7 +403,7 @@ def test_displayed_evidence_comes_from_selected_quote_not_other_page_text():
         app.text_area(key='claim_input').set_value(distractor).run()
         next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
         assert not app.exception
-        quotes = [item.value for item in app.markdown if 'class="evidence-quote"' in item.value]
+        quotes = [item.value for item in app.markdown if 'class="quote"' in item.value]
         assert quotes and quote in quotes[0] and distractor not in quotes[0]
     st.cache_resource.clear()
 
@@ -465,3 +465,28 @@ def test_dark_switch_lives_in_the_sidebar_and_sidebar_starts_open():
     app = AppTest.from_file(APP, default_timeout=50).run()
     assert [t.key for t in app.sidebar.toggle] == ['ui_dark']
     assert 'initial_sidebar_state="expanded"' in APP.read_text()
+
+
+def test_no_old_terms_or_emoji_in_the_rendered_page():
+    import re
+    import streamlit as st
+    st.cache_resource.clear()
+    bad = re.compile('Nicht geklärt|nicht geklärt|Widerspruch(?!s)|[\U0001F300-\U0001FAFF\u2139\u2705\u274C]')
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')):
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        next(button for button in app.button if button.key.startswith('story_')).click().run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert not app.exception
+        texts = [item.value for item in list(app.markdown) + list(app.caption) + list(app.info)]
+        assert any('verdict-card' in value for value in texts)
+        assert not [value[:80] for value in texts if bad.search(value) and 'Zweitprüfung' not in value and 'Gegenargumente' not in value]  # methodology notes quote past experiments
+        assert app.selectbox(key='history_label').options == ['Alle Ergebnisse', 'gestützt', 'nicht belegt', 'widersprochen']
+    st.cache_resource.clear()
+
+
+def test_an_old_history_filter_value_resets_instead_of_crashing():
+    app = AppTest.from_file(APP, default_timeout=50)
+    app.session_state['history_label'] = 'Widerspruch'
+    app.run()
+    assert not app.exception
+    assert app.selectbox(key='history_label').value == 'Alle Ergebnisse'
