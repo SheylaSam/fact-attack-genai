@@ -4,6 +4,7 @@ import re
 LANGUAGES = {'de': 'Deutsch', 'fr': 'Français', 'it': 'Italiano'}
 # German source text | French | Italian
 _ROWS = '''Faktencheck|Vérifier|Verifica
+Dunkler Modus|Mode sombre|Modalità scura
 Prüfverlauf|Historique|Cronologia
 Ergebnisse & Vergleiche|Résultats et comparaisons|Risultati e confronti
 So funktioniert’s|Fonctionnement|Come funziona

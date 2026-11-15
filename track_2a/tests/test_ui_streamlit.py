@@ -442,3 +442,12 @@ def test_uploaded_pdf_has_no_official_date_in_history_or_report(tmp_path, isolat
         assert load_checks(isolated_history)[0]['date'] is None
         assert all(record['date'] is None for call in reports.call_args_list for record in call.args[0])
     st.cache_resource.clear()
+
+
+def test_dark_toggle_switches_the_palette():
+    app = AppTest.from_file(APP, default_timeout=50).run()
+    assert not app.exception
+    assert any('#F3F4F8' in item.value for item in app.markdown)
+    app.toggle(key='ui_dark').set_value(True).run()
+    assert not app.exception
+    assert any('#121419' in item.value for item in app.markdown)
