@@ -1024,17 +1024,17 @@ with tab_factcheck:
                     <div style="margin-bottom: 1.2rem;">
                         <div class="conf-row">
                             <span class="conf-label">Entailment</span>
-                            <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {result.p_entail*100:.1f}%; background: #10b981;"></div></div>
+                            <div class="conf-bar-track"><div class="conf-bar-fill" style="background: var(--green); width: {result.p_entail*100:.1f}%;"></div></div>
                             <span class="conf-value">{result.p_entail*100:.0f}%</span>
                         </div>
                         <div class="conf-row">
                             <span class="conf-label">Neutral</span>
-                            <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {result.p_neutral*100:.1f}%; background: #f59e0b;"></div></div>
+                            <div class="conf-bar-track"><div class="conf-bar-fill" style="background: var(--grey); width: {result.p_neutral*100:.1f}%;"></div></div>
                             <span class="conf-value">{result.p_neutral*100:.0f}%</span>
                         </div>
                         <div class="conf-row">
                             <span class="conf-label">Contradiction</span>
-                            <div class="conf-bar-track"><div class="conf-bar-fill" style="width: {result.p_contra*100:.1f}%; background: #ef4444;"></div></div>
+                            <div class="conf-bar-track"><div class="conf-bar-fill" style="background: var(--red); width: {result.p_contra*100:.1f}%;"></div></div>
                             <span class="conf-value">{result.p_contra*100:.0f}%</span>
                         </div>
                     </div>
@@ -1213,7 +1213,7 @@ with tab_benchmark:
         st.markdown(t("##### Historische gespeicherte Konfigurationen"))
 
     def _kpi(value: str, label: str, color: str) -> str:
-        return f'<div class="kpi-card"><div class="kpi-value" style="color: {color};">{value}</div><div class="kpi-label">{label}</div></div>'
+        return f'<div class="kpi-card"><div class="kpi-value kpi-{color}">{value}</div><div class="kpi-label">{label}</div></div>'
 
     # Same 150-pair test sample for the context comparison
     def _pick(strategy: str, prompt: str, top_k: Optional[int] = None) -> Optional[Dict[str, Any]]:
@@ -1230,16 +1230,16 @@ with tab_benchmark:
 
     kpis = []
     if head_adv:
-        kpis.append(_kpi(f"{head_adv['macro_f1']:.3f}", f"Macro-F1 Advanced · n={head_adv['n']}", "#34d399"))
+        kpis.append(_kpi(f"{head_adv['macro_f1']:.3f}", f"Macro-F1 Advanced · n={head_adv['n']}", "green"))
     if head_beg:
-        kpis.append(_kpi(f"{head_beg['macro_f1']:.3f}", f"Macro-F1 Beginner · n={head_beg['n']}", "#60a5fa"))
+        kpis.append(_kpi(f"{head_beg['macro_f1']:.3f}", f"Macro-F1 Beginner · n={head_beg['n']}", "blue"))
     if head_adv:
-        kpis.append(_kpi(f"{head_adv['latency_p95_ms'] / 1000:.1f} s", "p95 Antwortzeit (Advanced)", "#fbbf24"))
+        kpis.append(_kpi(f"{head_adv['latency_p95_ms'] / 1000:.1f} s", "p95 Antwortzeit (Advanced)", "yellow"))
     full_run = next((run for name, run, ours in comparison if name == "Ganzes Büchlein"), None)
     ours_run = next((run for name, run, ours in comparison if ours), None)
     if full_run and ours_run:
         kpis.append(_kpi(f"−{(1 - ours_run['avg_prompt_tokens'] / full_run['avg_prompt_tokens']) * 100:.0f}%",
-                         "Input-Tokens vs. ganzes Büchlein", "#a78bfa"))
+                         "Input-Tokens vs. ganzes Büchlein", "orange"))
     if kpis:
         st.markdown(f'<div class="kpi-grid">{"".join(kpis)}</div>', unsafe_allow_html=True)
     else:

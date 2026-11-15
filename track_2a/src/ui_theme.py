@@ -8,12 +8,17 @@ PALETTES: Dict[str, Dict[str, str]] = {
         "text": "#1A2233", "muted": "#5B6478",
         "blue": "#3B62C6", "green": "#06A88A", "yellow": "#E8A600",
         "red": "#E0434F", "grey": "#8A8F99", "orange": "#C25E00",
+        # text-safe variants of the role colours (>= 4.5:1 on bg, surface and surface2)
+        "blue-text": "#3B62C6", "green-text": "#00705B", "yellow-text": "#8A5F00",
+        "red-text": "#C0262F", "orange-text": "#B35500",
     },
     "dark": {
         "bg": "#121419", "surface": "#1C1F26", "surface2": "#232731", "border": "#2E333F",
         "text": "#E8EAF0", "muted": "#A3AABA",
         "blue": "#6C8EEB", "green": "#2FD1AE", "yellow": "#FBC53F",
         "red": "#FF6B76", "grey": "#9AA0AC", "orange": "#FF9440",
+        "blue-text": "#6C8EEB", "green-text": "#2FD1AE", "yellow-text": "#FBC53F",
+        "red-text": "#FF6B76", "orange-text": "#FF9440",
     },
 }
 
@@ -46,4 +51,7 @@ def theme_css(mode: str) -> str:
     palette = PALETTES["dark" if mode == "dark" else "light"]
     tokens = "".join(f"--{name}:{value};" for name, value in palette.items())
     scheme = "dark" if mode == "dark" else "light"
-    return f"{_LINKS}<style>{_IMPORTS}:root{{{tokens}color-scheme:{scheme};}}\n{_CSS_FILE.read_text(encoding='utf-8')}</style>"
+    css = f"{_IMPORTS}:root{{{tokens}color-scheme:{scheme};}}\n{_CSS_FILE.read_text(encoding='utf-8')}"
+    # A blank line ends the HTML block in st.markdown and the rest would show up as page text.
+    css = "\n".join(line for line in css.splitlines() if line.strip())
+    return f"{_LINKS}<style>{css}</style>"

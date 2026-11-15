@@ -451,3 +451,11 @@ def test_dark_toggle_switches_the_palette():
     app.toggle(key='ui_dark').set_value(True).run()
     assert not app.exception
     assert any('#121419' in item.value for item in app.markdown)
+
+
+def test_stylesheet_is_not_rendered_as_page_text():
+    app = AppTest.from_file(APP, default_timeout=50).run()
+    assert not app.exception
+    sheets = [item.value for item in app.markdown if '<style>' in item.value]
+    assert len(sheets) == 1 and all(line.strip() for line in sheets[0].splitlines())
+    assert not any('data-testid=' in item.value for item in app.markdown if '<style>' not in item.value)
