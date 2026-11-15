@@ -36,7 +36,7 @@ def test_text_colours_in_the_stylesheet_use_the_text_safe_tokens():
     for line in css.splitlines():
         if line.startswith(".tone-") or "flow-arrow" in line:  # icons, not text
             continue
-        assert not re.search(r"(?<![-\w])color: var\(--(blue|green|yellow|red|orange|grey)\)", line), line
+        assert not re.search(r"((?<![-\w])color|text-fill-color): var\(--(blue|green|yellow|red|orange|grey)\)", line), line
 
 def test_sidebar_controls_are_not_hidden_and_lato_beats_streamlit_fonts():
     import re
@@ -46,3 +46,14 @@ def test_sidebar_controls_are_not_hidden_and_lato_beats_streamlit_fonts():
     rule = re.search(r"([^{}]*)\{[^}]*font-family: *'Lato'[^}]*\}", css)
     assert rule and ".stApp *" in rule.group(1) and "!important" in rule.group(0)
     assert "stIconMaterial" in rule.group(1) and "code" in rule.group(1)  # icon and monospace fonts stay alone
+
+def test_matrix_cells_use_palette_text_not_fixed_white():
+    from pathlib import Path
+    css = Path(ui_theme.__file__).with_name("ui_theme.css").read_text()
+    assert "#fff" not in css.lower()
+    # strongest tint used by app.py is 85% * 40% blue over the surface; text must stay readable on it
+    from src.ui_theme import PALETTES, contrast
+    for p in PALETTES.values():
+        mix = [round(int(p["blue"][i:i + 2], 16) * 0.34 + int(p["surface"][i:i + 2], 16) * 0.66) for i in (1, 3, 5)]
+        cell = "#%02X%02X%02X" % tuple(mix)
+        assert contrast(p["text"], cell) >= 4.5

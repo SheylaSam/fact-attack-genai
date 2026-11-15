@@ -1289,7 +1289,7 @@ with tab_benchmark:
                 alpha = min(0.85, max(0.12, (v["macro_f1"] - 0.7) / 0.3 * 0.85))
                 tip = f"{names[c]} → {names[b]}: Macro-F1 {v['macro_f1']:.3f}, Accuracy {v['accuracy']:.3f}, n={v['count']}"
                 cells.append(
-                    f'<div class="mx-cell" style="background: rgba(57,135,229,{alpha:.2f})" title="{tip}">'
+                    f'<div class="mx-cell" style="background: color-mix(in srgb, var(--blue) {alpha * 40:.0f}%, var(--surface))" title="{tip}">'
                     f'<span class="mx-val">{v["macro_f1"]:.2f}</span><span class="mx-n">n={v["count"]}</span></div>'
                 )
         st.markdown(f'<div class="mx-grid">{"".join(cells)}</div>', unsafe_allow_html=True)
