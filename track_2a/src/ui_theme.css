@@ -1,11 +1,13 @@
 /* Stylesheet for the light and dark look. Colours only through the tokens from ui_theme.PALETTES. */
 
-html, body, [class*="css"], .stApp, button, input, textarea, select {
-    font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+html, body, .stApp, .stApp *:not(code):not(pre):not(kbd):not(samp):not([data-testid="stIconMaterial"]):not([class*="material" i]):not(i):not(.fa):not(.fas):not(.far):not(.fab) {
+    font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
 }
 .stApp { background: var(--bg) !important; color: var(--text) !important; }
 .stApp > div, .stApp > div > div, div[data-testid="stAppViewBlockContainer"] { background-color: transparent !important; }
-[data-testid="stToolbar"], [data-testid="stDecoration"], footer, #MainMenu { display: none !important; }
+[data-testid="stToolbarActions"], [data-testid="stMainMenu"], [data-testid="stAppDeployButton"], [data-testid="stDecoration"], footer, #MainMenu { display: none !important; }
+[data-testid="stToolbar"], [data-testid="stExpandSidebarButton"], [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapsedControl"] { visibility: visible !important; }
+[data-testid="stExpandSidebarButton"] button, [data-testid="stSidebarCollapseButton"] button { color: var(--muted) !important; }
 header[data-testid="stHeader"] { background: transparent !important; }
 .block-container { padding-top: 1.6rem !important; padding-bottom: 2rem !important; max-width: 1240px !important; }
 .stApp p, .stApp li, .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 { color: var(--text); }

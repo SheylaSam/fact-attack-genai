@@ -459,3 +459,9 @@ def test_stylesheet_is_not_rendered_as_page_text():
     sheets = [item.value for item in app.markdown if '<style>' in item.value]
     assert len(sheets) == 1 and all(line.strip() for line in sheets[0].splitlines())
     assert not any('data-testid=' in item.value for item in app.markdown if '<style>' not in item.value)
+
+
+def test_dark_switch_lives_in_the_sidebar_and_sidebar_starts_open():
+    app = AppTest.from_file(APP, default_timeout=50).run()
+    assert [t.key for t in app.sidebar.toggle] == ['ui_dark']
+    assert 'initial_sidebar_state="expanded"' in APP.read_text()

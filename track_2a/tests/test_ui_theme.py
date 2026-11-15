@@ -37,3 +37,12 @@ def test_text_colours_in_the_stylesheet_use_the_text_safe_tokens():
         if line.startswith(".tone-") or "flow-arrow" in line:  # icons, not text
             continue
         assert not re.search(r"(?<![-\w])color: var\(--(blue|green|yellow|red|orange|grey)\)", line), line
+
+def test_sidebar_controls_are_not_hidden_and_lato_beats_streamlit_fonts():
+    import re
+    css = ui_theme.theme_css("light")
+    hidden = re.findall(r"([^{}]+)\{[^}]*display: *none", css)
+    assert not any(x in sel for sel in hidden for x in ('"stToolbar"]', 'stHeader', 'ExpandSidebar', 'SidebarCollapse'))
+    rule = re.search(r"([^{}]*)\{[^}]*font-family: *'Lato'[^}]*\}", css)
+    assert rule and ".stApp *" in rule.group(1) and "!important" in rule.group(0)
+    assert "stIconMaterial" in rule.group(1) and "code" in rule.group(1)  # icon and monospace fonts stay alone
