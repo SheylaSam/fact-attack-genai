@@ -66,7 +66,6 @@ Seite {n}|Page {n}|Pagina {n}
 {n} weitere Belege|{n} autres preuves|{n} altre prove
 Für ein nicht belegtes Ergebnis wird keine Belegstelle markiert.|Aucun passage n’est surligné pour un résultat non établi.|Per un risultato non provato non viene evidenziato alcun passaggio.
 Abgleich mit dem offiziellen Büchlein|Comparaison avec la brochure officielle|Confronto con l’opuscolo ufficiale
-Belegstellen im Abstimmungsbüchlein|Passages justificatifs dans la brochure|Passaggi a sostegno nell’opuscolo
 Details zur Prüfung|Détails de la vérification|Dettagli della verifica
 Konfidenzen schätzt Apertus selbst; sie sind nicht kalibriert.|Les niveaux de confiance sont estimés par Apertus et ne sont pas calibrés.|I livelli di confidenza sono stimati da Apertus e non sono calibrati.
 Faktencheck-Karte zum Teilen|Carte de vérification à partager|Scheda di verifica da condividere

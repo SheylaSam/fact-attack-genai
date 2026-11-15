@@ -1,4 +1,5 @@
 """Actual Streamlit widgets, with every remote completion explicitly forbidden."""
+import re
 from pathlib import Path
 from unittest.mock import patch
 import pytest
@@ -490,3 +491,36 @@ def test_an_old_history_filter_value_resets_instead_of_crashing():
     app.run()
     assert not app.exception
     assert app.selectbox(key='history_label').value == 'Alle Ergebnisse'
+
+
+def test_a_multi_paragraph_quote_keeps_the_verdict_card_in_one_html_block():
+    import streamlit as st
+    from src.inference import PredictionResult, EvidenceSource
+    st.cache_resource.clear()
+    quote = 'Erster Absatz der Belegstelle.\n\nZweiter Absatz der Belegstelle.'
+    result = PredictionResult(claim='Erster Absatz der Belegstelle.', label=0, label_name='Entailment', reasoning='x',
+                              evidence=[quote], evidence_sources=[EvidenceSource(page_number=22, quote=quote)],
+                              strategy='hybrid', booklet_path='', tokens_prompt=0, tokens_completion=0,
+                              tokens_total=0, latency_ms=0)
+    booklet = {'pages': [{'page_number': 22, 'text': quote}], 'paragraphs': [], 'full_text': quote}
+    with patch('src.config.LLM_API_KEY', 'ui-test'), patch('src.config.MOCK_APERTUS', False), \
+         patch('src.inference.ClaimVerificationEngine.verify_claim', return_value=result), \
+         patch('src.inference.ClaimVerificationEngine._get_booklet_data', return_value=booklet), \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')):
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        app.text_area(key='claim_input').set_value(result.claim).run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert not app.exception
+        card = next(item.value for item in app.markdown if 'class="verdict-card' in item.value)
+        assert not re.search(r'\n[ \t]*\n', card) and 'Erster Absatz' in card and 'Zweiter Absatz' in card
+    st.cache_resource.clear()
+
+
+def test_the_legend_uses_icons_and_the_stylesheet_has_no_dead_verdict_rules():
+    css = (APP.parent / 'src/ui_theme.css').read_text(encoding='utf-8')
+    assert 'verdict-container' not in css and 'outcome-dot' not in css and 'icon-entailment' not in css
+    app = AppTest.from_file(APP, default_timeout=50).run()
+    legend = next(item.value for item in app.markdown if 'class="outcome-row"' in item.value)
+    assert 'outcome-dot' not in legend
+    for icon in ('fa-check-circle', 'fa-minus-circle', 'fa-times-circle'):
+        assert icon in legend

@@ -933,9 +933,9 @@ with tab_factcheck:
                 <div class="claim-stage-label">{'Eingabe geändert · erneut prüfen' if stale else 'Dein Ergebnis'}</div>
                 <p class="verdict-reasoning">{'«Behauptung prüfen» klicken, um das Ergebnis zu aktualisieren.' if stale else
                 'Hier erscheint dein Ergebnis mit der passenden Belegstelle. Gib eine Behauptung ein, wähle die Quelle und starte die Prüfung.'}</p>
-                <div class="outcome-row"><span class="outcome-dot dot-supported"></span><strong>{t(agent_ui.OUTCOME_WORDS[0])}</strong> {t("— passende Aussage gefunden")}</div>
-                <div class="outcome-row"><span class="outcome-dot dot-not-proven"></span><strong>{t(agent_ui.OUTCOME_WORDS[1])}</strong> {t("— im geprüften Kontext offen")}</div>
-                <div class="outcome-row"><span class="outcome-dot dot-contradicted"></span><strong>{t(agent_ui.OUTCOME_WORDS[2])}</strong> {t("— das Büchlein sagt etwas anderes")}</div>
+                <div class="outcome-row"><i class="fas fa-check-circle tone-green" aria-hidden="true"></i><strong>{t(agent_ui.OUTCOME_WORDS[0])}</strong> {t("— passende Aussage gefunden")}</div>
+                <div class="outcome-row"><i class="fas fa-minus-circle tone-grey" aria-hidden="true"></i><strong>{t(agent_ui.OUTCOME_WORDS[1])}</strong> {t("— im geprüften Kontext offen")}</div>
+                <div class="outcome-row"><i class="fas fa-times-circle tone-red" aria-hidden="true"></i><strong>{t(agent_ui.OUTCOME_WORDS[2])}</strong> {t("— das Büchlein sagt etwas anderes")}</div>
                 <div class="disclaimer">Bei gestützten oder widersprochenen Aussagen kannst du die Belegstelle direkt nachlesen.</div>
             </div>
             """), unsafe_allow_html=True)
@@ -974,7 +974,7 @@ with tab_factcheck:
                     pills += f'<span class="pill">{t(section)}</span>'
                 if len(evidence) > 1:
                     pills += f'<span class="pill">{t("{n} weitere Belege").format(n=len(evidence) - 1)}</span>'
-                card_extra = f'<div class="quote">«{html.escape(snippets[0])}»</div><div class="pill-row">{pills}</div>'
+                card_extra = f'<div class="quote">«{html.escape(" ".join(snippets[0].split()))}»</div><div class="pill-row">{pills}</div>'
             st.markdown(f"""
             <div class="verdict-card verdict-card-{v_cls} animate-in">
                 <div class="verdict-card-head">
