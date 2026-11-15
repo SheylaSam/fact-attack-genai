@@ -44,7 +44,7 @@ class StepRowTests(unittest.TestCase):
         ]
         rows = agent_ui.step_rows(events)
         self.assertEqual(marks(rows), ['done', 'ask'])  # the search is done, the blocked action became the question
-        self.assertEqual(rows[1].title, agent_ui.TITLE_ASK)
+        self.assertEqual(rows[1].title, agent_ui.TITLE_QUESTION)
         self.assertIn('Wächter', rows[1].detail)
         self.assertNotIn(agent_ui.TOOL_TITLES['suche_passagen'], [row.title for row in rows])
 
@@ -72,7 +72,7 @@ class StepRowTests(unittest.TestCase):
         ]
         rows = agent_ui.step_rows(events)
         self.assertEqual(marks(rows), ['ask'])
-        self.assertEqual(rows[0].title, agent_ui.TITLE_ASK)
+        self.assertEqual(rows[0].title, agent_ui.TITLE_QUESTION)
         self.assertIn('2 Optionen', rows[0].detail)
 
     def test_errors_make_the_affected_row_red_with_the_message(self):
@@ -140,6 +140,102 @@ class StepRowTests(unittest.TestCase):
                                    event(1, 'act', 'suche_vorlagen', 'Gefundene Vorlagen, beste zuerst.')])
         self.assertEqual((rows[0].title, rows[0].detail, rows[0].error),
                          (agent_ui.TOOL_TITLES['suche_vorlagen'], 'Gefundene Vorlagen, beste zuerst.', None))
+
+
+CANDIDATES = [{'vote_id': '2025-09-28_de#2', 'title': 'E-ID-Gesetz', 'date': '2025-09-28', 'score': 0.9},
+              {'vote_id': '2025-09-28_de#1', 'title': 'Eigenmietwert', 'date': '2025-09-28', 'score': 0.8}]
+OPTIONS = [{'vote_id': '2025-09-28_de#2', 'title': 'E-ID-Gesetz', 'date': '2025-09-28'},
+           {'vote_id': '2025-09-28_de#1', 'title': 'Eigenmietwert', 'date': '2025-09-28'}]
+
+
+def vote_search(candidates):
+    return [event(1, 'decide', 'suche_vorlagen', 'suche_vorlagen gewählt'),
+            event(1, 'act', 'suche_vorlagen', 'Gefundene Vorlagen', data={'candidates': candidates})]
+
+
+class PlainStepTextTests(unittest.TestCase):
+    def test_vote_search_with_two_candidates_reads_as_a_count(self):
+        [row] = agent_ui.step_rows(vote_search(CANDIDATES))
+        self.assertEqual(row.kind, 'votes')
+        self.assertEqual(agent_ui.row_text(row, str, str), '2 passende Vorlagen gefunden')
+        self.assertEqual(row.detail, 'Gefundene Vorlagen')
+
+    def test_vote_search_with_one_or_no_candidate(self):
+        [one] = agent_ui.step_rows(vote_search(CANDIDATES[:1]))
+        self.assertEqual(agent_ui.row_text(one, str, str), 'Passende Vorlage gefunden: E-ID-Gesetz')
+        [none] = agent_ui.step_rows(vote_search([]))
+        self.assertEqual((none.kind, agent_ui.row_text(none, str, str)), ('votes', agent_ui.TITLE_NO_SOURCE))
+
+    def test_answered_question_names_title_and_formatted_date(self):
+        events = [event(1, 'decide', 'rueckfrage'),
+                  event(1, 'act', 'rueckfrage', 'Wächter: mehrdeutig; nicht ausgeführt',
+                        data={'guard': {'kind': 'mehrdeutig'}}),
+                  event(1, 'ask', 'rueckfrage', 'Rückfrage beantwortet', args={'optionen': ['a'], 'antwort': '2025-09-28_de#2'},
+                        data={'options': OPTIONS})]
+        [row] = agent_ui.step_rows(events)
+        self.assertEqual((row.mark, row.kind), ('ask', 'ask'))
+        self.assertEqual(agent_ui.row_text(row, str, lambda d: '28. September 2025'),
+                         'Du hast gewählt: E-ID-Gesetz, Abstimmung vom 28. September 2025')
+
+    def test_an_open_question_and_a_statement_question_use_their_titles(self):
+        open_q = [event(1, 'decide', 'rueckfrage'), event(1, 'act', 'rueckfrage', 'Rückfrage mit 2 Optionen')]
+        [row] = agent_ui.step_rows(open_q)
+        self.assertEqual((row.kind, agent_ui.row_text(row, str, str)), ('ask', agent_ui.TITLE_QUESTION))
+        statement = [event(1, 'decide', 'teilaussage_fragen'), event(1, 'act', 'teilaussage_fragen', '2 Teilaussagen')]
+        [row] = agent_ui.step_rows(statement)
+        self.assertEqual((row.kind, agent_ui.row_text(row, str, str)), ('statement', agent_ui.TITLE_STATEMENT))
+
+    def test_passages_and_vector_search_count_the_found_passages(self):
+        events = [event(2, 'decide', 'suche_passagen'), event(2, 'act', 'suche_passagen', 'x', data={'found': 12}),
+                  event(3, 'decide', 'suche_passagen_vektor'),
+                  event(3, 'act', 'suche_passagen_vektor', 'y', data={'new': 3})]
+        rows = agent_ui.step_rows(events)
+        self.assertEqual([row.kind for row in rows], ['passages', 'vector'])
+        self.assertEqual([agent_ui.row_text(row, str, str) for row in rows],
+                         ['12 Textstellen im Büchlein gefunden', 'Nachsuche: 3 neue Textstellen'])
+
+    def test_verify_and_evidence_use_the_new_data_fields(self):
+        events = [event(3, 'verify', 'pruefen', 'Label 0 (gestuetzt), 5 Zitate', data={'label': 0, 'quotes': 5}),
+                  event(3, 'check_evidence', None, '5 gültige Belege', data={'valid': 5, 'quotes': 5}),
+                  event(4, 'verify', 'pruefen', 'Label 2', data={'label': 2, 'quotes': 2}),
+                  event(4, 'check_evidence', None, '1 gültige', data={'valid': 1, 'quotes': 2}),
+                  event(5, 'verify', 'pruefen', 'Label 1', data={'label': 1, 'quotes': 0}),
+                  event(5, 'check_evidence', None, 'Nicht belegt', data={'valid': 0, 'quotes': 0}),
+                  event(6, 'check_evidence', None, 'verworfen', data={'valid': 0, 'quotes': 3})]
+        texts = [agent_ui.row_text(row, str, str) for row in agent_ui.step_rows(events)]
+        self.assertEqual(texts, ['Apertus hat geprüft: gestützt', 'Alle 5 Zitate stehen wörtlich im PDF',
+                                 'Apertus hat geprüft: widersprochen', '1 von 2 Zitaten stehen im PDF',
+                                 'Apertus hat geprüft: nicht belegt', 'Kein Zitat zu prüfen',
+                                 'Urteil verworfen: kein Zitat steht im PDF'])
+
+    def test_events_without_data_keep_the_old_title_and_summary(self):
+        events = [event(2, 'decide', 'suche_passagen'), event(2, 'act', 'suche_passagen', 'Passagen gefunden', data={})]
+        [row] = agent_ui.step_rows(events)
+        self.assertEqual((row.kind, row.title, row.detail), ('', 'Passagen suchen', 'Passagen gefunden'))
+        self.assertEqual(agent_ui.row_text(row, str, str), 'Passagen suchen')
+
+    def test_row_text_translates_the_outcome_word(self):
+        translate = lambda s: {'Apertus hat geprüft: {v0}': 'Apertus a vérifié : {v0}', 'gestützt': 'étayée'}.get(s, s)
+        [row] = agent_ui.step_rows([event(3, 'verify', 'pruefen', 's', data={'label': 0, 'quotes': 1})])
+        self.assertEqual(agent_ui.row_text(row, translate, str), 'Apertus a vérifié : étayée')
+
+    def test_new_texts_are_translatable_and_icons_cover_every_kind(self):
+        for text in ('{n} passende Vorlagen gefunden', 'gestützt', 'nicht belegt', 'widersprochen'):
+            self.assertIn(text, agent_ui.TEXT_KEYS)
+        self.assertEqual(agent_ui.OUTCOME_WORDS, {0: 'gestützt', 1: 'nicht belegt', 2: 'widersprochen'})
+        for kind in ('votes', 'ask', 'statement', 'passages', 'vector', 'verify', 'evidence', 'source_missing'):
+            self.assertIn(kind, agent_ui.STEP_ICONS)
+
+    def test_no_vote_id_or_score_reaches_a_title(self):
+        events = (vote_search(CANDIDATES)
+                  + [event(2, 'decide', 'suche_passagen'),
+                     event(2, 'act', 'suche_passagen', 'Pool 8, Score 0.9', data={'found': 12, 'pool_size': 8}),
+                     event(3, 'verify', 'pruefen', 'Label 0 (gestuetzt), 5 Zitate', data={'label': 0, 'quotes': 5}),
+                     event(3, 'check_evidence', None, 'x', data={'valid': 5, 'quotes': 5})])
+        for row in agent_ui.step_rows(events):
+            text = agent_ui.row_text(row, str, str)
+            for bad in ('_de#', 'Score', 'Pool', 'Label '):
+                self.assertNotIn(bad, text)
 
 
 @unittest.skipUnless(HAS_LANGGRAPH, 'needs requirements-agent.txt')
@@ -319,7 +415,7 @@ class StatementQuestionTests(unittest.TestCase):
         result, _, _ = check(PresetDecider(search_votes(), ask), claim=COMPOUND)  # the events the graph emits
         rows = agent_ui.step_rows(result.events)
         self.assertEqual(marks(rows), ['done', 'ask'])  # the vote search, then the question as one row
-        self.assertEqual(rows[1].title, agent_ui.TITLE_ASK)
+        self.assertEqual(rows[1].title, agent_ui.TITLE_STATEMENT)
         self.assertIn('2 Teilaussagen', rows[1].detail)
         self.assertNotIn('Wächter', rows[1].detail)
         open_row = agent_ui.step_rows(result.events[:3], running=True)  # the decision alone: the open row

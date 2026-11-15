@@ -416,7 +416,7 @@ def _new_agent_check(own_source: bool, pdf_path: Path, vote: Optional[str], uplo
 
 
 def _step_line(row) -> str:
-    return f"{AGENT_MARKS[row.mark]} {t(row.title)}" + (f" · {row.detail}" if row.detail else "")
+    return f"{AGENT_MARKS[row.mark]} {agent_ui.row_text(row, t, _vote_date)}" + (f" · {row.detail}" if row.detail else "")
 
 
 def _check_statement(statement: str) -> None:

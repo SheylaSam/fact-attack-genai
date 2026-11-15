@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import queue
 import threading
-from typing import (TYPE_CHECKING, Any, Callable, Iterator, List, Literal, Mapping, Optional, Sequence, Tuple, Union)
+from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Literal, Mapping, Optional, Sequence, Tuple, Union)
 
 from src import config
 from src.agent.trace import TraceEvent
@@ -66,7 +66,22 @@ TEXT_LAST_VOTE = "wie zuletzt: {v0}"  # the button of the person's last chosen v
 TITLE_TECHNICAL = "Die Prüfung konnte nicht abgeschlossen werden"
 TEXT_TECHNICAL = "Die Prüfung wurde wegen eines technischen Fehlers abgebrochen; es gibt kein Urteil."
 
+# plain-language step titles; the placeholders are filled from the trace data by `row_text`
+TITLE_VOTES_MANY = "{n} passende Vorlagen gefunden"
+TITLE_VOTES_ONE = "Passende Vorlage gefunden: {v0}"
+TITLE_ANSWERED = "Du hast gewählt: {v0}, Abstimmung vom {date}"
+TITLE_PASSAGES = "{n} Textstellen im Büchlein gefunden"
+TITLE_VECTOR = "Nachsuche: {n} neue Textstellen"
+TITLE_VERIFIED = "Apertus hat geprüft: {v0}"
+TITLE_EVIDENCE_ALL = "Alle {n} Zitate stehen wörtlich im PDF"
+TITLE_EVIDENCE_SOME = "{v0} von {n} Zitaten stehen im PDF"
+TITLE_EVIDENCE_NONE = "Kein Zitat zu prüfen"
+TITLE_EVIDENCE_REJECTED = "Urteil verworfen: kein Zitat steht im PDF"
+OUTCOME_WORDS = {0: "gestützt", 1: "nicht belegt", 2: "widersprochen"}  # NLI label -> word in a sentence
+
 TEXT_KEYS: Tuple[str, ...] = tuple(dict.fromkeys((
+    TITLE_VOTES_MANY, TITLE_VOTES_ONE, TITLE_ANSWERED, TITLE_PASSAGES, TITLE_VECTOR, TITLE_VERIFIED,
+    TITLE_EVIDENCE_ALL, TITLE_EVIDENCE_SOME, TITLE_EVIDENCE_NONE, TITLE_EVIDENCE_REJECTED, *OUTCOME_WORDS.values(),
     TITLE_ASK, TITLE_DECIDE, TITLE_RUNNING, *TOOL_TITLES.values(), *NODE_TITLES.values(),
     TITLE_SUPPORTED, TEXT_SUPPORTED, TITLE_NOT_PROVEN, TEXT_NOT_PROVEN, TITLE_CONTRADICTED, TEXT_CONTRADICTED,
     TITLE_QUESTION, TEXT_QUESTION, TEXT_QUESTION_CHOOSE, TITLE_STATEMENT, TEXT_STATEMENT,
@@ -81,9 +96,12 @@ OUTCOME_LABELS = {"gestuetzt": 0, "nicht_belegt": 1, "widersprochen": 2}
 @dataclass(frozen=True)
 class StepRow:
     mark: Literal["done", "ask", "error", "running"]
-    title: str  # German; the UI translates it with t()
+    title: str  # German sentence template (placeholders in braces); `row_text` translates and fills it
     detail: str  # the summary the agent wrote; shown unchanged
     error: Optional[str]
+    kind: str = ""  # votes, ask, statement, passages, vector, verify, evidence, source_missing; "" = old title
+    params: Tuple[Tuple[str, str], ...] = ()  # (name, value) for the placeholders of `title`
+
 
 
 def _flat(text: Any) -> str:
@@ -135,6 +153,84 @@ def _title(group: List[TraceEvent]) -> str:
     return NODE_TITLES.get(first.node, first.node)
 
 
+STEP_ICONS: Dict[str, Tuple[str, str]] = {  # kind -> (Font Awesome class, tone)
+    "votes": ("fa-search", "blue"),
+    "ask": ("fa-question", "yellow"),
+    "statement": ("fa-question", "yellow"),
+    "passages": ("fa-file-alt", "blue"),
+    "vector": ("fa-layer-group", "blue"),
+    "verify": ("fa-balance-scale", "blue"),
+    "evidence": ("fa-check-double", "green"),
+    "source_missing": ("fa-search-minus", "grey"),
+    "error": ("fa-exclamation-triangle", "orange"),
+    "running": ("fa-circle-notch", "grey"),
+}
+
+
+def _count(value: Any) -> Optional[int]:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _sentence(group: List[TraceEvent]) -> Optional[Tuple[str, str, Tuple[Tuple[str, str], ...]]]:
+    """(kind, title template, params) of a finished step from its trace data; None if the data is missing."""
+    act = next((item for item in group if item.node == "act"), None)
+    ask = next((item for item in group if item.node == "ask"), None)
+    first = group[0]
+    if first.node == "ask" or _asks(group):
+        if any(item.tool == "teilaussage_fragen" for item in group):
+            return "statement", TITLE_STATEMENT, ()
+        answer = (ask.args or {}).get("antwort") if ask is not None else None
+        if answer is None:
+            return "ask", TITLE_QUESTION, ()
+        option = next((o for o in (ask.data or {}).get("options") or []
+                       if isinstance(o, dict) and o.get("vote_id") == answer), None)
+        if option is None or not option.get("title"):
+            return None
+        return "ask", TITLE_ANSWERED, (("v0", str(option["title"])), ("date", str(option.get("date") or "")))
+    data = (act.data if act is not None else first.data) or {}
+    tool = act.tool if act is not None else None
+    if first.node == "decide" and act is not None:
+        if tool == "suche_vorlagen":
+            candidates = data.get("candidates")
+            if not isinstance(candidates, list):
+                return None
+            if not candidates:
+                return "votes", TITLE_NO_SOURCE, ()
+            if len(candidates) == 1:
+                return "votes", TITLE_VOTES_ONE, (("v0", str(candidates[0].get("title", ""))),)
+            return "votes", TITLE_VOTES_MANY, (("n", str(len(candidates))),)
+        if tool == "suche_passagen" and _count(data.get("found")) is not None:
+            return "passages", TITLE_PASSAGES, (("n", str(data["found"])),)
+        if tool == "suche_passagen_vektor" and _count(data.get("new")) is not None:
+            return "vector", TITLE_VECTOR, (("n", str(data["new"])),)
+        if tool == "quelle_fehlt":
+            return "source_missing", TITLE_NO_SOURCE, ()
+        return None
+    data = first.data or {}
+    if first.node == "verify" and data.get("label") in OUTCOME_WORDS:
+        return "verify", TITLE_VERIFIED, (("v0", OUTCOME_WORDS[data["label"]]),)
+    if first.node == "check_evidence" and _count(data.get("valid")) is not None and _count(data.get("quotes")) is not None:
+        valid, quotes = data["valid"], data["quotes"]
+        if quotes == 0:
+            return "evidence", TITLE_EVIDENCE_NONE, ()
+        if valid == 0:
+            return "evidence", TITLE_EVIDENCE_REJECTED, ()
+        if valid >= quotes:
+            return "evidence", TITLE_EVIDENCE_ALL, (("n", str(quotes)),)
+        return "evidence", TITLE_EVIDENCE_SOME, (("v0", str(valid)), ("n", str(quotes)))
+    return None
+
+
+def row_text(row: StepRow, translate: Callable[[str], str], format_date: Callable[[str], str]) -> str:
+    """The row's sentence in the UI language: the title template translated, every parameter value that is a known
+    text translated, `date` formatted with `format_date`, then filled in."""
+    values = {}
+    for name, value in row.params:
+        values[name] = format_date(value) if name == "date" else translate(value) if value in TEXT_KEYS else value
+    text = translate(row.title)
+    return text.format(**values) if values else text
+
+
 def step_rows(events: Sequence[TraceEvent], *, running: bool = False) -> List[StepRow]:
     """One row per step of the run, in order. A decision and its action are one row. A question, whether the guard
     stopped the action or the model asked, is one `ask` row together with its `ask` event; the stopped action gets no
@@ -152,11 +248,16 @@ def step_rows(events: Sequence[TraceEvent], *, running: bool = False) -> List[St
         if error is not None:
             row = StepRow("error", _title(group), _flat(group[-1].summary), error)
         elif first.node == "ask" or _asks(group):
-            row = StepRow("ask", TITLE_ASK, _ask_detail(group), None)
+            sentence = _sentence(group)
+            kind, title, params = sentence if sentence else ("", TITLE_ASK, ())
+            row = StepRow("ask", title, _ask_detail(group), None, kind, params)
         else:
             act = next((item for item in group if item.node == "act"), None)
             open_step = running and number == len(groups) - 1 and first.node == "decide" and act is None
-            row = StepRow("running" if open_step else "done", _title(group), _flat((act or group[-1]).summary), None)
+            sentence = None if open_step else _sentence(group)
+            kind, title, params = sentence if sentence else ("", _title(group), ())
+            row = StepRow("running" if open_step else "done", title, _flat((act or group[-1]).summary), None,
+                          kind, params)
         if error is not None:
             shown.add(error)
         rows.append(row)

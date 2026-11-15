@@ -139,7 +139,7 @@ def test_a_clear_claim_shows_the_steps_and_the_result_card():
     with agent_app(fakes) as app:
         check(app)
         steps = '\n'.join(step_texts(app))
-        for title in ('Vorlagen suchen', 'Passagen suchen', 'Prüfung starten', 'Belege prüfen'):
+        for title in ('passende Vorlagen gefunden', 'Textstellen im Büchlein gefunden', 'Prüfung starten', 'Zitate stehen'):
             assert title in steps
         assert 'Rückfrage' not in steps
         assert 'agent-step-running' not in steps  # the finished list has no running row left from the live one
@@ -162,7 +162,7 @@ def test_a_close_claim_shows_the_question_with_one_button_per_option_in_the_ask_
         ask = next(index for index, node in enumerate(nodes)
                    if node.type == 'markdown' and node.value.startswith('<div class="agent-step agent-step-ask'))
         question = next(index for index, node in enumerate(nodes)
-                        if node.type == 'markdown' and 'Welche Vorlage ist gemeint?' in node.value)
+                        if node.type == 'markdown' and node.value.startswith('**Welche Vorlage ist gemeint?**'))
         first_option = next(index for index, node in enumerate(nodes)
                             if node.type == 'button' and (node.key or '').startswith('agent_option_'))
         assert ask < question < first_option
@@ -177,7 +177,7 @@ def test_clicking_an_option_continues_the_check_and_shows_the_result():
         assert not app.exception
         assert fakes.answers == [V2.vote_id] and len(fakes.sessions) == 1
         steps = '\n'.join(step_texts(app))
-        assert 'Vorlagen suchen' in steps and 'Rückfrage' in steps and 'Belege prüfen' in steps
+        assert 'passende Vorlagen gefunden' in steps and 'Du hast gewählt' in steps and 'Zitate stehen' in steps
         assert 'agent-step-running' not in steps
         assert not any('Welche Vorlage ist gemeint?' in value for value in markdown(app))
         assert not options(app)
@@ -210,7 +210,7 @@ def test_changing_the_ui_language_keeps_the_open_question_and_translates_the_but
         assert [button.key for button in options(app)] == keys
         assert all('24 novembre 2024' in button.label for button in options(app))
         assert any('Quel objet est visé ?' in value for value in markdown(app))
-        assert any('Question' in value for value in step_texts(app))
+        assert any('Quel objet est visé ?' in value for value in step_texts(app))
         assert len(fakes.sessions) == 1
         next(button for button in options(app) if button.label.startswith(V2.title)).click().run()
         assert not app.exception and has_verdict(app)
@@ -300,7 +300,7 @@ def test_clicking_an_option_in_mock_mode_ends_with_a_verdict_not_a_technical_err
         turn = app.session_state['agent_turn']
         assert (turn.vote, turn.error) == (EIGENBEDARF, None)
         steps = '\n'.join(step_texts(app))
-        assert 'Rückfrage' in steps and 'Belege prüfen' in steps and 'agent-step-error' not in steps
+        assert 'Du hast gewählt' in steps and 'Kein Zitat zu prüfen' in steps and 'agent-step-error' not in steps
 
 
 @needs_rent_booklet
@@ -505,7 +505,7 @@ def test_uploaded_pdf_check_has_the_same_steps_and_card(isolated_history):
         assert fakes.sessions[0][0] == upload.vote_id
         assert fakes.index.vote_calls == []
         steps = '\n'.join(step_texts(app))
-        for title in ('Passagen suchen', 'Prüfung starten', 'Belege prüfen'):
+        for title in ('Textstellen im Büchlein gefunden', 'Prüfung starten', 'Zitate stehen'):
             assert title in steps
         assert 'Rückfrage' not in steps and not options(app)
         assert has_verdict(app)
@@ -878,7 +878,7 @@ def test_clicking_a_statement_starts_a_new_check_with_it_as_the_claim():
         assert len({button.key for button in buttons}) == 2
         assert not options(app) and not has_verdict(app) and 'last_check' not in app.session_state
         assert any(agent_ui.TITLE_STATEMENT in value and agent_ui.TEXT_STATEMENT in value for value in markdown(app))
-        assert 'Rückfrage' in '\n'.join(step_texts(app))
+        assert agent_ui.TITLE_STATEMENT in '\n'.join(step_texts(app))
         first_check = app.session_state['agent_session']
         buttons[1].click().run()
         assert not app.exception

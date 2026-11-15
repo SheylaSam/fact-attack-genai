@@ -543,8 +543,9 @@ class _Nodes:
         if answer not in ids and not (last is not None and answer == last.vote_id):
             raise ValueError(ANSWER_NOT_AN_OPTION.format(answer=_short(repr(answer), 80), options=", ".join(ids)))
         vote = self.tools.fix_vote(answer)
+        shown = [{"vote_id": o.vote_id, "title": o.title, "date": o.date} for o in [*options, vote]]  # for the UI
         self.emit(step, "ask", started, tool="rueckfrage", args={"optionen": ids, "antwort": vote.vote_id},
-                  data=state.get("ask_data"), summary=f"Rückfrage beantwortet: {vote.vote_id} «{vote.title}»")
+                  data={**(state.get("ask_data") or {}), "options": shown}, summary=f"Rückfrage beantwortet: {vote.vote_id} «{vote.title}»")
         # `state["action"]` is the decision the question interrupted (never run): answer it with the choice, so the
         # transcript keeps its roles, and from now on the prompt of a given vote applies
         exchange = self.decider.observation_messages(
@@ -573,7 +574,8 @@ class _Nodes:
             return {"prediction": prediction, "checks": checks, "error": message, "route": "finish"}
         summary = (f"Label {prediction.label} ({LABEL_OUTCOMES[prediction.label]}), "
                    f"{len(prediction.evidence_sources)} Zitate")
-        self.emit(step, "verify", started, tool="pruefen", args=args, summary=summary, **tokens)
+        self.emit(step, "verify", started, tool="pruefen", args=args, summary=summary,
+                  data={"label": prediction.label, "quotes": len(prediction.evidence_sources)}, **tokens)
         return {"prediction": prediction, "checks": checks, "route": "check_evidence"}
 
     def check_evidence(self, state: _State) -> dict:
@@ -581,14 +583,16 @@ class _Nodes:
         verdict = LABEL_OUTCOMES[prediction.label]
         started = time.perf_counter()
         if verdict == "nicht_belegt":
-            self.emit(step, "check_evidence", started, summary="Nicht belegt: kein Zitat zu prüfen")
+            self.emit(step, "check_evidence", started, summary="Nicht belegt: kein Zitat zu prüfen",
+                      data={"valid": 0, "quotes": 0})
             return {"outcome": verdict, "evidence": [], "reasoning": prediction.reasoning, "note": None,
                     "route": self._after_not_proven(state)}
         total = len(prediction.evidence_sources)
         if not self.evidence_check:  # arm B2: no PDF text is read, nothing is discarded
             evidence = self._given_evidence(prediction)
             self.emit(step, "check_evidence", started,
-                      summary=f"Belegprüfung aus: {len(evidence)} von {total} Zitaten ungeprüft übernommen: {verdict}")
+                      summary=f"Belegprüfung aus: {len(evidence)} von {total} Zitaten ungeprüft übernommen: {verdict}",
+                      data={"valid": len(evidence), "quotes": total})
             return {"outcome": verdict, "evidence": evidence, "reasoning": prediction.reasoning, "note": None,
                     "route": "finish"}
         evidence, unreadable = self._valid_evidence(vote, prediction)
@@ -599,11 +603,13 @@ class _Nodes:
             return {"error": message, "route": "finish"}
         if evidence:
             self.emit(step, "check_evidence", started,
-                      summary=f"{len(evidence)} gültige Belege aus {total} Zitaten: {verdict}")
+                      summary=f"{len(evidence)} gültige Belege aus {total} Zitaten: {verdict}",
+                      data={"valid": len(evidence), "quotes": total})
             return {"outcome": verdict, "evidence": evidence, "reasoning": prediction.reasoning, "note": None,
                     "route": "finish"}
         self.emit(step, "check_evidence", started,
-                  summary=f"Urteil «{verdict}» verworfen: keines von {total} Zitaten steht im PDF-Text seiner Seite")
+                  summary=f"Urteil «{verdict}» verworfen: keines von {total} Zitaten steht im PDF-Text seiner Seite",
+                  data={"valid": 0, "quotes": total})
         return {"outcome": "nicht_belegt", "evidence": [], "note": DISCARDED_NOTE,
                 "reasoning": DISCARDED_REASON.format(verdict=verdict), "route": self._after_not_proven(state)}
 

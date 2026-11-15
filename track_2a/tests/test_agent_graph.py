@@ -313,6 +313,9 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(decisions[0].args, {'anfrage': 'Untermiete'})
         verify = next(e for e in result.events if e.node == 'verify')
         self.assertEqual((verify.tokens_prompt, verify.tokens_completion), (100, 7))
+        self.assertEqual(verify.data, {'label': 0, 'quotes': 1})
+        evidence = next(e for e in result.events if e.node == 'check_evidence')
+        self.assertEqual(evidence.data, {'valid': 1, 'quotes': 1})
         self.assertTrue(all(e.duration_ms >= 0 for e in result.events))
         self.assertTrue(all(e.error is None for e in result.events))
 
@@ -1390,6 +1393,7 @@ class InteractiveGraphTests(unittest.TestCase):
         [ask] = [e for e in tracer.events if e.node == 'ask']
         self.assertEqual(ask.args, {'optionen': [V1.vote_id, V2.vote_id], 'antwort': V2.vote_id})
         self.assertIn('Rückfrage beantwortet', ask.summary)
+        self.assertIn({'vote_id': V2.vote_id, 'title': V2.title, 'date': V2.date}, ask.data['options'])
         self.assertIn(V2.vote_id, ask.summary)
         self.assertEqual(ask.data['kind'], 'mehrdeutig')
 

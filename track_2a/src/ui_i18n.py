@@ -232,6 +232,19 @@ Aktive Quelle: eigenes PDF. Das Abstimmungsdatum ist unbekannt; die offizielle D
 """
 _ROWS += """
 Rückfrage|Question|Domanda
+{n} passende Vorlagen gefunden|{n} objets correspondants trouvés|{n} oggetti corrispondenti trovati
+Passende Vorlage gefunden: {v0}|Objet correspondant trouvé : {v0}|Oggetto corrispondente trovato: {v0}
+Du hast gewählt: {v0}, Abstimmung vom {date}|Vous avez choisi : {v0}, votation du {date}|Hai scelto: {v0}, votazione del {date}
+{n} Textstellen im Büchlein gefunden|{n} passages trouvés dans la brochure|{n} passaggi trovati nell’opuscolo
+Nachsuche: {n} neue Textstellen|Recherche complémentaire : {n} nouveaux passages|Ricerca supplementare: {n} nuovi passaggi
+Apertus hat geprüft: {v0}|Apertus a vérifié : {v0}|Apertus ha verificato: {v0}
+Alle {n} Zitate stehen wörtlich im PDF|Les {n} citations figurent mot pour mot dans le PDF|Tutte le {n} citazioni compaiono alla lettera nel PDF
+{v0} von {n} Zitaten stehen im PDF|{v0} citations sur {n} figurent dans le PDF|{v0} citazioni su {n} compaiono nel PDF
+Kein Zitat zu prüfen|Aucune citation à vérifier|Nessuna citazione da verificare
+Urteil verworfen: kein Zitat steht im PDF|Jugement écarté : aucune citation ne figure dans le PDF|Giudizio scartato: nessuna citazione compare nel PDF
+gestützt|étayée|confermata
+nicht belegt|non établie|non provata
+widersprochen|contredite|contraddetta
 Entscheidung|Décision|Decisione
 Nächster Schritt läuft …|L’étape suivante est en cours …|Il passaggio successivo è in corso …
 Vorlagen suchen|Rechercher des objets|Cercare gli oggetti
