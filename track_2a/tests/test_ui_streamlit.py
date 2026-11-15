@@ -726,3 +726,17 @@ def test_removing_the_pdf_while_the_uploader_still_shows_it_is_final(tmp_path):
         assert not any('Aktive Quelle: eigenes PDF' in item.value for item in app.info)
         assert app.session_state['upload_round'] == 1 and asked[-1] == 'uploaded_pdf_1'
     st.cache_resource.clear()
+
+
+def test_footer_links_main_not_the_old_branch():
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')):
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        footer = app.main.caption[-1].value
+        assert footer == ('Fact Attack · GenAI-Modulprojekt · Team Fact Attack · '
+                          '[Repository](https://github.com/SheylaSam/fact-attack-genai) · '
+                          '[Originalprojekt](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)')
+        assert 'github.com/SheylaSam/fact-attack-genai)' in footer and 'tree/genai/vector-rag' not in footer
+        assert not any('Josip' in item.value for item in app.caption)
+        app.selectbox(key='ui_language').set_value('it').run()
+        footer = app.main.caption[-1].value
+        assert 'Progetto originale' in footer and 'github.com/SheylaSam/fact-attack-genai)' in footer

@@ -377,6 +377,8 @@ AGENT_BAD_UPLOAD = "Dieses PDF kann nicht gelesen werden. Lade eine andere Datei
 AGENT_UNKNOWN_SOURCE = ("Der Agent kann die gewählte Quelle nicht prüfen. "
                         "Wähle eine andere Quelle oder lass den Agenten die Vorlage suchen.")
 AGENT_MOCK_NOTICE = "Testmodus, kein Apertus-Urteil"
+CHECK_HINT = ("Behauptung und Textstellen gehen an Apertus (CSCS). Kein allgemeiner Wahrheitscheck, "
+              "keine Abstimmungsempfehlung.")  # the one hint line below the button in agent mode
 AGENT_BATCH_NEEDS_SOURCE = ("Für die Mehrfachprüfung die Quelle unter «Quelle selbst wählen» vorgeben "
                             "oder ein eigenes PDF laden.")
 
@@ -541,7 +543,7 @@ def _adopt_agent_turn(check, save_history: bool) -> None:
     if kind == "turn" and getattr(turn, "outcome", None) == "quelle_fehlt":
         if agent_ui.asks_to_pick_source(turn):  # tick «Diese Quelle vorgeben» with the expander (before its widget)
             st.session_state["agent_pick_source"] = True
-        st.rerun()  # the source expander was drawn before this turn existed; it opens for "pick the source" now
+        st.rerun()  # «Weitere Möglichkeiten» was drawn before this turn existed; it opens for "pick the source" now
     if kind != "turn" or agent_app.is_question(turn) or turn.prediction is None:
         return
     if agent_ui.outcome_view(turn).kind != "verdict":
@@ -702,149 +704,177 @@ if page == PAGES[0]:
     statement_start = bool(st.session_state.pop("agent_check_statement", False)) and agent_mode
     own_upload = agent_mode and has_upload  # an own PDF is always the check's fixed source
     own_source = own_upload or (agent_mode and bool(st.session_state.get("agent_own_source")))
-    col_in, col_out = st.columns([1, 1.12], gap="large")
+    if agent_mode:  # one column: claim, button, hint; everything optional under «Weitere Möglichkeiten»; then the result
+        col_in = st.container()
+        claim_box, verify_box = col_in.container(), col_in.container()
+        more_box = col_in.expander(t("Weitere Möglichkeiten"), expanded=own_source or picked_source or getattr(
+            st.session_state.get("agent_turn"), "outcome", None) == "quelle_fehlt")
+        source_tab, example_tab, search_tab, batch_tab, lang_tab = more_box.tabs(
+            [t(agent_ui.TITLE_PICK_SOURCE), t("Beispiel auswählen"), t("Eigenes PDF & Suche"), t("Mehrere Aussagen"),
+             t("Sprache der Behauptung")])
+        # no expander inside an expander: each area is a container in its tab, the old heading a caption
+        source_box, lang_box = source_tab.container(), lang_tab.container()
+        example_box, search_box, batch_box = example_tab.container(), search_tab.container(), batch_tab.container()
+        example_box.caption(t("Keine eigene Behauptung? Beispiel auswählen"))
+        search_box.caption(t("Weitere Optionen: Suche & eigenes PDF"))
+        batch_box.caption(t("Mehrere Aussagen aus einem Text prüfen"))
+        example_note, save_box, retry_box = claim_box, more_box.container(), batch_box
+        col_out = st.container()
+    else:  # without the agent: two columns, the source is required
+        col_in, col_out = st.columns([1, 1.12], gap="large")
+        claim_box = col_in.container()
+        claim_box.markdown(th('<div class="flow-heading"><span>1</span> Was möchtest du prüfen?</div>'), unsafe_allow_html=True)
+        example_box = col_in.expander(t("Keine eigene Behauptung? Beispiel auswählen"), expanded=False)
+        example_note = col_in.container()
+        col_in.markdown(th('<div class="flow-heading"><span>2</span> Quelle wählen</div>'), unsafe_allow_html=True)
+        source_box = col_in.container()
+        lang_box = col_in.expander(t("Sprache der Behauptung"), expanded=False)
+        save_box, verify_box = col_in.container(), col_in.container()
+        search_box = col_in.expander(t("Weitere Optionen: Suche & eigenes PDF"), expanded=False)
+        batch_box = col_in.expander(t("Mehrere Aussagen aus einem Text prüfen"), expanded=False)
+        retry_box = col_in.container()
 
-    # ── LEFT: input ──────────────────────────────────────────────────────────
-    with col_in:
-        st.markdown(th('<div class="flow-heading"><span>1</span> Was möchtest du prüfen?</div>'), unsafe_allow_html=True)
+    # ── Input (drawn into the boxes above, so the code order stays the order the values are needed in) ──────
+    with claim_box:
         claim = st.text_area(
             t("Behauptung"), key="claim_input", persist_state="session", height=130,
             placeholder=t("Zum Beispiel: Die Vorlage erhöht das Rentenalter auf 67 Jahre."),
             label_visibility="collapsed",
         )
-        with st.expander(t("Keine eigene Behauptung? Beispiel auswählen"), expanded=False):
-            st.caption(t("Ein Beispiel füllt Behauptung und Quelle aus. Die Prüfung startest du anschliessend selbst."))
-            for case in DEMO_CASES:
-                if f"{case['booklet_date']}_{case['booklet_language']}.pdf" not in AVAILABLE_SOURCES:
-                    continue
-                st.button(case["title"], key=f"story_{case['id']}", width="stretch",
-                          on_click=_apply_case, args=(case,))
-        active_case = next((c for c in DEMO_CASES if c["id"] == st.session_state.get("active_case")
-                            and c["claim"] == claim), None)
-        if active_case:
-            st.caption(active_case["story"])
+    with example_box:
+        st.caption(t("Ein Beispiel füllt Behauptung und Quelle aus. Die Prüfung startest du anschliessend selbst."))
+        for case in DEMO_CASES:
+            if f"{case['booklet_date']}_{case['booklet_language']}.pdf" not in AVAILABLE_SOURCES:
+                continue
+            st.button(case["title"], key=f"story_{case['id']}", width="stretch",
+                      on_click=_apply_case, args=(case,))
+    active_case = next((c for c in DEMO_CASES if c["id"] == st.session_state.get("active_case")
+                        and c["claim"] == claim), None)
+    if active_case:
+        example_note.caption(active_case["story"])
 
-        if agent_mode:  # the agent finds the source itself; choosing it is optional
-            source_box = st.expander(t(agent_ui.TITLE_PICK_SOURCE), expanded=own_source or getattr(
-                st.session_state.get("agent_turn"), "outcome", None) == "quelle_fehlt")
-        else:
-            st.markdown(th('<div class="flow-heading"><span>2</span> Quelle wählen</div>'), unsafe_allow_html=True)
-            source_box = st.container()
-        with source_box:
-            if own_upload:
-                st.caption(t("Das eigene PDF ist die Quelle der Prüfung; der Agent sucht nur darin."))
-            elif agent_mode:
-                st.checkbox(t("Diese Quelle für die Prüfung vorgeben"), key="agent_own_source", persist_state="session",
-                            help=t("Ohne Häkchen sucht der Agent die passende Vorlage selbst."))
-            c_search, c_year = st.columns([2, 1])
-            with c_search:
-                source_query = st.text_input(t("Thema oder Vorlage suchen"), key="source_query", persist_state="session",
-                                            placeholder=t("z. B. Mietrecht, Rente, biodiversité"),
-                                            help=t("Sucht lokal in den Vorlagentiteln auf DE, FR und IT; keine Volltextsuche im PDF."))
-            with c_year:
-                years = ["Alle Jahre"] + sorted({entry["date"][:4] for entry in AVAILABLE_SOURCES.values()}, reverse=True)
-                if st.session_state.get("source_year", "Alle Jahre") not in years:
-                    st.session_state["source_year"] = "Alle Jahre"
-                source_year = st.selectbox(t("Jahr"), years, key="source_year", persist_state="session", format_func=t)
-            filtered_sources = filter_sources(AVAILABLE_SOURCES, source_query, source_year)
-            filtered_dates = date_options(filtered_sources)
-            no_source_matches = not filtered_dates
-            if no_source_matches:
-                st.info(t("Keine passende Quelle gefunden. Versuche einen anderen Begriff oder setze die Filter zurück. Die bisherige Quelle bleibt ausgewählt."))
-                filtered_dates = {st.session_state["ballot"]: BOOKLET_CATALOG[st.session_state["ballot"]]}
-            elif st.session_state.get("ballot") not in filtered_dates:
-                st.session_state["ballot"] = next(iter(filtered_dates))
-            if source_query.strip() or source_year != "Alle Jahre":
-                st.caption(t('{v0} von {v1} Terminen gefunden · Suche in Vorlagentiteln').format(v0=len(date_options(filtered_sources)), v1=len(BOOKLET_CATALOG)))
-                st.button(t("Quellenfilter zurücksetzen"), on_click=_reset_source_filters)
-            c_ballot, c_lang = st.columns([1.5, 1])
-            with c_ballot:
-                selected_ballot_name = st.selectbox(t("Abstimmung"), list(filtered_dates), key="ballot", persist_state="session", disabled=no_source_matches or has_upload, format_func=lambda label: date_label(label, UI_LANGUAGE))
-                selected_date = BOOKLET_CATALOG[selected_ballot_name]
-            with c_lang:
-                language_options = ["DE", "FR", "IT"] if has_upload else languages_for_date(AVAILABLE_SOURCES, selected_date)
-                if st.session_state.get("booklet_lang") not in language_options:
-                    st.session_state["booklet_lang"] = language_options[0]
-                selected_lang = st.radio(t("Sprache des Büchleins"), language_options, horizontal=True, key="booklet_lang", persist_state="session")
-                lang_code = selected_lang.lower()
+    with source_box:
+        if own_upload:
+            st.caption(t("Das eigene PDF ist die Quelle der Prüfung; der Agent sucht nur darin."))
+        elif agent_mode:
+            st.checkbox(t("Diese Quelle für die Prüfung vorgeben"), key="agent_own_source", persist_state="session",
+                        help=t("Ohne Häkchen sucht der Agent die passende Vorlage selbst."))
+        c_search, c_year = st.columns([2, 1])
+        with c_search:
+            source_query = st.text_input(t("Thema oder Vorlage suchen"), key="source_query", persist_state="session",
+                                        placeholder=t("z. B. Mietrecht, Rente, biodiversité"),
+                                        help=t("Sucht lokal in den Vorlagentiteln auf DE, FR und IT; keine Volltextsuche im PDF."))
+        with c_year:
+            years = ["Alle Jahre"] + sorted({entry["date"][:4] for entry in AVAILABLE_SOURCES.values()}, reverse=True)
+            if st.session_state.get("source_year", "Alle Jahre") not in years:
+                st.session_state["source_year"] = "Alle Jahre"
+            source_year = st.selectbox(t("Jahr"), years, key="source_year", persist_state="session", format_func=t)
+        filtered_sources = filter_sources(AVAILABLE_SOURCES, source_query, source_year)
+        filtered_dates = date_options(filtered_sources)
+        no_source_matches = not filtered_dates
+        if no_source_matches:
+            st.info(t("Keine passende Quelle gefunden. Versuche einen anderen Begriff oder setze die Filter zurück. Die bisherige Quelle bleibt ausgewählt."))
+            filtered_dates = {st.session_state["ballot"]: BOOKLET_CATALOG[st.session_state["ballot"]]}
+        elif st.session_state.get("ballot") not in filtered_dates:
+            st.session_state["ballot"] = next(iter(filtered_dates))
+        if source_query.strip() or source_year != "Alle Jahre":
+            st.caption(t('{v0} von {v1} Terminen gefunden · Suche in Vorlagentiteln').format(v0=len(date_options(filtered_sources)), v1=len(BOOKLET_CATALOG)))
+            st.button(t("Quellenfilter zurücksetzen"), on_click=_reset_source_filters)
+        c_ballot, c_lang = st.columns([1.5, 1])
+        with c_ballot:
+            selected_ballot_name = st.selectbox(t("Abstimmung"), list(filtered_dates), key="ballot", persist_state="session", disabled=no_source_matches or has_upload, format_func=lambda label: date_label(label, UI_LANGUAGE))
+            selected_date = BOOKLET_CATALOG[selected_ballot_name]
+        with c_lang:
+            language_options = ["DE", "FR", "IT"] if has_upload else languages_for_date(AVAILABLE_SOURCES, selected_date)
+            if st.session_state.get("booklet_lang") not in language_options:
+                st.session_state["booklet_lang"] = language_options[0]
+            selected_lang = st.radio(t("Sprache des Büchleins"), language_options, horizontal=True, key="booklet_lang", persist_state="session")
+            lang_code = selected_lang.lower()
 
-            source_date = None if has_upload else selected_date
-            pdf_path = config.BOOKLETS_DIR / f"{selected_date}_{lang_code}.pdf"
-            if has_upload:
-                if uploaded_file is not None:
-                    upload_name = uploaded_file.name
-                    pdf_path = store_uploaded_source(config.BOOKLETS_DIR, bytes(uploaded_file.getbuffer()))
-                    st.session_state["kept_upload"] = (upload_name, str(pdf_path))
-                else:
-                    upload_name, pdf_path = kept_upload[0], Path(kept_upload[1])
-                st.success(t('✓ {v0} geladen').format(v0=upload_name))
-                st.info(t("Aktive Quelle: eigenes PDF. Das Abstimmungsdatum ist unbekannt; die offizielle Datumsauswahl ist deaktiviert."))
-                st.button(t("Eigenes PDF entfernen"), key="remove_upload", on_click=_remove_upload)
+        source_date = None if has_upload else selected_date
+        pdf_path = config.BOOKLETS_DIR / f"{selected_date}_{lang_code}.pdf"
+        if has_upload:
+            if uploaded_file is not None:
+                upload_name = uploaded_file.name
+                pdf_path = store_uploaded_source(config.BOOKLETS_DIR, bytes(uploaded_file.getbuffer()))
+                st.session_state["kept_upload"] = (upload_name, str(pdf_path))
+            else:
+                upload_name, pdf_path = kept_upload[0], Path(kept_upload[1])
+            st.success(t('✓ {v0} geladen').format(v0=upload_name))
+            st.info(t("Aktive Quelle: eigenes PDF. Das Abstimmungsdatum ist unbekannt; die offizielle Datumsauswahl ist deaktiviert."))
+            st.button(t("Eigenes PDF entfernen"), key="remove_upload", on_click=_remove_upload)
 
-            vote_options = [VOTE_AUTO] + ([] if has_upload else DEMO_VOTES.get(pdf_path.name, SOURCE_METADATA.get(pdf_path.name, {}).get("votes", [])))
-            if st.session_state.get("vote") not in vote_options:
-                st.session_state["vote"] = VOTE_AUTO
-            selected_vote = st.selectbox(t("Vorlage"), vote_options, key="vote", persist_state="session", format_func=lambda label: t(label) if label == VOTE_AUTO else label)
-            vote = None if selected_vote == VOTE_AUTO else selected_vote
-            if not has_upload:
-                st.caption(t('{v0} Abstimmungstermine · {v1} Sprachfassungen lokal verfügbar').format(v0=len(BOOKLET_CATALOG), v1=len(AVAILABLE_SOURCES)))
-                st.link_button(t("Original bei der Bundeskanzlei öffnen ↗"), SOURCE_METADATA[pdf_path.name]["url"])
+        vote_options = [VOTE_AUTO] + ([] if has_upload else DEMO_VOTES.get(pdf_path.name, SOURCE_METADATA.get(pdf_path.name, {}).get("votes", [])))
+        if st.session_state.get("vote") not in vote_options:
+            st.session_state["vote"] = VOTE_AUTO
+        selected_vote = st.selectbox(t("Vorlage"), vote_options, key="vote", persist_state="session", format_func=lambda label: t(label) if label == VOTE_AUTO else label)
+        vote = None if selected_vote == VOTE_AUTO else selected_vote
+        if not has_upload:
+            st.caption(t('{v0} Abstimmungstermine · {v1} Sprachfassungen lokal verfügbar').format(v0=len(BOOKLET_CATALOG), v1=len(AVAILABLE_SOURCES)))
+            st.link_button(t("Original bei der Bundeskanzlei öffnen ↗"), SOURCE_METADATA[pdf_path.name]["url"])
 
-        with st.expander(t("Sprache der Behauptung"), expanded=False):
-            claim_lang_choice = st.selectbox(t("Erkennung"), ["Automatisch", "DE", "FR", "IT"], key="claim_lang", persist_state="session", format_func=t)
-            st.caption(t("Deutsch, Französisch und Italienisch werden automatisch erkannt. Die Quelle darf eine andere Sprache haben."))
-        claim_lang = guess_language(claim) if claim_lang_choice == "Automatisch" else claim_lang_choice.lower()
+    with lang_box:
+        claim_lang_choice = st.selectbox(t("Erkennung"), ["Automatisch", "DE", "FR", "IT"], key="claim_lang", persist_state="session", format_func=t)
+        st.caption(t("Deutsch, Französisch und Italienisch werden automatisch erkannt. Die Quelle darf eine andere Sprache haben."))
+    claim_lang = guess_language(claim) if claim_lang_choice == "Automatisch" else claim_lang_choice.lower()
+    with save_box:
         save_history = st.checkbox(t("Prüfung lokal im Verlauf speichern"), value=True, key="save_history", persist_state="session",
                                    help=t("Speichert Behauptung, Quelle und Ergebnis auf diesem Rechner. Der Verlauf ist für Nutzer dieser lokalen App-Installation sichtbar."))
+    with verify_box:
         verify_clicked = st.button(t("Behauptung prüfen"), type="primary", width="stretch", disabled=not claim.strip() or (
             not agent_mode and no_source_matches and not has_upload)) or statement_start
-        st.caption(t("Beim Prüfen werden die Behauptung und ausgewählte Textstellen an Apertus auf CSCS gesendet."))
-        if not agent_on:
-            st.caption(t("Die Agentenschicht ist nicht verfügbar; die Prüfung läuft wie bisher ohne Agenten."))
-        st.markdown(
-            th('<div class="disclaimer">Vergleicht die Aussage mit dem Büchlein. Keine allgemeine Wahrheitsprüfung und keine Abstimmungsempfehlung.</div>'),
-            unsafe_allow_html=True,
-        )
+        if agent_mode:  # one hint line instead of the two notes of the old flow
+            st.markdown(f'<div class="disclaimer"><i class="fas fa-lock tone-grey" aria-hidden="true"></i> {t(CHECK_HINT)}</div>',
+                        unsafe_allow_html=True)
+        else:
+            st.caption(t("Beim Prüfen werden die Behauptung und ausgewählte Textstellen an Apertus auf CSCS gesendet."))
+            if not agent_on:
+                st.caption(t("Die Agentenschicht ist nicht verfügbar; die Prüfung läuft wie bisher ohne Agenten."))
+            st.markdown(
+                th('<div class="disclaimer">Vergleicht die Aussage mit dem Büchlein. Keine allgemeine Wahrheitsprüfung und keine Abstimmungsempfehlung.</div>'),
+                unsafe_allow_html=True,
+            )
 
-        with st.expander(t("Weitere Optionen: Suche & eigenes PDF"), expanded=False):
-            experiments = st.checkbox(t("Vektor-Experimente aktivieren"), key="enable_vector_rag", persist_state="session")
-            options = strategy_options(experiments)
-            if st.session_state.get("strategy_option") not in options:
-                st.session_state["strategy_option"] = STANDARD
-            st.radio(t("Kontext für Apertus"), options, key="strategy_option", persist_state="session", format_func=t)
-            strat = strategy_from_label(st.session_state["strategy_option"])
-            if strat in ("vector", "vector_hybrid"):
-                st.caption(t("Experimentelle Suche. Im bisherigen Dev-Vergleich war die Standardstrategie besser."))
-                if not rag_available():
-                    st.info(t("Die lokale Vektorsuche ist in dieser Installation noch nicht verfügbar."))
-            st.file_uploader(t("Eigenes PDF laden"), type=["pdf"], key=_upload_key(), on_change=_upload_changed,
-                help=t("Die Datei wird lokal gespeichert; beim Prüfen werden ausgewählte Textstellen an Apertus gesendet."))
+    with search_box:
+        experiments = st.checkbox(t("Vektor-Experimente aktivieren"), key="enable_vector_rag", persist_state="session")
+        options = strategy_options(experiments)
+        if st.session_state.get("strategy_option") not in options:
+            st.session_state["strategy_option"] = STANDARD
+        st.radio(t("Kontext für Apertus"), options, key="strategy_option", persist_state="session", format_func=t)
+        strat = strategy_from_label(st.session_state["strategy_option"])
+        if strat in ("vector", "vector_hybrid"):
+            st.caption(t("Experimentelle Suche. Im bisherigen Dev-Vergleich war die Standardstrategie besser."))
+            if not rag_available():
+                st.info(t("Die lokale Vektorsuche ist in dieser Installation noch nicht verfügbar."))
+        st.file_uploader(t("Eigenes PDF laden"), type=["pdf"], key=_upload_key(), on_change=_upload_changed,
+            help=t("Die Datei wird lokal gespeichert; beim Prüfen werden ausgewählte Textstellen an Apertus gesendet."))
 
-        with st.expander(t("Mehrere Aussagen aus einem Text prüfen"), expanded=False):
-            batch_text = st.text_area(t("Text mit mehreren Aussagen"), key="batch_text", persist_state="session", height=140, max_chars=20000)
-            st.caption(t("Lokale Satzvorschläge, keine automatische Faktenauswahl. Bitte Text und Auswahl prüfen; Abkürzungen können falsch getrennt werden."))
-            candidates = suggest_statements(batch_text)
-            if len(candidates) > 30:
-                st.info(t("Bitte kürze den Text auf höchstens 30 Satzvorschläge."))
-                candidates = []
-            if st.session_state.get("batch_selected"):
-                st.session_state["batch_selected"] = [value for value in st.session_state["batch_selected"] if value in candidates]
-            selected_claims = st.multiselect(t("Aussagen auswählen"), candidates, key="batch_selected", persist_state="session", max_selections=MAX_CHECKS)
-            st.caption(t("{n} Einzelprüfungen ausgewählt (maximal 5). Jede kann mehrere API-Anfragen auslösen. Alle verwenden die oben gewählte Quelle und Vorlage.").format(n=len(selected_claims)))
-            batch_needs_source = agent_mode and not own_source  # the agent's own search does not run here
-            if batch_needs_source:
-                st.caption(t(AGENT_BATCH_NEEDS_SOURCE))
-            batch_clicked = st.button(t("Ausgewählte Aussagen prüfen"), key="run_batch",
-                                      disabled=not selected_claims or batch_needs_source
-                                      or (no_source_matches and not has_upload))
-        batch_signature = (tuple(selected_claims), str(pdf_path),
-                           hashlib.sha256(pdf_path.read_bytes()).hexdigest() if pdf_path.exists() else None,
-                           vote, strat, claim_lang_choice)
+    with batch_box:
+        batch_text = st.text_area(t("Text mit mehreren Aussagen"), key="batch_text", persist_state="session", height=140, max_chars=20000)
+        st.caption(t("Lokale Satzvorschläge, keine automatische Faktenauswahl. Bitte Text und Auswahl prüfen; Abkürzungen können falsch getrennt werden."))
+        candidates = suggest_statements(batch_text)
+        if len(candidates) > 30:
+            st.info(t("Bitte kürze den Text auf höchstens 30 Satzvorschläge."))
+            candidates = []
+        if st.session_state.get("batch_selected"):
+            st.session_state["batch_selected"] = [value for value in st.session_state["batch_selected"] if value in candidates]
+        selected_claims = st.multiselect(t("Aussagen auswählen"), candidates, key="batch_selected", persist_state="session", max_selections=MAX_CHECKS)
+        st.caption(t("{n} Einzelprüfungen ausgewählt (maximal 5). Jede kann mehrere API-Anfragen auslösen. Alle verwenden die oben gewählte Quelle und Vorlage.").format(n=len(selected_claims)))
+        batch_needs_source = agent_mode and not own_source  # the agent's own search does not run here
+        if batch_needs_source:
+            st.caption(t(AGENT_BATCH_NEEDS_SOURCE))
+        batch_clicked = st.button(t("Ausgewählte Aussagen prüfen"), key="run_batch",
+                                  disabled=not selected_claims or batch_needs_source
+                                  or (no_source_matches and not has_upload))
+    batch_signature = (tuple(selected_claims), str(pdf_path),
+                       hashlib.sha256(pdf_path.read_bytes()).hexdigest() if pdf_path.exists() else None,
+                       vote, strat, claim_lang_choice)
 
-        previous_batch = st.session_state.get("batch_check")
-        retry_count = sum(bool(item["error"]) for item in previous_batch["outcomes"]) if previous_batch and previous_batch["signature"] == batch_signature else 0
-        retry_clicked = False
-        if retry_count:
+    previous_batch = st.session_state.get("batch_check")
+    retry_count = sum(bool(item["error"]) for item in previous_batch["outcomes"]) if previous_batch and previous_batch["signature"] == batch_signature else 0
+    retry_clicked = False
+    if retry_count:
+        with retry_box:
             st.caption(t("Nur {n} fehlgeschlagene Aussagen werden erneut geprüft; erfolgreiche Antworten bleiben erhalten.").format(n=retry_count))
             retry_clicked = st.button(t("Nur fehlgeschlagene Aussagen erneut prüfen"), key="retry_batch",
                                       disabled=batch_needs_source)
@@ -1527,4 +1557,4 @@ python -m src benchmark -d data/hf/test.jsonl -t beginner""", language="bash")
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-st.caption(t("Hack Apertus 2026 — Team Fact Attack (Track 2A: OST) · Josip Jukic & Felipe Wüthrich · [Unser Entwicklungsbranch](https://github.com/SheylaSam/fact-attack-genai/tree/genai/vector-rag) · [Originalprojekt](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)"))
+st.caption(t("Fact Attack · GenAI-Modulprojekt · Team Fact Attack · [Repository](https://github.com/SheylaSam/fact-attack-genai) · [Originalprojekt](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)"))

@@ -233,15 +233,59 @@ def test_french_claim_without_source_asks_to_pick_the_source():
         assert fakes.index.vote_calls == [] and fakes.engine.verify_calls == []
 
 
-def test_the_source_expander_opens_with_the_request_to_pick_the_source():
+MORE = 'Weitere Möglichkeiten'
+MORE_TABS = ['Quelle selbst wählen', 'Beispiel auswählen', 'Eigenes PDF & Suche', 'Mehrere Aussagen',
+             'Sprache der Behauptung']
+OLD_EXPANDERS = ('Keine eigene Behauptung? Beispiel auswählen', 'Quelle selbst wählen', 'Sprache der Behauptung',
+                 'Weitere Optionen: Suche & eigenes PDF', 'Mehrere Aussagen aus einem Text prüfen')
+LOCK_HINT = ('Behauptung und Textstellen gehen an Apertus (CSCS). Kein allgemeiner Wahrheitscheck, keine '
+             'Abstimmungsempfehlung.')
+
+
+def outside_expanders(node, inside=False):
+    """Every node of the page under `node` with whether an expander encloses it."""
+    for child in getattr(node, 'children', {}).values():
+        yield child, inside
+        yield from outside_expanders(child, inside or child.type == 'expander')
+
+
+def more_options(app):
+    return next(expander for expander in app.main.expander if expander.label == MORE)
+
+
+def test_agent_page_is_one_column_with_one_more_options_expander():
+    with agent_app(clear_fakes()) as app:
+        nodes = list(outside_expanders(app.main))
+        assert [node.label for node, inside in nodes if node.type == 'expander' and not inside] == [MORE]
+        assert not [node for node, inside in nodes if node.type == 'column' and not inside]  # one column
+        assert not any(expander.label in OLD_EXPANDERS for expander in app.expander)
+        assert [tab.label for tab in more_options(app).tabs] == MORE_TABS
+        keys = {getattr(node, 'key', None) for node, _ in nodes}
+        for key in ('claim_input', 'ballot', 'vote', 'source_year', 'source_query', 'booklet_lang', 'agent_own_source',
+                    'save_history', 'claim_lang', 'enable_vector_rag', 'strategy_option', UPLOADER, 'batch_text',
+                    'batch_selected', 'run_batch'):
+            assert key in keys, key
+        assert any(key.startswith('story_') for key in keys if key)
+        assert not more_options(app).proto.expanded
+        hints = [value for value in markdown(app) if LOCK_HINT in value]
+        assert len(hints) == 1 and '<i class="fas fa-lock tone-grey" aria-hidden="true"></i>' in hints[0]
+        assert not any('Beim Prüfen werden' in item.value for item in app.caption)
+        assert not any('Keine allgemeine Wahrheitsprüfung' in value for value in markdown(app))
+        app.selectbox(key='ui_language').set_value('fr').run()
+        [more] = [expander for expander in app.main.expander if expander.label == 'Autres possibilités']
+        assert more.tabs[0].label == 'Choisir la source soi-même'
+        assert not any(LOCK_HINT in value for value in markdown(app))
+        assert any('fa-lock' in value for value in markdown(app))
+
+
+def test_more_options_opens_itself_when_the_source_must_be_picked():
     fakes = clear_fakes()
     with agent_app(fakes) as app:
-        source_box = next(expander for expander in app.expander if expander.label == 'Quelle selbst wählen')
-        assert not source_box.proto.expanded
+        assert not more_options(app).proto.expanded
         check(app, FRENCH_CLAIM)
         assert any('nur für deutsche Behauptungen' in item.value for item in app.warning)
-        source_box = next(expander for expander in app.expander if expander.label == 'Quelle selbst wählen')
-        assert source_box.proto.expanded  # in the same click, not only after the next rerun
+        assert more_options(app).proto.expanded  # in the same click, not only after the next rerun
+        assert more_options(app).tabs[0].label == 'Quelle selbst wählen'  # the first tab is the source
 
 
 def pick_source(app, vote_title=V1.title):
@@ -256,7 +300,7 @@ def pick_source(app, vote_title=V1.title):
 def test_picking_the_source_yourself_runs_with_the_fixed_vote_and_has_no_question_step():
     fakes = Fakes([search_passages(V1), act('pruefen', vorlage_id=V1.vote_id)], index=FakeIndex(CLOSE))
     with agent_app(fakes) as app:
-        assert any(expander.label == 'Quelle selbst wählen' for expander in app.expander)
+        assert more_options(app).tabs[0].label == 'Quelle selbst wählen'
         pick_source(app)
         check(app)
         assert fakes.sessions[0][0] == V1.vote_id
@@ -416,7 +460,9 @@ def test_without_the_agent_layer_the_tab_keeps_the_old_flow():
          patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')):
         app = AppTest.from_file(APP, default_timeout=50).run()
         assert any('Agentenschicht ist nicht verfügbar' in item.value for item in app.caption)
-        assert not any(expander.label == 'Quelle selbst wählen' for expander in app.expander)
+        assert not any(expander.label in ('Quelle selbst wählen', MORE) for expander in app.expander)
+        assert not app.tabs and len(app.main.columns) >= 2  # the two columns with the required source picker
+        assert any('Quelle wählen' in value for value in markdown(app))
         check(app)
         assert verify.call_count == 1 and not make.called
         assert app.session_state['last_check']['result'] == result
@@ -887,8 +933,7 @@ def test_the_request_to_pick_the_source_ticks_the_box_so_a_chosen_booklet_runs()
         check(app, FRENCH_CLAIM)
         assert any('nur für deutsche Behauptungen' in item.value for item in app.warning)
         assert app.checkbox(key='agent_own_source').value
-        source_box = next(expander for expander in app.expander if expander.label == 'Quelle selbst wählen')
-        assert source_box.proto.expanded
+        assert more_options(app).proto.expanded
         app.selectbox(key='ballot').set_value('24. November 2024').run()
         app.radio(key='booklet_lang').set_value('DE').run()
         app.selectbox(key='vote').set_value(V1.title).run()

@@ -295,6 +295,14 @@ Die Behauptung verbindet mehrere Aussagen, die einzeln verschieden ausfallen kö
 Testmodus, kein Apertus-Urteil|Mode test, pas de verdict d’Apertus|Modalità di test, nessun giudizio di Apertus
 Für die Mehrfachprüfung die Quelle unter «Quelle selbst wählen» vorgeben oder ein eigenes PDF laden.|Pour la vérification multiple, imposez la source sous « Choisir la source soi-même » ou chargez un PDF personnel.|Per la verifica multipla, imponi la fonte in «Scegliere la fonte da soli» o carica un PDF personale.
 """
+_ROWS += """
+Weitere Möglichkeiten|Autres possibilités|Altre possibilità
+Beispiel auswählen|Choisir un exemple|Scegli un esempio
+Eigenes PDF & Suche|PDF personnel et recherche|PDF personale e ricerca
+Mehrere Aussagen|Plusieurs affirmations|Più affermazioni
+Behauptung und Textstellen gehen an Apertus (CSCS). Kein allgemeiner Wahrheitscheck, keine Abstimmungsempfehlung.|L’affirmation et les passages sont envoyés à Apertus (CSCS). Ni vérification générale de la vérité, ni recommandation de vote.|L’affermazione e i passaggi vengono inviati ad Apertus (CSCS). Nessuna verifica generale della verità, nessuna raccomandazione di voto.
+Fact Attack · GenAI-Modulprojekt · Team Fact Attack · [Repository](https://github.com/SheylaSam/fact-attack-genai) · [Originalprojekt](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)|Fact Attack · Projet du module GenAI · Équipe Fact Attack · [Dépôt](https://github.com/SheylaSam/fact-attack-genai) · [Projet original](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)|Fact Attack · Progetto del modulo GenAI · Team Fact Attack · [Repository](https://github.com/SheylaSam/fact-attack-genai) · [Progetto originale](https://github.com/JJukic/Apertus-Team-Fact-Attack-2026)
+"""
 TRANSLATIONS = {parts[0]: {'fr': parts[1], 'it': parts[2]} for row in _ROWS.splitlines() if row.strip() and (parts := row.split('|'))}
 
 
