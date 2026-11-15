@@ -329,6 +329,7 @@ def test_technical_error_is_red_in_its_step_and_there_is_no_verdict(isolated_his
         check(app)
         errors = [item.value for item in app.error]
         assert any('agent-step-error' in value and 'fa-exclamation-triangle' in value and 'Apertus nicht erreichbar' in value
+                   and 'role="alert"' in value and 'Schritt fehlgeschlagen' in value
                    for value in step_texts(app))  # the error card carries the escaped error text
         assert any('Die Prüfung konnte nicht abgeschlossen werden' in value for value in errors)
         assert not has_verdict(app) and 'last_check' not in app.session_state

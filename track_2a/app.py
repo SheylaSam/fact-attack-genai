@@ -427,13 +427,15 @@ def _step_card(row) -> str:
     """One step as a card: its icon in the tone of its kind, the sentence, the agent's own text folded away, an error
     in full. Everything from the trace or the model is escaped; the markup has no blank line (it stays one block)."""
     icon, tone = _step_icon(row)
-    body = f'<div class="step-title">{html.escape(agent_ui.row_text(row, t, _vote_date))}</div>'
+    alert = ' role="alert"' if row.mark == "error" else ""
+    body = (f'<div class="step-error-label">{html.escape(t("Schritt fehlgeschlagen"))}</div>' if row.mark == "error" else "")
+    body += f'<div class="step-title">{html.escape(agent_ui.row_text(row, t, _vote_date))}</div>'
     if row.detail:
         body += (f'<details class="step-details"><summary>{html.escape(t("Details"))}</summary>'
                  f'<div>{html.escape(row.detail)}</div></details>')
     if row.error:
         body += f'<div class="step-text step-error">{html.escape(row.error)}</div>'
-    return (f'<div class="agent-step agent-step-{row.mark} step-card" data-kind="{html.escape(row.kind)}">'
+    return (f'<div class="agent-step agent-step-{row.mark} step-card" data-kind="{html.escape(row.kind)}"{alert}>'
             f'<i class="fas {html.escape(icon)} tone-{html.escape(tone)}" aria-hidden="true"></i>'
             f'<div class="step-body">{body}</div></div>')
 

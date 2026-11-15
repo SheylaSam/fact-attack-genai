@@ -274,6 +274,8 @@ button:focus-visible { outline: 2px solid var(--blue) !important; outline-offset
 .agent-step { font-size: 0.9rem; color: var(--text); padding: 0.7rem 1rem; margin-bottom: 0.5rem; }
 .agent-step-running { color: var(--muted); font-style: italic; }
 .agent-step .step-body { min-width: 0; flex: 1; }
+.agent-step-running .step-title { color: var(--muted); }
+.agent-step .step-error-label { font-size: 0.78rem; font-weight: 700; color: var(--red-text); }
 .agent-step .step-error { color: var(--red-text); margin-top: 0.3rem; }
 .step-details { margin-top: 0.3rem; font-size: 0.8rem; color: var(--muted); }
 .step-details summary { cursor: pointer; color: var(--muted); }
