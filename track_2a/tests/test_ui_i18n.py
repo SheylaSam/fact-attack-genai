@@ -58,3 +58,10 @@ def test_new_verdict_terms_have_translations():
     for text in ('Vom Büchlein gestützt', 'Im Büchlein nicht belegt', 'Widerspricht dem Büchlein',
                  'Für ein nicht belegtes Ergebnis wird keine Belegstelle markiert.', '{n} weitere Belege', 'Seite {n}'):
         assert set(TRANSLATIONS.get(text, {})) == {'fr', 'it'}, text
+
+
+def test_sidebar_and_upload_texts_have_translations():
+    assert translate('Eigenes PDF entfernen', 'fr') == 'Retirer le PDF personnel'
+    assert translate('Eigenes PDF entfernen', 'it') == 'Rimuovi il PDF personale'
+    for text in ('Zuletzt geprüft', 'Navigation'):
+        assert set(TRANSLATIONS.get(text, {})) == {'fr', 'it'}, text

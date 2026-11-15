@@ -501,6 +501,30 @@ def uploaded_pdf(contents):
         stored.unlink(missing_ok=True)
 
 
+@contextmanager
+def switchable_upload(contents):
+    """Like `uploaded_pdf`, but `held['upload'] = None` empties the uploader, as Streamlit does with the uploader of a
+    page that a page switch left undrawn."""
+    import hashlib
+    from types import SimpleNamespace
+    from streamlit.runtime.state.session_state_proxy import SessionStateProxy
+    from src import config
+    held = {'upload': SimpleNamespace(name='mein-dokument.pdf', getbuffer=lambda: memoryview(contents))}
+    stored = config.BOOKLETS_DIR / f'custom_{hashlib.sha256(contents).hexdigest()}.pdf'
+    original_get = SessionStateProxy.get
+
+    def session_get(self, key, default=None):
+        if key == 'uploaded_pdf' and held['upload'] is not None:
+            return held['upload']
+        return original_get(self, key, default)
+
+    try:
+        with patch.object(SessionStateProxy, 'get', session_get):
+            yield held
+    finally:
+        stored.unlink(missing_ok=True)
+
+
 def tiny_pdf(pages=3):
     import fitz
     with fitz.open() as document:
@@ -541,6 +565,32 @@ def test_uploaded_pdf_check_has_the_same_steps_and_card(isolated_history):
         assert last['source'][0] == stored and last['source'][1] is None and last['source'][2] == 'fr'
         assert [(row['date'], row['language']) for row in load_checks(isolated_history)] == [(None, 'fr')]
         assert not any(item.value.startswith('Die Prüfung konnte nicht') for item in app.error)
+
+
+def test_an_agent_check_on_an_upload_survives_a_page_switch_until_the_pdf_is_removed():
+    import hashlib
+    contents = tiny_pdf()
+    upload_id = f'custom_{hashlib.sha256(contents).hexdigest()}#0'
+    fakes = Fakes([act('suche_passagen', vorlage_id=upload_id), act('pruefen', vorlage_id=upload_id)],
+                  index=FakeIndex(CLOSE))
+    booklet = {'pages': [{'page_number': number, 'text': f'Seite {number}'} for number in (1, 2, 3)],
+               'paragraphs': [], 'full_text': ''}
+    with switchable_upload(contents) as held, \
+         patch('src.inference.ClaimVerificationEngine._get_booklet_data', return_value=booklet), \
+         patch('src.inference.ClaimVerificationEngine.verify_claim', side_effect=AssertionError('old flow')), \
+         agent_app(fakes) as app:
+        check(app)
+        assert has_verdict(app)
+        held['upload'] = None  # Streamlit empties the uploader of a page that was not drawn
+        goto(goto(app, 'Prüfverlauf'), 'Faktencheck')
+        assert not app.exception
+        assert has_verdict(app) and step_texts(app)
+        assert any('Aktive Quelle: eigenes PDF' in item.value for item in app.info)
+        assert len(fakes.sessions) == 1 and 'agent_session' in app.session_state
+        app.button(key='remove_upload').click().run()
+        assert not app.exception
+        assert 'agent_session' not in app.session_state and not has_verdict(app)
+        assert not any('Aktive Quelle: eigenes PDF' in item.value for item in app.info)
 
 
 def test_unreadable_upload_shows_a_translated_message_and_starts_no_check():

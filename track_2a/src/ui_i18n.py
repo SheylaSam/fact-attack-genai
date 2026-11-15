@@ -7,6 +7,7 @@ _ROWS = '''Faktencheck|Vérifier|Verifica
 Dunkler Modus|Mode sombre|Modalità scura
 Navigation|Navigation|Navigazione
 Zuletzt geprüft|Vérifiées récemment|Verificate di recente
+Eigenes PDF entfernen|Retirer le PDF personnel|Rimuovi il PDF personale
 Prüfverlauf|Historique|Cronologia
 Ergebnisse & Vergleiche|Résultats et comparaisons|Risultati e confronti
 So funktioniert’s|Fonctionnement|Come funziona

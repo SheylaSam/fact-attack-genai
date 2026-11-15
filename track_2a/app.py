@@ -321,6 +321,19 @@ def _short_claim(text: str) -> str:
     return textwrap.shorten(text, width=42, placeholder=" …")
 
 
+def _remove_upload() -> None:
+    """Button callback «Eigenes PDF entfernen»: forgets the own PDF, also the copy kept for page switches."""
+    st.session_state.pop("kept_upload", None)
+    st.session_state.pop("uploaded_pdf", None)
+
+
+def _upload_changed() -> None:
+    """The user emptied the uploader with its own control: the kept upload goes too. (A page switch empties the
+    uploader without this callback, so the kept upload stays.)"""
+    if st.session_state.get("uploaded_pdf") is None:
+        st.session_state.pop("kept_upload", None)
+
+
 def _reset_source_filters():
     st.session_state["source_query"] = ""
     st.session_state["source_year"] = "Alle Jahre"
@@ -336,6 +349,7 @@ def _apply_case(case: dict, set_active: bool = True) -> None:
     st.session_state["claim_lang"] = case["claim_language"].upper()
     st.session_state["active_case"] = case["id"] if set_active else None
     st.session_state.pop("uploaded_pdf", None)  # an example's source is its official booklet, never an upload
+    st.session_state.pop("kept_upload", None)
     st.session_state["agent_own_source"] = True  # and in agent mode that booklet is the given source
     _reset_source_filters()
 
@@ -615,15 +629,17 @@ with st.sidebar:
     if recent_checks:
         with st.expander(t("Zuletzt geprüft"), expanded=False):
             for record in recent_checks:
-                label = record["result"]["label"]
+                label = record["result"].get("label")
+                known = label in VERDICTS and label in agent_ui.OUTCOME_WORDS  # an odd stored label: no icon, no word
+                short = _md(_short_claim(record["result"]["claim"]))
                 with st.container(horizontal=True, vertical_alignment="center", gap="small", wrap=False):
-                    st.markdown(f'<i class="fas {VERDICTS[label][1]} tone-{VERDICT_TONES[label]} recent-icon" aria-hidden="true"></i>',
-                                unsafe_allow_html=True, width="content")
-                    st.button(f"{_md(_short_claim(record['result']['claim']))} · {t(agent_ui.OUTCOME_WORDS[label])}",
+                    if known:
+                        st.markdown(f'<i class="fas {VERDICTS[label][1]} tone-{VERDICT_TONES[label]} recent-icon" aria-hidden="true"></i>',
+                                    unsafe_allow_html=True, width="content")
+                    st.button(f"{short} · {t(agent_ui.OUTCOME_WORDS[label])}" if known else short,
                               key=f"recent_{record['id']}", on_click=_open_saved, args=(record["id"],),
                               type="tertiary", width="stretch", wrap=True)  # the verdict word stays readable
     st.selectbox("Sprache / Langue / Lingua", list(LANGUAGES), format_func=LANGUAGES.get, key="ui_language",
-                 label_visibility="collapsed",
                  help=t("Die Sprache der Oberfläche ändert weder die Behauptung noch die Quelle. Forschungsnotizen, Beispieltitel und Exporte behalten ihre Originalsprache."))
     st.toggle(t("Dunkler Modus"), key="ui_dark")
 
@@ -662,6 +678,13 @@ if page == PAGES[0]:
         st.session_state["ballot"] = next(iter(BOOKLET_CATALOG))
     agent_on = agent_app.agent_available()
     uploaded_file = st.session_state.get("uploaded_pdf")
+    # A page switch empties the uploader (it cannot persist its value). The stored copy of the last own PDF stays the
+    # source until the user removes it, so a result or open question on it survives the switch.
+    kept_upload = st.session_state.get("kept_upload")  # (file name, stored path) of the own PDF
+    if uploaded_file is None and kept_upload is not None and not Path(kept_upload[1]).is_file():
+        st.session_state.pop("kept_upload", None)
+        kept_upload = None
+    has_upload = uploaded_file is not None or kept_upload is not None
     agent_mode = agent_on
     # «Quelle selbst wählen» after a claim in another language ticks the box too (set before its widget exists)
     picked_source = bool(st.session_state.pop("agent_pick_source", False)) and agent_mode
@@ -669,7 +692,7 @@ if page == PAGES[0]:
         st.session_state["agent_own_source"] = True
     # a clicked statement of a compound claim is in the claim input now: it starts a new check like the button
     statement_start = bool(st.session_state.pop("agent_check_statement", False)) and agent_mode
-    own_upload = agent_mode and uploaded_file is not None  # an own PDF is always the check's fixed source
+    own_upload = agent_mode and has_upload  # an own PDF is always the check's fixed source
     own_source = own_upload or (agent_mode and bool(st.session_state.get("agent_own_source")))
     col_in, col_out = st.columns([1, 1.12], gap="large")
 
@@ -728,29 +751,34 @@ if page == PAGES[0]:
                 st.button(t("Quellenfilter zurücksetzen"), on_click=_reset_source_filters)
             c_ballot, c_lang = st.columns([1.5, 1])
             with c_ballot:
-                selected_ballot_name = st.selectbox(t("Abstimmung"), list(filtered_dates), key="ballot", persist_state="session", disabled=no_source_matches or uploaded_file is not None, format_func=lambda label: date_label(label, UI_LANGUAGE))
+                selected_ballot_name = st.selectbox(t("Abstimmung"), list(filtered_dates), key="ballot", persist_state="session", disabled=no_source_matches or has_upload, format_func=lambda label: date_label(label, UI_LANGUAGE))
                 selected_date = BOOKLET_CATALOG[selected_ballot_name]
             with c_lang:
-                language_options = ["DE", "FR", "IT"] if uploaded_file is not None else languages_for_date(AVAILABLE_SOURCES, selected_date)
+                language_options = ["DE", "FR", "IT"] if has_upload else languages_for_date(AVAILABLE_SOURCES, selected_date)
                 if st.session_state.get("booklet_lang") not in language_options:
                     st.session_state["booklet_lang"] = language_options[0]
                 selected_lang = st.radio(t("Sprache des Büchleins"), language_options, horizontal=True, key="booklet_lang", persist_state="session")
                 lang_code = selected_lang.lower()
 
-            source_date = None if uploaded_file is not None else selected_date
+            source_date = None if has_upload else selected_date
             pdf_path = config.BOOKLETS_DIR / f"{selected_date}_{lang_code}.pdf"
-            if uploaded_file is not None:
-                uploaded_bytes = bytes(uploaded_file.getbuffer())
-                pdf_path = store_uploaded_source(config.BOOKLETS_DIR, uploaded_bytes)
-                st.success(t('✓ {v0} geladen').format(v0=uploaded_file.name))
+            if has_upload:
+                if uploaded_file is not None:
+                    upload_name = uploaded_file.name
+                    pdf_path = store_uploaded_source(config.BOOKLETS_DIR, bytes(uploaded_file.getbuffer()))
+                    st.session_state["kept_upload"] = (upload_name, str(pdf_path))
+                else:
+                    upload_name, pdf_path = kept_upload[0], Path(kept_upload[1])
+                st.success(t('✓ {v0} geladen').format(v0=upload_name))
                 st.info(t("Aktive Quelle: eigenes PDF. Das Abstimmungsdatum ist unbekannt; die offizielle Datumsauswahl ist deaktiviert."))
+                st.button(t("Eigenes PDF entfernen"), key="remove_upload", on_click=_remove_upload)
 
-            vote_options = [VOTE_AUTO] + ([] if uploaded_file is not None else DEMO_VOTES.get(pdf_path.name, SOURCE_METADATA.get(pdf_path.name, {}).get("votes", [])))
+            vote_options = [VOTE_AUTO] + ([] if has_upload else DEMO_VOTES.get(pdf_path.name, SOURCE_METADATA.get(pdf_path.name, {}).get("votes", [])))
             if st.session_state.get("vote") not in vote_options:
                 st.session_state["vote"] = VOTE_AUTO
             selected_vote = st.selectbox(t("Vorlage"), vote_options, key="vote", persist_state="session", format_func=lambda label: t(label) if label == VOTE_AUTO else label)
             vote = None if selected_vote == VOTE_AUTO else selected_vote
-            if uploaded_file is None:
+            if not has_upload:
                 st.caption(t('{v0} Abstimmungstermine · {v1} Sprachfassungen lokal verfügbar').format(v0=len(BOOKLET_CATALOG), v1=len(AVAILABLE_SOURCES)))
                 st.link_button(t("Original bei der Bundeskanzlei öffnen ↗"), SOURCE_METADATA[pdf_path.name]["url"])
 
@@ -761,7 +789,7 @@ if page == PAGES[0]:
         save_history = st.checkbox(t("Prüfung lokal im Verlauf speichern"), value=True, key="save_history", persist_state="session",
                                    help=t("Speichert Behauptung, Quelle und Ergebnis auf diesem Rechner. Der Verlauf ist für Nutzer dieser lokalen App-Installation sichtbar."))
         verify_clicked = st.button(t("Behauptung prüfen"), type="primary", width="stretch", disabled=not claim.strip() or (
-            not agent_mode and no_source_matches and uploaded_file is None)) or statement_start
+            not agent_mode and no_source_matches and not has_upload)) or statement_start
         st.caption(t("Beim Prüfen werden die Behauptung und ausgewählte Textstellen an Apertus auf CSCS gesendet."))
         if not agent_on:
             st.caption(t("Die Agentenschicht ist nicht verfügbar; die Prüfung läuft wie bisher ohne Agenten."))
@@ -781,7 +809,7 @@ if page == PAGES[0]:
                 st.caption(t("Experimentelle Suche. Im bisherigen Dev-Vergleich war die Standardstrategie besser."))
                 if not rag_available():
                     st.info(t("Die lokale Vektorsuche ist in dieser Installation noch nicht verfügbar."))
-            st.file_uploader(t("Eigenes PDF laden"), type=["pdf"], key="uploaded_pdf",
+            st.file_uploader(t("Eigenes PDF laden"), type=["pdf"], key="uploaded_pdf", on_change=_upload_changed,
                 help=t("Die Datei wird lokal gespeichert; beim Prüfen werden ausgewählte Textstellen an Apertus gesendet."))
 
         with st.expander(t("Mehrere Aussagen aus einem Text prüfen"), expanded=False):
@@ -800,7 +828,7 @@ if page == PAGES[0]:
                 st.caption(t(AGENT_BATCH_NEEDS_SOURCE))
             batch_clicked = st.button(t("Ausgewählte Aussagen prüfen"), key="run_batch",
                                       disabled=not selected_claims or batch_needs_source
-                                      or (no_source_matches and uploaded_file is None))
+                                      or (no_source_matches and not has_upload))
         batch_signature = (tuple(selected_claims), str(pdf_path),
                            hashlib.sha256(pdf_path.read_bytes()).hexdigest() if pdf_path.exists() else None,
                            vote, strat, claim_lang_choice)
@@ -1370,13 +1398,13 @@ if page == PAGES[2]:
         datasets = {k: v for k, v in datasets.items() if v.exists()}
         c_ds, c_task, c_strat, c_lim = st.columns([2, 1, 1, 1])
         with c_ds:
-            eval_dataset = st.selectbox(t("Datensatz"), list(datasets))
+            eval_dataset = st.selectbox(t("Datensatz"), list(datasets), key="eval_dataset", persist_state="session")
         with c_task:
-            eval_task = st.selectbox(t("Task"), ["advanced", "beginner"])
+            eval_task = st.selectbox(t("Task"), ["advanced", "beginner"], key="eval_task", persist_state="session")
         with c_strat:
-            eval_strat = st.selectbox(t("Strategie"), ["hybrid", "retrieval", "full"])
+            eval_strat = st.selectbox(t("Strategie"), ["hybrid", "retrieval", "full"], key="eval_strat", persist_state="session")
         with c_lim:
-            eval_lim = st.selectbox(t("Limit"), [6, 15, 30, "Alle"], index=0)
+            eval_lim = st.selectbox(t("Limit"), [6, 15, 30, "Alle"], key="eval_lim", persist_state="session")
 
         if st.button(t("Evaluierung starten"), key="btn_run_live_eval"):
             lim_val = None if eval_lim == "Alle" else int(eval_lim)

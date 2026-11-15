@@ -548,7 +548,8 @@ def test_sidebar_has_navigation_language_and_dark_switch():
     assert nav.value == 'Faktencheck'
     assert any('Fact Attack' in item.value for item in app.sidebar.markdown)
     language = app.sidebar.selectbox(key='ui_language')
-    assert language.label and 'Oberfläche' in language.help
+    assert language.label == 'Sprache / Langue / Lingua' and 'Oberfläche' in language.help
+    assert language.proto.label_visibility.value == 0  # visible: a collapsed label also hides the help icon
     assert not app.tabs
     assert not any('topbar' in item.value for item in app.markdown)
     assert not any('Die Sprache der Oberfläche' in item.value for item in app.caption)
@@ -619,3 +620,67 @@ def test_recent_section_is_absent_without_history(isolated_history):
     assert not app.exception
     assert not any(expander.label == 'Zuletzt geprüft' for expander in app.expander)
     assert not _recent(app)
+
+
+def test_a_record_with_an_unknown_label_does_not_break_the_sidebar(isolated_history):
+    saved = _save_checks(isolated_history, [('Aussage mit altem Ergebnis', 7)])
+    app = AppTest.from_file(APP, default_timeout=50).run()
+    assert not app.exception
+    button = app.button(key=f"recent_{saved[0]['id']}")
+    assert button.label == 'Aussage mit altem Ergebnis'
+    assert not any('fa-' in item.value for item in app.sidebar.markdown if 'recent-icon' in item.value)
+
+
+def test_live_benchmark_choices_survive_a_page_switch():
+    app = goto(AppTest.from_file(APP, default_timeout=50).run(), 'Ergebnisse & Vergleiche')
+    assert not app.exception
+    app.selectbox(key='eval_task').set_value('beginner').run()
+    app.selectbox(key='eval_lim').set_value(15).run()
+    goto(goto(app, 'Faktencheck'), 'Prüfverlauf')
+    goto(app, 'Ergebnisse & Vergleiche')
+    assert app.selectbox(key='eval_task').value == 'beginner'
+    assert app.selectbox(key='eval_lim').value == 15
+
+
+def test_an_uploaded_pdf_and_its_result_survive_a_page_switch_until_removed(tmp_path):
+    import hashlib
+    import streamlit as st
+    from types import SimpleNamespace
+    from streamlit.runtime.state.session_state_proxy import SessionStateProxy
+    from src.inference import PredictionResult
+    pdf = (APP.parent / 'data/booklets/2026-06-14_fr.pdf').read_bytes()
+    source = tmp_path / f'custom_{hashlib.sha256(pdf).hexdigest()}.pdf'
+    source.write_bytes(pdf)
+    held = {'upload': SimpleNamespace(name='mein-dokument.pdf', getbuffer=lambda: memoryview(pdf))}
+    original_get = SessionStateProxy.get
+    def session_get(self, key, default=None):
+        if key == 'uploaded_pdf' and held['upload'] is not None:
+            return held['upload']
+        return original_get(self, key, default)
+    result = PredictionResult(claim='Une affirmation personnelle.', label=1, label_name='Neutral', reasoning='Injected',
+                              evidence=[], strategy='hybrid', booklet_path=str(source), tokens_prompt=0,
+                              tokens_completion=0, tokens_total=0, latency_ms=0)
+    st.cache_resource.clear()
+    with patch.object(SessionStateProxy, 'get', session_get), \
+         patch('src.ui_strategies.store_uploaded_source', return_value=source), \
+         patch('src.config.LLM_API_KEY', 'ui-test'), patch('src.config.MOCK_APERTUS', False), \
+         patch('src.inference.ClaimVerificationEngine.verify_claim', return_value=result) as verify, \
+         patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')):
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        app.text_area(key='claim_input').set_value(result.claim).run()
+        next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        assert not app.exception and any('<div class="verdict-card' in item.value for item in app.markdown)
+        held['upload'] = None  # Streamlit empties the uploader of a page that was not drawn
+        goto(goto(app, 'Prüfverlauf'), 'Faktencheck')
+        assert not app.exception
+        assert any('Aktive Quelle: eigenes PDF' in item.value for item in app.info)
+        assert app.selectbox(key='ballot').disabled
+        assert any('<div class="verdict-card' in item.value for item in app.markdown)
+        assert verify.call_count == 1
+        app.button(key='remove_upload').click().run()
+        assert not app.exception
+        assert not any('Aktive Quelle: eigenes PDF' in item.value for item in app.info)
+        assert not app.selectbox(key='ballot').disabled
+        assert not any('<div class="verdict-card' in item.value for item in app.markdown)
+        assert not any(button.key == 'remove_upload' for button in app.button)
+    st.cache_resource.clear()
