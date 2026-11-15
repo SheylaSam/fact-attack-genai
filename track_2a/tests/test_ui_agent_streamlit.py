@@ -139,7 +139,7 @@ def test_a_clear_claim_shows_the_steps_and_the_result_card():
     with agent_app(fakes) as app:
         check(app)
         steps = '\n'.join(step_texts(app))
-        for title in ('passende Vorlagen gefunden', 'Textstellen im Büchlein gefunden', 'Prüfung starten', 'Zitate stehen'):
+        for title in ('passende Vorlagen gefunden', 'Textstellen im Büchlein gefunden', 'Prüfung starten', 'wörtlich im PDF'):
             assert title in steps
         assert 'Rückfrage' not in steps
         assert 'agent-step-running' not in steps  # the finished list has no running row left from the live one
@@ -177,7 +177,7 @@ def test_clicking_an_option_continues_the_check_and_shows_the_result():
         assert not app.exception
         assert fakes.answers == [V2.vote_id] and len(fakes.sessions) == 1
         steps = '\n'.join(step_texts(app))
-        assert 'passende Vorlagen gefunden' in steps and 'Du hast gewählt' in steps and 'Zitate stehen' in steps
+        assert 'passende Vorlagen gefunden' in steps and 'Du hast gewählt' in steps and 'wörtlich im PDF' in steps
         assert 'agent-step-running' not in steps
         assert not any('Welche Vorlage ist gemeint?' in value for value in markdown(app))
         assert not options(app)
@@ -505,7 +505,7 @@ def test_uploaded_pdf_check_has_the_same_steps_and_card(isolated_history):
         assert fakes.sessions[0][0] == upload.vote_id
         assert fakes.index.vote_calls == []
         steps = '\n'.join(step_texts(app))
-        for title in ('Textstellen im Büchlein gefunden', 'Prüfung starten', 'Zitate stehen'):
+        for title in ('Textstellen im Büchlein gefunden', 'Prüfung starten', 'wörtlich im PDF'):
             assert title in steps
         assert 'Rückfrage' not in steps and not options(app)
         assert has_verdict(app)

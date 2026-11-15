@@ -208,6 +208,17 @@ class PlainStepTextTests(unittest.TestCase):
                                  'Apertus hat geprüft: nicht belegt', 'Kein Zitat zu prüfen',
                                  'Urteil verworfen: kein Zitat steht im PDF'])
 
+    def test_one_valid_quote_and_unchecked_quotes_read_correctly(self):
+        events = [event(1, 'check_evidence', None, 'a', data={'valid': 1, 'quotes': 1}),
+                  event(2, 'check_evidence', None, 'b', data={'valid': 1, 'quotes': 1, 'checked': False}),
+                  event(3, 'check_evidence', None, 'c', data={'valid': 3, 'quotes': 3, 'checked': False}),
+                  event(4, 'check_evidence', None, 'd', data={'valid': 2, 'quotes': 4, 'checked': False})]
+        texts = [agent_ui.row_text(row, str, str) for row in agent_ui.step_rows(events)]
+        self.assertEqual(texts, ['Das Zitat steht wörtlich im PDF', 'Ein Zitat ungeprüft übernommen',
+                                 '3 Zitate ungeprüft übernommen', '2 Zitate ungeprüft übernommen'])
+        for text in ('Das Zitat steht wörtlich im PDF', 'Ein Zitat ungeprüft übernommen', '{n} Zitate ungeprüft übernommen'):
+            self.assertIn(text, agent_ui.TEXT_KEYS)
+
     def test_events_without_data_keep_the_old_title_and_summary(self):
         events = [event(2, 'decide', 'suche_passagen'), event(2, 'act', 'suche_passagen', 'Passagen gefunden', data={})]
         [row] = agent_ui.step_rows(events)

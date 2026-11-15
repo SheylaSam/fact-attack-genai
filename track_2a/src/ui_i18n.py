@@ -240,6 +240,9 @@ Nachsuche: {n} neue Textstellen|Recherche complémentaire : {n} nouveaux passage
 Apertus hat geprüft: {v0}|Apertus a vérifié : {v0}|Apertus ha verificato: {v0}
 Alle {n} Zitate stehen wörtlich im PDF|Les {n} citations figurent mot pour mot dans le PDF|Tutte le {n} citazioni compaiono alla lettera nel PDF
 {v0} von {n} Zitaten stehen im PDF|{v0} citations sur {n} figurent dans le PDF|{v0} citazioni su {n} compaiono nel PDF
+Das Zitat steht wörtlich im PDF|La citation figure mot pour mot dans le PDF|La citazione compare alla lettera nel PDF
+Ein Zitat ungeprüft übernommen|Une citation reprise sans vérification|Una citazione ripresa senza verifica
+{n} Zitate ungeprüft übernommen|{n} citations reprises sans vérification|{n} citazioni riprese senza verifica
 Kein Zitat zu prüfen|Aucune citation à vérifier|Nessuna citazione da verificare
 Urteil verworfen: kein Zitat steht im PDF|Jugement écarté : aucune citation ne figure dans le PDF|Giudizio scartato: nessuna citazione compare nel PDF
 gestützt|étayée|confermata

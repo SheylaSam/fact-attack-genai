@@ -75,13 +75,17 @@ TITLE_VECTOR = "Nachsuche: {n} neue Textstellen"
 TITLE_VERIFIED = "Apertus hat geprüft: {v0}"
 TITLE_EVIDENCE_ALL = "Alle {n} Zitate stehen wörtlich im PDF"
 TITLE_EVIDENCE_SOME = "{v0} von {n} Zitaten stehen im PDF"
+TITLE_EVIDENCE_ONE = "Das Zitat steht wörtlich im PDF"
+TITLE_UNCHECKED_ONE = "Ein Zitat ungeprüft übernommen"
+TITLE_UNCHECKED_MANY = "{n} Zitate ungeprüft übernommen"
 TITLE_EVIDENCE_NONE = "Kein Zitat zu prüfen"
 TITLE_EVIDENCE_REJECTED = "Urteil verworfen: kein Zitat steht im PDF"
 OUTCOME_WORDS = {0: "gestützt", 1: "nicht belegt", 2: "widersprochen"}  # NLI label -> word in a sentence
 
 TEXT_KEYS: Tuple[str, ...] = tuple(dict.fromkeys((
     TITLE_VOTES_MANY, TITLE_VOTES_ONE, TITLE_ANSWERED, TITLE_PASSAGES, TITLE_VECTOR, TITLE_VERIFIED,
-    TITLE_EVIDENCE_ALL, TITLE_EVIDENCE_SOME, TITLE_EVIDENCE_NONE, TITLE_EVIDENCE_REJECTED, *OUTCOME_WORDS.values(),
+    TITLE_EVIDENCE_ALL, TITLE_EVIDENCE_ONE, TITLE_UNCHECKED_ONE, TITLE_UNCHECKED_MANY,
+    TITLE_EVIDENCE_SOME, TITLE_EVIDENCE_NONE, TITLE_EVIDENCE_REJECTED, *OUTCOME_WORDS.values(),
     TITLE_ASK, TITLE_DECIDE, TITLE_RUNNING, *TOOL_TITLES.values(), *NODE_TITLES.values(),
     TITLE_SUPPORTED, TEXT_SUPPORTED, TITLE_NOT_PROVEN, TEXT_NOT_PROVEN, TITLE_CONTRADICTED, TEXT_CONTRADICTED,
     TITLE_QUESTION, TEXT_QUESTION, TEXT_QUESTION_CHOOSE, TITLE_STATEMENT, TEXT_STATEMENT,
@@ -211,10 +215,16 @@ def _sentence(group: List[TraceEvent]) -> Optional[Tuple[str, str, Tuple[Tuple[s
         return "verify", TITLE_VERIFIED, (("v0", OUTCOME_WORDS[data["label"]]),)
     if first.node == "check_evidence" and _count(data.get("valid")) is not None and _count(data.get("quotes")) is not None:
         valid, quotes = data["valid"], data["quotes"]
+        if data.get("checked") is False and valid > 0:  # the evidence check was off: nothing was looked up in the PDF
+            if valid == 1:
+                return "evidence", TITLE_UNCHECKED_ONE, ()
+            return "evidence", TITLE_UNCHECKED_MANY, (("n", str(valid)),)
         if quotes == 0:
             return "evidence", TITLE_EVIDENCE_NONE, ()
         if valid == 0:
             return "evidence", TITLE_EVIDENCE_REJECTED, ()
+        if valid >= quotes == 1:
+            return "evidence", TITLE_EVIDENCE_ONE, ()
         if valid >= quotes:
             return "evidence", TITLE_EVIDENCE_ALL, (("n", str(quotes)),)
         return "evidence", TITLE_EVIDENCE_SOME, (("v0", str(valid)), ("n", str(quotes)))

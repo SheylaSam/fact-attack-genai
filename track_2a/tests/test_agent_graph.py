@@ -1270,6 +1270,8 @@ class EvidenceSwitchTests(unittest.TestCase):
                 step = next(e for e in result.events if e.node == 'check_evidence')
                 self.assertNotIn('verworfen', step.summary)
                 self.assertIn('ungeprüft', step.summary)
+                self.assertIs(step.data['checked'], False)
+                self.assertEqual(step.data['valid'], len(result.evidence))
 
     def test_evidence_check_off_never_reads_the_pdf_text(self):
         # with the check on, a page without readable text is a technical error; off, nobody looks at the page

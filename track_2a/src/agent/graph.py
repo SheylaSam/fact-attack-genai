@@ -592,7 +592,7 @@ class _Nodes:
             evidence = self._given_evidence(prediction)
             self.emit(step, "check_evidence", started,
                       summary=f"Belegprüfung aus: {len(evidence)} von {total} Zitaten ungeprüft übernommen: {verdict}",
-                      data={"valid": len(evidence), "quotes": total})
+                      data={"valid": len(evidence), "quotes": total, "checked": False})
             return {"outcome": verdict, "evidence": evidence, "reasoning": prediction.reasoning, "note": None,
                     "route": "finish"}
         evidence, unreadable = self._valid_evidence(vote, prediction)
