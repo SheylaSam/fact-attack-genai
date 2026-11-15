@@ -111,6 +111,11 @@ def agent_app(fakes, votes=VOTES):
         remote.assert_not_called()
 
 
+def goto(app, page):
+    """Opens a page of the sidebar navigation."""
+    return app.radio(key='nav').set_value(page).run()
+
+
 def check(app, claim=CLAIM):
     app.text_area(key='claim_input').set_value(claim).run()
     next(button for button in app.button if button.label == VERIFY).click().run()
@@ -338,6 +343,24 @@ def test_technical_error_is_red_in_its_step_and_there_is_no_verdict(isolated_his
         assert not load_checks(isolated_history)
 
 
+def test_open_question_survives_a_page_switch():
+    fakes = close_fakes()
+    with agent_app(fakes) as app:
+        check(app)
+        keys = [button.key for button in options(app)]
+        assert keys
+        goto(app, 'Prüfverlauf')
+        assert not app.exception and not options(app)
+        goto(app, 'Faktencheck')
+        assert not app.exception
+        assert app.text_area(key='claim_input').value == CLAIM
+        assert [button.key for button in options(app)] == keys
+        next(button for button in options(app) if button.label.startswith(V2.title)).click().run()
+        assert not app.exception
+        assert fakes.answers == [V2.vote_id] and len(fakes.sessions) == 1
+        assert has_verdict(app)
+
+
 def test_history_saves_verdicts_but_not_questions(isolated_history):
     from src.check_history import load_checks
     fakes = close_fakes()
@@ -372,7 +395,7 @@ def test_multi_check_and_history_tabs_work_as_before(isolated_history):
         assert not app.exception
         assert verify.call_count == 2 and not fakes.sessions
         assert len(load_checks(isolated_history)) == 2
-        reopened = AppTest.from_file(APP, default_timeout=50).run()
+        reopened = goto(AppTest.from_file(APP, default_timeout=50).run(), 'Prüfverlauf')
         assert not reopened.exception
         assert len(reopened.selectbox(key='history_selected').options) == 2
     st.cache_resource.clear()

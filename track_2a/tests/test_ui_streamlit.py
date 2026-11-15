@@ -10,6 +10,11 @@ from src.ui_strategies import STANDARD,DENSE,FUSED
 APP=Path(__file__).parents[1]/'app.py'
 
 
+def goto(app, page):
+    """Opens a page of the sidebar navigation."""
+    return app.radio(key='nav').set_value(page).run()
+
+
 @pytest.fixture(autouse=True)
 def isolated_history(tmp_path, monkeypatch):
     from src.check_history import save_check, load_checks, set_removed
@@ -123,7 +128,7 @@ def test_history_reopens_after_app_restart_without_inference(isolated_history):
         next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
         assert not app.exception
         assert isolated_history.exists()
-        reopened = AppTest.from_file(APP, default_timeout=50).run()
+        reopened = goto(AppTest.from_file(APP, default_timeout=50).run(), 'Prüfverlauf')
         assert not reopened.exception
         assert len(reopened.selectbox(key='history_selected').options) == 1
         assert any('Gespeicherte Demoantwort' in info.value for info in reopened.info)
@@ -147,6 +152,7 @@ def test_history_trash_and_restore_survive_new_app_run_without_api(isolated_hist
         app = AppTest.from_file(APP, default_timeout=50).run()
         next(button for button in app.button if button.key.startswith('story_')).click().run()
         next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
+        goto(app, 'Prüfverlauf')
         app.button(key='history_remove_restore').click().run()
         assert not app.exception
         assert not load_checks(isolated_history)
@@ -155,7 +161,7 @@ def test_history_trash_and_restore_survive_new_app_run_without_api(isolated_hist
         app.button(key='history_remove_restore').click().run()
         assert not app.exception
         assert len(load_checks(isolated_history)) == 1
-        restarted = AppTest.from_file(APP, default_timeout=50).run()
+        restarted = goto(AppTest.from_file(APP, default_timeout=50).run(), 'Prüfverlauf')
         assert not restarted.exception
         assert len(restarted.selectbox(key='history_selected').options) == 1
         remote.assert_not_called()
@@ -188,8 +194,9 @@ def test_ui_language_does_not_rewrite_saved_claims_or_evidence(isolated_history)
         app.selectbox(key='ui_language').set_value('fr').run()
         assert not app.exception
         assert load_checks(isolated_history) == original
-        assert any('Réponse de démonstration enregistrée' in info.value for info in app.info)
         assert any('Markiert' not in caption.value and 'surligné' in caption.value for caption in app.caption)
+        goto(app, 'Prüfverlauf')
+        assert any('Réponse de démonstration enregistrée' in info.value for info in app.info)
         remote.assert_not_called()
 
 
@@ -248,7 +255,7 @@ def test_history_search_filters_dates_labels_and_reset_without_api(isolated_hist
                    date='2026-06-14', language='fr', vote=None, notice='saved demo')
     before = load_checks(isolated_history)
     with patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')) as remote:
-        app = AppTest.from_file(APP, default_timeout=50).run()
+        app = goto(AppTest.from_file(APP, default_timeout=50).run(), 'Prüfverlauf')
         assert len(app.selectbox(key='history_selected').options) == 2
         app.text_input(key='history_query').set_value('Mietrecht').run()
         assert not app.exception
@@ -319,7 +326,7 @@ def test_history_origin_sort_and_localized_report_use_filtered_records(isolated_
                    date='2026-06-14', language='fr', vote=None, notice=notice)
     with patch('src.check_report.render_check_report', wraps=render_check_report) as reports, \
          patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')) as remote:
-        app = AppTest.from_file(APP, default_timeout=50).run()
+        app = goto(AppTest.from_file(APP, default_timeout=50).run(), 'Prüfverlauf')
         app.selectbox(key='history_order').set_value('Älteste zuerst').run()
         assert not app.exception
         assert app.selectbox(key='history_selected').options[0].endswith('Alpha Demo')
@@ -478,9 +485,14 @@ def test_no_old_terms_or_emoji_in_the_rendered_page():
         next(button for button in app.button if button.key.startswith('story_')).click().run()
         next(button for button in app.button if button.label == 'Behauptung prüfen').click().run()
         assert not app.exception
-        texts = [item.value for item in list(app.markdown) + list(app.caption) + list(app.info)]
+        texts = []
+        for page in ('Prüfverlauf', 'Ergebnisse & Vergleiche', 'So funktioniert’s', 'Faktencheck'):  # every page once
+            texts += [item.value for item in list(app.markdown) + list(app.caption) + list(app.info)]
+            goto(app, page)
+            assert not app.exception
         assert any('verdict-card' in value for value in texts)
         assert not [value[:80] for value in texts if bad.search(value) and 'Zweitprüfung' not in value and 'Gegenargumente' not in value]  # methodology notes quote past experiments
+        goto(app, 'Prüfverlauf')
         assert app.selectbox(key='history_label').options == ['Alle Ergebnisse', 'gestützt', 'nicht belegt', 'widersprochen']
     st.cache_resource.clear()
 
@@ -488,7 +500,7 @@ def test_no_old_terms_or_emoji_in_the_rendered_page():
 def test_an_old_history_filter_value_resets_instead_of_crashing():
     app = AppTest.from_file(APP, default_timeout=50)
     app.session_state['history_label'] = 'Widerspruch'
-    app.run()
+    goto(app.run(), 'Prüfverlauf')
     assert not app.exception
     assert app.selectbox(key='history_label').value == 'Alle Ergebnisse'
 
@@ -524,3 +536,86 @@ def test_the_legend_uses_icons_and_the_stylesheet_has_no_dead_verdict_rules():
     assert 'outcome-dot' not in legend
     for icon in ('fa-check-circle', 'fa-minus-circle', 'fa-times-circle'):
         assert icon in legend
+
+
+def test_sidebar_has_navigation_language_and_dark_switch():
+    app = AppTest.from_file(APP, default_timeout=50).run()
+    assert not app.exception
+    keyed = [node.key for node in app.sidebar if getattr(node, 'key', None) in ('nav', 'ui_language', 'ui_dark')]
+    assert keyed == ['nav', 'ui_language', 'ui_dark']
+    nav = app.sidebar.radio(key='nav')
+    assert nav.options == ['Faktencheck', 'Prüfverlauf', 'Ergebnisse & Vergleiche', 'So funktioniert’s']
+    assert nav.value == 'Faktencheck'
+    assert any('Fact Attack' in item.value for item in app.sidebar.markdown)
+    language = app.sidebar.selectbox(key='ui_language')
+    assert language.label and 'Oberfläche' in language.help
+    assert not app.tabs
+    assert not any('topbar' in item.value for item in app.markdown)
+    assert not any('Die Sprache der Oberfläche' in item.value for item in app.caption)
+    app.selectbox(key='ui_language').set_value('fr').run()
+    assert app.radio(key='nav').options == ['Vérifier', 'Historique', 'Résultats et comparaisons', 'Fonctionnement']
+    assert app.radio(key='nav').value == 'Faktencheck'
+
+
+def _save_checks(database, claims):
+    import json
+    import time
+    from src.check_history import save_check, load_checks
+    sample = json.loads((APP.parent / 'data/demo_cases.json').read_text())['cases'][0]
+    for claim, label in claims:
+        save_check(database, result={**sample['cached_result'], 'claim': claim, 'label': label},
+                   source_path=APP.parent / 'data/booklets/2026-06-14_fr.pdf',
+                   date='2026-06-14', language='fr', vote=None, notice='saved demo')
+        time.sleep(0.01)  # distinct timestamps keep the order stable
+    return load_checks(database)  # newest first
+
+
+def _recent(app):
+    return [button for button in app.sidebar.button if (button.key or '').startswith('recent_')]
+
+
+def test_recent_checks_are_collapsed_and_open_the_saved_result(isolated_history):
+    long_claim = 'Die Vorlage verändert das Rentenalter für alle Frauen und Männer in der ganzen Schweiz.'
+    saved = _save_checks(isolated_history, [(long_claim, 2), ('Mietrecht alpha', 0)])
+    newer, older = saved
+    with patch('src.apertus_client.ApertusClient._request_completion', side_effect=AssertionError('No API')) as remote:
+        app = AppTest.from_file(APP, default_timeout=50).run()
+        assert not app.exception
+        recent = next(expander for expander in app.sidebar.expander if expander.label == 'Zuletzt geprüft')
+        assert not recent.proto.expanded
+        assert [button.key for button in _recent(app)] == [f"recent_{newer['id']}", f"recent_{older['id']}"]
+        button = app.button(key=f"recent_{older['id']}")
+        short, word = button.label.rsplit(' · ', 1)
+        assert len(short) <= 42 and short.endswith('…') and long_claim.startswith(short[:-2])
+        assert word == 'widersprochen'
+        assert any('fa-times-circle' in item.value and 'tone-red' in item.value and 'aria-hidden="true"' in item.value
+                   for item in app.sidebar.markdown)
+        goto(app, 'Prüfverlauf')
+        app.text_input(key='history_query').set_value('xyz').run()
+        assert not any(widget.key == 'history_selected' for widget in app.selectbox)
+        goto(app, 'Faktencheck')
+        app.button(key=f"recent_{older['id']}").click().run()
+        assert not app.exception
+        assert app.radio(key='nav').value == 'Prüfverlauf'
+        assert app.text_input(key='history_query').value == ''
+        assert app.radio(key='history_view').value == 'Aktive Prüfungen'
+        assert app.selectbox(key='history_selected').value == older['id']
+        app.selectbox(key='ui_language').set_value('fr').run()
+        assert app.button(key=f"recent_{older['id']}").label.endswith(' · contredite')
+        remote.assert_not_called()
+
+
+def test_recent_checks_show_the_five_newest_active_ones(isolated_history):
+    from src.check_history import set_removed
+    saved = _save_checks(isolated_history, [(f'Aussage {number}', 1) for number in range(7)])
+    set_removed(isolated_history, saved[1]['id'])
+    app = AppTest.from_file(APP, default_timeout=50).run()
+    assert not app.exception
+    assert [button.key for button in _recent(app)] == [f"recent_{record['id']}" for record in [saved[0], *saved[2:6]]]
+
+
+def test_recent_section_is_absent_without_history(isolated_history):
+    app = AppTest.from_file(APP, default_timeout=50).run()
+    assert not app.exception
+    assert not any(expander.label == 'Zuletzt geprüft' for expander in app.expander)
+    assert not _recent(app)

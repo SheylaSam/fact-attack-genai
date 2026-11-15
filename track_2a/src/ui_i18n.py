@@ -5,6 +5,8 @@ LANGUAGES = {'de': 'Deutsch', 'fr': 'Français', 'it': 'Italiano'}
 # German source text | French | Italian
 _ROWS = '''Faktencheck|Vérifier|Verifica
 Dunkler Modus|Mode sombre|Modalità scura
+Navigation|Navigation|Navigazione
+Zuletzt geprüft|Vérifiées récemment|Verificate di recente
 Prüfverlauf|Historique|Cronologia
 Ergebnisse & Vergleiche|Résultats et comparaisons|Risultati e confronti
 So funktioniert’s|Fonctionnement|Come funziona

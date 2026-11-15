@@ -12,6 +12,7 @@ import re
 import html
 import sqlite3
 import hashlib
+import textwrap
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -51,7 +52,7 @@ UI_LANGUAGE = st.session_state.get("ui_language", "de")
 # Streamlit keeps the wire label of keyed selections; resend canonical values
 # when only their display language changes.
 if st.session_state.get("_last_ui_language") != UI_LANGUAGE:
-    for selection_key in ("source_year", "ballot", "vote", "claim_lang", "strategy_option", "history_view", "history_label", "history_origin", "history_order"):
+    for selection_key in ("nav", "source_year", "ballot", "vote", "claim_lang", "strategy_option", "history_view", "history_label", "history_origin", "history_order"):
         if selection_key in st.session_state:
             st.session_state[selection_key] = st.session_state[selection_key]
     st.session_state["_last_ui_language"] = UI_LANGUAGE
@@ -68,8 +69,6 @@ def th(markup):
 # =============================================================================
 # DESIGN SYSTEM — calm light and dark look, palettes and styles in src/ui_theme
 # =============================================================================
-with st.sidebar:
-    st.toggle(t("Dunkler Modus"), key="ui_dark")
 st.markdown(ui_theme.theme_css("dark" if st.session_state.get("ui_dark") else "light"), unsafe_allow_html=True)
 
 
@@ -250,6 +249,9 @@ SOURCE_METADATA = load_catalog(config.DATA_DIR / "booklet_catalog.json")
 AVAILABLE_SOURCES = available_sources(config.BOOKLETS_DIR, SOURCE_METADATA)
 BOOKLET_CATALOG = date_options(AVAILABLE_SOURCES)
 VOTE_AUTO = "Automatisch erkennen"
+HISTORY_PATH = config.DATA_DIR / ".local-history/checks.sqlite3"
+PAGES = ("Faktencheck", "Prüfverlauf", "Ergebnisse & Vergleiche", "So funktioniert’s")
+RECENT_CHECKS = 5  # entries under «Zuletzt geprüft» in the sidebar
 
 # Wording describes the relationship to the booklet, never a verdict on truth (OST ethics guideline)
 VERDICTS = {
@@ -305,6 +307,18 @@ def _reset_history_filters():
     st.session_state["history_end"] = None
     st.session_state["history_origin"] = "Alle Antwortarten"
     st.session_state["history_order"] = "Neueste zuerst"
+
+
+def _open_saved(check_id: str) -> None:
+    """Button callback of «Zuletzt geprüft»: opens the saved check on the history page, whatever filter was set."""
+    st.session_state["nav"] = "Prüfverlauf"
+    _reset_history_filters()
+    st.session_state["history_view"] = "Aktive Prüfungen"
+    st.session_state["history_selected"] = check_id
+
+
+def _short_claim(text: str) -> str:
+    return textwrap.shorten(text, width=42, placeholder=" …")
 
 
 def _reset_source_filters():
@@ -589,21 +603,29 @@ def run_agent_check(steps, verify_clicked: bool, claim: str, claim_lang: str, si
 # UI LAYOUT
 # =============================================================================
 
-# ── Top Bar ──────────────────────────────────────────────────────────────────
-st.markdown(th("""
-<div class="topbar">
-    <div class="topbar-brand">
-        <div class="logo-mark">+</div>
-        <span class="brand-text">Fact Attack</span>
-    </div>
-    <div class="topbar-meta">
-        <span class="topbar-tag">Offizielle Quellen · DE / FR / IT</span>
-    </div>
-</div>
-"""), unsafe_allow_html=True)
-
-st.selectbox("Sprache / Langue / Lingua", list(LANGUAGES), format_func=LANGUAGES.get, key="ui_language")
-st.caption(t("Die Sprache der Oberfläche ändert weder die Behauptung noch die Quelle. Forschungsnotizen, Beispieltitel und Exporte behalten ihre Originalsprache."))
+# ── Sidebar: brand, navigation, recent checks, language, dark mode ──────────
+with st.sidebar:
+    st.markdown('<div class="sidebar-brand"><div class="logo-mark">+</div><span class="brand-text">Fact Attack</span></div>',
+                unsafe_allow_html=True)
+    page = st.radio(t("Navigation"), PAGES, key="nav", format_func=t, label_visibility="collapsed")
+    try:
+        recent_checks = load_checks(HISTORY_PATH)[:RECENT_CHECKS]  # active entries, newest first
+    except (OSError, ValueError, sqlite3.Error):
+        recent_checks = []  # the history page says that the history cannot be read
+    if recent_checks:
+        with st.expander(t("Zuletzt geprüft"), expanded=False):
+            for record in recent_checks:
+                label = record["result"]["label"]
+                with st.container(horizontal=True, vertical_alignment="center", gap="small", wrap=False):
+                    st.markdown(f'<i class="fas {VERDICTS[label][1]} tone-{VERDICT_TONES[label]} recent-icon" aria-hidden="true"></i>',
+                                unsafe_allow_html=True, width="content")
+                    st.button(f"{_md(_short_claim(record['result']['claim']))} · {t(agent_ui.OUTCOME_WORDS[label])}",
+                              key=f"recent_{record['id']}", on_click=_open_saved, args=(record["id"],),
+                              type="tertiary", width="stretch", wrap=True)  # the verdict word stays readable
+    st.selectbox("Sprache / Langue / Lingua", list(LANGUAGES), format_func=LANGUAGES.get, key="ui_language",
+                 label_visibility="collapsed",
+                 help=t("Die Sprache der Oberfläche ändert weder die Behauptung noch die Quelle. Forschungsnotizen, Beispieltitel und Exporte behalten ihre Originalsprache."))
+    st.toggle(t("Dunkler Modus"), key="ui_dark")
 
 # ── Hero Section ─────────────────────────────────────────────────────────────
 st.markdown(th("""
@@ -614,20 +636,16 @@ st.markdown(th("""
 """), unsafe_allow_html=True)
 
 
-# ── Navigation Tabs ──────────────────────────────────────────────────────────
-HISTORY_PATH = config.DATA_DIR / ".local-history/checks.sqlite3"
-tab_factcheck, tab_history, tab_benchmark, tab_methodology = st.tabs([
-    t("Faktencheck"),
-    t("Prüfverlauf"),
-    t("Ergebnisse & Vergleiche"),
-    t("So funktioniert’s"),
-])
+# ── Pages (chosen in the sidebar) ────────────────────────────────────────────
+# Only the chosen page is drawn. Its keyed inputs carry persist_state="session", so they keep their values while
+# another page is shown, and an open agent question (plain session state) waits for the user's return. ("session"
+# rather than "page": this is one script, and AppTest builds a new PagesManager per run, which drops "page" values.)
 
 
 # =============================================================================
-# TAB 1: INTERAKTIVER FAKTENCHECK
+# SEITE 1: INTERAKTIVER FAKTENCHECK
 # =============================================================================
-with tab_factcheck:
+if page == PAGES[0]:
     if not BOOKLET_CATALOG:
         st.warning(t("Noch keine offiziellen Büchlein installiert. Bitte im Projektordner `python -m src.booklet_catalog` ausführen."))
         st.stop()
@@ -659,7 +677,7 @@ with tab_factcheck:
     with col_in:
         st.markdown(th('<div class="flow-heading"><span>1</span> Was möchtest du prüfen?</div>'), unsafe_allow_html=True)
         claim = st.text_area(
-            t("Behauptung"), key="claim_input", height=130,
+            t("Behauptung"), key="claim_input", persist_state="session", height=130,
             placeholder=t("Zum Beispiel: Die Vorlage erhöht das Rentenalter auf 67 Jahre."),
             label_visibility="collapsed",
         )
@@ -685,18 +703,18 @@ with tab_factcheck:
             if own_upload:
                 st.caption(t("Das eigene PDF ist die Quelle der Prüfung; der Agent sucht nur darin."))
             elif agent_mode:
-                st.checkbox(t("Diese Quelle für die Prüfung vorgeben"), key="agent_own_source",
+                st.checkbox(t("Diese Quelle für die Prüfung vorgeben"), key="agent_own_source", persist_state="session",
                             help=t("Ohne Häkchen sucht der Agent die passende Vorlage selbst."))
             c_search, c_year = st.columns([2, 1])
             with c_search:
-                source_query = st.text_input(t("Thema oder Vorlage suchen"), key="source_query",
+                source_query = st.text_input(t("Thema oder Vorlage suchen"), key="source_query", persist_state="session",
                                             placeholder=t("z. B. Mietrecht, Rente, biodiversité"),
                                             help=t("Sucht lokal in den Vorlagentiteln auf DE, FR und IT; keine Volltextsuche im PDF."))
             with c_year:
                 years = ["Alle Jahre"] + sorted({entry["date"][:4] for entry in AVAILABLE_SOURCES.values()}, reverse=True)
                 if st.session_state.get("source_year", "Alle Jahre") not in years:
                     st.session_state["source_year"] = "Alle Jahre"
-                source_year = st.selectbox(t("Jahr"), years, key="source_year", format_func=t)
+                source_year = st.selectbox(t("Jahr"), years, key="source_year", persist_state="session", format_func=t)
             filtered_sources = filter_sources(AVAILABLE_SOURCES, source_query, source_year)
             filtered_dates = date_options(filtered_sources)
             no_source_matches = not filtered_dates
@@ -710,13 +728,13 @@ with tab_factcheck:
                 st.button(t("Quellenfilter zurücksetzen"), on_click=_reset_source_filters)
             c_ballot, c_lang = st.columns([1.5, 1])
             with c_ballot:
-                selected_ballot_name = st.selectbox(t("Abstimmung"), list(filtered_dates), key="ballot", disabled=no_source_matches or uploaded_file is not None, format_func=lambda label: date_label(label, UI_LANGUAGE))
+                selected_ballot_name = st.selectbox(t("Abstimmung"), list(filtered_dates), key="ballot", persist_state="session", disabled=no_source_matches or uploaded_file is not None, format_func=lambda label: date_label(label, UI_LANGUAGE))
                 selected_date = BOOKLET_CATALOG[selected_ballot_name]
             with c_lang:
                 language_options = ["DE", "FR", "IT"] if uploaded_file is not None else languages_for_date(AVAILABLE_SOURCES, selected_date)
                 if st.session_state.get("booklet_lang") not in language_options:
                     st.session_state["booklet_lang"] = language_options[0]
-                selected_lang = st.radio(t("Sprache des Büchleins"), language_options, horizontal=True, key="booklet_lang")
+                selected_lang = st.radio(t("Sprache des Büchleins"), language_options, horizontal=True, key="booklet_lang", persist_state="session")
                 lang_code = selected_lang.lower()
 
             source_date = None if uploaded_file is not None else selected_date
@@ -730,17 +748,17 @@ with tab_factcheck:
             vote_options = [VOTE_AUTO] + ([] if uploaded_file is not None else DEMO_VOTES.get(pdf_path.name, SOURCE_METADATA.get(pdf_path.name, {}).get("votes", [])))
             if st.session_state.get("vote") not in vote_options:
                 st.session_state["vote"] = VOTE_AUTO
-            selected_vote = st.selectbox(t("Vorlage"), vote_options, key="vote", format_func=lambda label: t(label) if label == VOTE_AUTO else label)
+            selected_vote = st.selectbox(t("Vorlage"), vote_options, key="vote", persist_state="session", format_func=lambda label: t(label) if label == VOTE_AUTO else label)
             vote = None if selected_vote == VOTE_AUTO else selected_vote
             if uploaded_file is None:
                 st.caption(t('{v0} Abstimmungstermine · {v1} Sprachfassungen lokal verfügbar').format(v0=len(BOOKLET_CATALOG), v1=len(AVAILABLE_SOURCES)))
                 st.link_button(t("Original bei der Bundeskanzlei öffnen ↗"), SOURCE_METADATA[pdf_path.name]["url"])
 
         with st.expander(t("Sprache der Behauptung"), expanded=False):
-            claim_lang_choice = st.selectbox(t("Erkennung"), ["Automatisch", "DE", "FR", "IT"], key="claim_lang", format_func=t)
+            claim_lang_choice = st.selectbox(t("Erkennung"), ["Automatisch", "DE", "FR", "IT"], key="claim_lang", persist_state="session", format_func=t)
             st.caption(t("Deutsch, Französisch und Italienisch werden automatisch erkannt. Die Quelle darf eine andere Sprache haben."))
         claim_lang = guess_language(claim) if claim_lang_choice == "Automatisch" else claim_lang_choice.lower()
-        save_history = st.checkbox(t("Prüfung lokal im Verlauf speichern"), value=True, key="save_history",
+        save_history = st.checkbox(t("Prüfung lokal im Verlauf speichern"), value=True, key="save_history", persist_state="session",
                                    help=t("Speichert Behauptung, Quelle und Ergebnis auf diesem Rechner. Der Verlauf ist für Nutzer dieser lokalen App-Installation sichtbar."))
         verify_clicked = st.button(t("Behauptung prüfen"), type="primary", width="stretch", disabled=not claim.strip() or (
             not agent_mode and no_source_matches and uploaded_file is None)) or statement_start
@@ -753,11 +771,11 @@ with tab_factcheck:
         )
 
         with st.expander(t("Weitere Optionen: Suche & eigenes PDF"), expanded=False):
-            experiments = st.checkbox(t("Vektor-Experimente aktivieren"), key="enable_vector_rag")
+            experiments = st.checkbox(t("Vektor-Experimente aktivieren"), key="enable_vector_rag", persist_state="session")
             options = strategy_options(experiments)
             if st.session_state.get("strategy_option") not in options:
                 st.session_state["strategy_option"] = STANDARD
-            st.radio(t("Kontext für Apertus"), options, key="strategy_option", format_func=t)
+            st.radio(t("Kontext für Apertus"), options, key="strategy_option", persist_state="session", format_func=t)
             strat = strategy_from_label(st.session_state["strategy_option"])
             if strat in ("vector", "vector_hybrid"):
                 st.caption(t("Experimentelle Suche. Im bisherigen Dev-Vergleich war die Standardstrategie besser."))
@@ -767,7 +785,7 @@ with tab_factcheck:
                 help=t("Die Datei wird lokal gespeichert; beim Prüfen werden ausgewählte Textstellen an Apertus gesendet."))
 
         with st.expander(t("Mehrere Aussagen aus einem Text prüfen"), expanded=False):
-            batch_text = st.text_area(t("Text mit mehreren Aussagen"), key="batch_text", height=140, max_chars=20000)
+            batch_text = st.text_area(t("Text mit mehreren Aussagen"), key="batch_text", persist_state="session", height=140, max_chars=20000)
             st.caption(t("Lokale Satzvorschläge, keine automatische Faktenauswahl. Bitte Text und Auswahl prüfen; Abkürzungen können falsch getrennt werden."))
             candidates = suggest_statements(batch_text)
             if len(candidates) > 30:
@@ -775,7 +793,7 @@ with tab_factcheck:
                 candidates = []
             if st.session_state.get("batch_selected"):
                 st.session_state["batch_selected"] = [value for value in st.session_state["batch_selected"] if value in candidates]
-            selected_claims = st.multiselect(t("Aussagen auswählen"), candidates, key="batch_selected", max_selections=MAX_CHECKS)
+            selected_claims = st.multiselect(t("Aussagen auswählen"), candidates, key="batch_selected", persist_state="session", max_selections=MAX_CHECKS)
             st.caption(t("{n} Einzelprüfungen ausgewählt (maximal 5). Jede kann mehrere API-Anfragen auslösen. Alle verwenden die oben gewählte Quelle und Vorlage.").format(n=len(selected_claims)))
             batch_needs_source = agent_mode and not own_source  # the agent's own search does not run here
             if batch_needs_source:
@@ -1088,10 +1106,10 @@ with tab_factcheck:
                 )
 
 
-with tab_history:
+if page == PAGES[1]:
     st.markdown(t("### Dein Prüfverlauf"))
     st.caption(t("Lokal auf diesem Rechner gespeichert · Öffnen löst keine neue Prüfung aus. Sichtbar für Nutzer dieser App-Installation."))
-    history_view = st.radio(t("Ansicht"), ["Aktive Prüfungen", "Papierkorb"], horizontal=True, key="history_view", format_func=t)
+    history_view = st.radio(t("Ansicht"), ["Aktive Prüfungen", "Papierkorb"], horizontal=True, key="history_view", persist_state="session", format_func=t)
     in_trash = history_view == "Papierkorb"
     if st.session_state.get("history_message"):
         st.success(t(st.session_state.pop("history_message")))
@@ -1102,22 +1120,22 @@ with tab_history:
         st.warning(t("Der lokale Verlauf lässt sich gerade nicht lesen."))
     all_history = history
     with st.expander(t("Verlauf durchsuchen"), expanded=True):
-        history_query = st.text_input(t("Text in Prüfungen suchen"), key="history_query",
+        history_query = st.text_input(t("Text in Prüfungen suchen"), key="history_query", persist_state="session",
                                      help=t("Sucht lokal in Behauptungen, Vorlagentiteln und gespeicherten Belegzitaten."))
         if st.session_state.get("history_label") not in ("Alle Ergebnisse", *agent_ui.OUTCOME_WORDS.values()):
             st.session_state["history_label"] = "Alle Ergebnisse"  # a value from before the terms were unified
         history_label = st.selectbox(t("Ergebnis filtern"),
                                     ["Alle Ergebnisse", *agent_ui.OUTCOME_WORDS.values()],
-                                    key="history_label", format_func=t)
+                                    key="history_label", persist_state="session", format_func=t)
         history_origin = st.selectbox(t("Antwortart"), ["Alle Antwortarten", "Liveantworten", "Demoantworten"],
-                                      key="history_origin", format_func=t)
+                                      key="history_origin", persist_state="session", format_func=t)
         history_order = st.selectbox(t("Sortierung"), ["Neueste zuerst", "Älteste zuerst", "Behauptung A–Z"],
-                                     key="history_order", format_func=t)
+                                     key="history_order", persist_state="session", format_func=t)
         c_start, c_end = st.columns(2)
         with c_start:
-            history_start = st.date_input(t("Prüfdatum ab (UTC)"), value=None, key="history_start")
+            history_start = st.date_input(t("Prüfdatum ab (UTC)"), value=None, key="history_start", persist_state="session")
         with c_end:
-            history_end = st.date_input(t("Prüfdatum bis (UTC)"), value=None, key="history_end")
+            history_end = st.date_input(t("Prüfdatum bis (UTC)"), value=None, key="history_end", persist_state="session")
         if history_start and history_end and history_start > history_end:
             st.warning(t("Das Startdatum liegt nach dem Enddatum. Bitte korrigiere den Zeitraum."))
         labels = {"Alle Ergebnisse": None, **{word: label for label, word in agent_ui.OUTCOME_WORDS.items()}}
@@ -1138,7 +1156,7 @@ with tab_history:
             st.session_state["history_selected"] = next(iter(indexed))
         selected_id = st.selectbox(t("Gespeicherte Prüfung"), list(indexed),
             format_func=lambda key: f"{indexed[key]['created_at'][:16].replace('T', ' ')} UTC · {indexed[key]['result']['claim'][:90]}",
-            key="history_selected")
+            key="history_selected", persist_state="session")
         record = indexed[selected_id]
         with st.expander(t("Export & Verlauf verwalten"), expanded=False):
             st.caption(t("JSON enthält Ergebnis und Belegzitate; CSV eine Übersicht. PDF-Dateien sind nicht enthalten."))
@@ -1197,9 +1215,9 @@ with tab_history:
 
 
 # =============================================================================
-# TAB 2: BENCHMARK DASHBOARD
+# SEITE 3: BENCHMARK DASHBOARD
 # =============================================================================
-with tab_benchmark:
+if page == PAGES[2]:
     if st.session_state.get("ui_language", "de") != "de":
         st.info(t("Technische Forschungsnotizen und gespeicherte Benchmark-Auswertungen sind derzeit auf Deutsch dokumentiert."))
     summary = build_summary()
@@ -1395,9 +1413,9 @@ with tab_benchmark:
 
 
 # =============================================================================
-# TAB 3: ARCHITEKTUR
+# SEITE 4: ARCHITEKTUR
 # =============================================================================
-with tab_methodology:
+if page == PAGES[3]:
     if st.session_state.get("ui_language", "de") != "de":
         st.info(t("Technische Forschungsnotizen und gespeicherte Benchmark-Auswertungen sind derzeit auf Deutsch dokumentiert."))
     st.markdown(t("### So funktioniert Fact Attack"))
