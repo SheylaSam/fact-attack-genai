@@ -51,3 +51,18 @@ def test_real_italian_original_page(tmp_path):
     preview = render_evidence_page(source, 22, quote, 0)
     assert preview.highlighted
     assert path.read_bytes() == source
+
+
+def test_quote_across_soft_hyphen_line_break_is_highlighted():
+    data = _pdf(['The federal government takes no responsi­', 'bility for data security in that case.'])
+    quote = 'The federal government takes no responsibility for data security in that case.'
+    assert render_evidence_page(data, 1, quote, 0).highlighted
+
+
+def test_real_german_page_with_soft_hyphen():
+    path = Path(__file__).parents[1] / 'data/booklets/2025-09-28_de.pdf'
+    quote = ('Wird das E-ID-Gesetz abgelehnt, könnten sich private elektronische Nachweise durchsetzen, '
+             'zum Beispiel solche von grossen internationalen Technologiekonzernen. Der Bund könnte bei '
+             'solchen Angeboten keine Verantwortung für den Schutz der Privatsphäre und die Datensicherheit '
+             'übernehmen.')
+    assert render_evidence_page(path.read_bytes(), 31, quote, 0).highlighted
