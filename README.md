@@ -2,6 +2,24 @@
 
 Eigenständige Fortsetzung des Hackathon-Projekts für das Modul Generative KI und Agentensysteme.
 
+## Lokale React-Agentenoberfläche
+
+Die lokale Weboberfläche verwendet React/TypeScript und FastAPI und spricht die bestehende Agentenlogik an.
+Voraussetzungen: Python 3.12 und Node.js 22.12+ (hier mit Node 24 geprüft).
+
+```sh
+make setup-web  # einmalig: Projektumgebung und Pakete installieren
+make web       # React bauen und auf http://127.0.0.1:8000 starten
+```
+
+Für Live-Prüfungen `API_KEY` in `.env` oder `track_2a/.env` eintragen; ohne Schlüssel den ausdrücklich
+markierten **Demomodus** wählen. Mit gewähltem Büchlein ist kein Vektorindex erforderlich.
+Standardmässig sucht der Agent die Quelle selbst: mit dem optionalen Agentenindex (Vektorsuche), sonst mit einer
+lexikalischen BM25-Suche über die lokalen deutschen Büchlein (alle Büchlein des Katalogs: `cd track_2a && .venv/bin/python scripts/fetch_catalog_booklets.py`). Einrichtung, Grenzen und Entwicklungsbefehle:
+[frontend/README.md](frontend/README.md). Die bisherige Streamlit-Oberfläche ist über `make streamlit` erreichbar.
+
+---
+
 **Start hier: [Projektplan und Umsetzungsvorschlag](docs/genai/PROJEKTPLAN.md).**
 
 Freie Abstimmungsbehauptungen mit Rückfragen, begrenzter Agentensteuerung und validierten Quellen prüfen. Der Agent (Stufen 1 bis 4: Suchschleife, Wächter, Rückfrage mit Fortsetzen, Oberfläche im Faktencheck-Tab) ist implementiert, Stand und Grenzen stehen in [docs/genai/AGENT_STUFE4.md](docs/genai/AGENT_STUFE4.md). Die Evaluation (Stufe 5) mit B0/B1/B2 auf dem gesperrten Testset, Regression und Fehleranalyse steht in [docs/genai/EVALUATION_AGENT.md](docs/genai/EVALUATION_AGENT.md). Die neue Oberfläche (hell/dunkel, Seitenleiste, Schritte in Klartext) beschreibt [docs/genai/UI_UND_PYTHON312.md](docs/genai/UI_UND_PYTHON312.md#oberfläche-ab-15-november-2026). Optionaler Vektor-RAG-Prototyp: [Startanleitung und Versuchsplan](docs/genai/START_VECTOR_RAG.md). Die folgende Dokumentation beschreibt den übernommenen Hackathon-Stand, Standardkonfiguration und Wettbewerbspfad bleiben erhalten.
@@ -252,7 +270,8 @@ saves parsing time.
 export API_KEY="your_api_key_here"   # LLM_API_KEY works too
 make run          # Docker: benchmark on the 398-pair test split, ~4 min (report + JSON in track_2a/results/)
 make test         # unit tests (no API calls)
-make web          # Streamlit app at http://localhost:8501
+make web          # React agent workspace at http://127.0.0.1:8000
+make streamlit    # previous Streamlit UI at http://localhost:8501
 ```
 
 `make run` runs our own benchmark (task A) on the 398-pair test split (the 5 test voting dates in dataset v1.1, which

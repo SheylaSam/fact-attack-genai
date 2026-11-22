@@ -271,12 +271,17 @@ class AgentTools:
         specs = [spec if spec["name"] in TERMINAL_TOOLS else search.get(spec["name"]) for spec in TOOL_SPECS]
         return [copy.deepcopy(spec) for spec in specs if spec is not None and spec["name"] not in hidden]
 
+    def _thresholds(self) -> Optional[guard.Thresholds]:
+        """The search index's own guard thresholds (the lexical index has some), else None: the settings' values."""
+        return getattr(getattr(self.backend, "index", None), "guard_thresholds", None)
+
     def claim_assessment(self, claim: str) -> guard.Assessment:
         """The guard's assessment of the vote ranking for the claim's own wording. The search runs once per
         instance and query; a failure of the backend is passed on and not cached."""
         query = claim[:MAX_QUERY_CHARS].strip()
         if query not in self._assessments:
-            self._assessments[query] = guard.assess(self.backend.search_votes(query, k=VOTE_CANDIDATES))
+            self._assessments[query] = guard.assess(self.backend.search_votes(query, k=VOTE_CANDIDATES),
+                                                    self._thresholds())
         return self._assessments[query]
 
     def check_vote_id(self, vote_id: str) -> VoteRef:
@@ -361,9 +366,9 @@ class AgentTools:
         # model asks back on a "mehrdeutig" that only its own query produced.
         of_claim = isinstance(claim, str) and bool(claim.strip())
         try:
-            assessment = self.claim_assessment(claim) if of_claim else guard.assess(candidates)
+            assessment = self.claim_assessment(claim) if of_claim else guard.assess(candidates, self._thresholds())
         except Exception:  # the guard reports a failing claim search itself before the first vote-bound action
-            of_claim, assessment = False, guard.assess(candidates)
+            of_claim, assessment = False, guard.assess(candidates, self._thresholds())
         if not candidates:
             return Observation("suche_vorlagen", "Keine Vorlage gefunden. Formuliere die Anfrage anders.",
                                {"candidates": [], "assessment": assessment.to_data()})

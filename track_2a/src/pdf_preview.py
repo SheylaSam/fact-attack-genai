@@ -43,7 +43,7 @@ def _word_text(page):
     return text, owners, words
 
 
-def render_evidence_page(pdf_bytes, page_number, quote, label, scale=1.5):
+def render_evidence_page(pdf_bytes, page_number, quote, label, scale=1.5, *, highlight_color=None):
     """Highlight only a complete, unique quote on a 1-based physical PDF page.
 
     Missing/ambiguous text produces an unmarked original page and an explicit reason.
@@ -68,7 +68,8 @@ def render_evidence_page(pdf_bytes, page_number, quote, label, scale=1.5):
                     lines[words[m][5:7]] = lines.get(words[m][5:7], fitz.Rect(words[m][:4])) | fitz.Rect(words[m][:4])
                 if lines:
                     annotation = page.add_highlight_annot(list(lines.values()))
-                    annotation.set_colors(stroke=(0.35, 0.85, 0.65) if label == 0 else (1.0, 0.6, 0.35))
+                    annotation.set_colors(stroke=highlight_color if highlight_color is not None else
+                                          ((0.35, 0.85, 0.65) if label == 0 else (1.0, 0.6, 0.35)))
                     annotation.set_opacity(0.35)
                     annotation.update()
                     highlighted = True

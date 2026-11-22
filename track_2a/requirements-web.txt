@@ -1,0 +1,7 @@
+# React UI + local agent API. Dense retrieval remains optional (requirements-rag.txt).
+-r requirements.txt
+-r requirements-agent.txt
+fastapi==0.165.0
+uvicorn==0.54.0
+python-multipart==0.0.34
+httpx==0.28.1

@@ -30,9 +30,16 @@ runs, a repeated baseline as noise floor, the holdout, and the experiments E1–
 ## 🚀 Quick start
 
 ```bash
-pip install -r requirements.txt
-cp .env.example .env          # then set API_KEY
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-web.txt
+# Set API_KEY in the existing .env (root or track_2a); use Demo without a key.
+make web                     # React + FastAPI at http://127.0.0.1:8000
 ```
+
+Run these commands from `track_2a/`. Node.js 22.12+ with npm is also required.
+`make web` selects `.venv/bin/python`, installs frontend packages with `npm ci` if needed,
+builds React and serves the complete app on one local port. [Web UI documentation](../frontend/README.md).
+The previous Streamlit UI remains available with `make streamlit`.
 
 Configuration (environment variables or `.env`). [`.env.example`](.env.example) lists every setting with its
 default (what the submission image runs; a test keeps it equal to `src/config.py`). The main ones:

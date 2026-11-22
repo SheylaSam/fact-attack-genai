@@ -65,6 +65,11 @@ class AgentSession:
         self._last_vote: Optional[VoteRef] = None  # the memory of the current check (see `start`)
 
     @property
+    def tools(self) -> AgentTools:
+        """The check's tools (read access for the app, e.g. to show where a claim stands in each option)."""
+        return self._tools
+
+    @property
     def pending(self) -> Optional[Pending]:
         """The open question, or None."""
         return self._pending

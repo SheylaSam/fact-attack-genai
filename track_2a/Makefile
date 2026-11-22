@@ -1,6 +1,9 @@
-.PHONY: run build test benchmark compare download install web
+.PHONY: run build test benchmark compare download install web setup-web api streamlit
 
 IMAGE_NAME ?= hackapertus-track2a
+
+# Use the project's installed packages even when the virtualenv is not activated.
+WEB_PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
 # Judges run `make run` from the root of the project.
 # It builds and executes the Docker container, passing required environment variables.
@@ -37,4 +40,15 @@ compare:
 	python -m src compare
 
 web:
-	streamlit run app.py
+	"$(WEB_PYTHON)" scripts/start_web.py
+
+setup-web:
+	python3.12 -m venv .venv
+	.venv/bin/python -m pip install -r requirements-web.txt
+	cd ../frontend && npm ci
+
+api:
+	"$(WEB_PYTHON)" -m uvicorn src.web.api:app --host 127.0.0.1 --port 8000
+
+streamlit:
+	"$(WEB_PYTHON)" -m streamlit run app.py
