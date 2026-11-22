@@ -96,8 +96,9 @@ class AgentSession:
             return mark_evidence(crash_result(exc, self._tracer, self._first_event), self._evidence_check)
 
     def answer(self, vote_id: str) -> Turn:
-        """Answers the open question with one of its options, or with its `last_vote`, and continues the check.
-        Raises ValueError, and keeps the question open, if there is no question or `vote_id` is none of those. The
+        """Answers the open question with one of its options, or with its `last_vote`, and continues the check;
+        `settings.NO_VOTE_ANSWER` (none of the options is meant) ends it as `quelle_fehlt` without a request. Raises
+        ValueError, and keeps the question open, if there is no question or `vote_id` is none of those. The
         answer is used up either way: a second `answer` raises ValueError."""
         pending = self._pending
         if pending is None:
@@ -105,7 +106,7 @@ class AgentSession:
         ids = [option.vote_id for option in pending.options]
         if pending.last_vote is not None:
             ids.append(pending.last_vote.vote_id)
-        if vote_id not in ids:
+        if vote_id not in ids and vote_id != settings.NO_VOTE_ANSWER:
             raise ValueError(NOT_AN_OPTION.format(answer=repr(vote_id)[:80], options=", ".join(ids)))
         self._pending = None  # before the run: whatever happens, this question is answered
         try:

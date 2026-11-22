@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.agent import settings
 from src.agent.decider import ScriptedDecider
 from src.agent.search_backend import LocalBackend
 from src.agent.source_index import VoteRef
@@ -19,7 +20,7 @@ from tests.test_agent_graph import (BOOKLETS, CLAIM, CLEAR, CLOSE, FRENCH_CLAIM,
 
 if HAS_LANGGRAPH:
     from src.agent.budget import BudgetExceeded, RequestBudget
-    from src.agent.graph import AgentResult
+    from src.agent.graph import NO_VOTE_REASON, AgentResult
     from src.agent import session as session_module
     from src.agent.session import AgentSession, Pending
 
@@ -134,6 +135,22 @@ class AgentSessionTests(unittest.TestCase):
         session.answer(V1.vote_id)  # the same question can still be answered
         self.assertIsNone(session.pending)
         self.assertEqual(tools.fixed_vote_id, V1.vote_id)
+
+    def test_answering_none_of_the_options_ends_the_check_as_quelle_fehlt_without_a_request(self):
+        budget = RequestBudget(limit=3)
+        session, tools, engine = make_session(budget=budget)
+        session.start(CLAIM)
+        result = session.answer(settings.NO_VOTE_ANSWER)
+        self.assertIsInstance(result, AgentResult)
+        self.assertEqual((result.outcome, result.vote), ('quelle_fehlt', None))
+        self.assertEqual(result.reasoning, NO_VOTE_REASON)
+        self.assertIsNone(tools.fixed_vote_id)
+        self.assertEqual(engine.verify_calls, [])
+        self.assertEqual(budget.used, 0)
+        ask = [item for item in result.events if item.node == 'ask'][-1]
+        self.assertEqual(ask.args['antwort'], settings.NO_VOTE_ANSWER)
+        self.assertEqual(result.events[-1].node, 'finish')
+        self.assertIsNone(session.pending)
 
     def test_answer_without_a_question_is_refused(self):
         session, _, engine = make_session()

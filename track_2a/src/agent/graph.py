@@ -23,8 +23,9 @@
   Without a checkpointer the run ends there. With one (`build_graph(checkpointer=...)`, interactive mode) `ask` calls
   `interrupt` first and the run pauses at the question; `graph.invoke(Command(resume=<vote id>), config)` fixes that
   vote (`AgentTools.fix_vote`), swaps the system message for the fixed-vote prompt, answers the intercepted action
-  with the choice, restores the search budget and continues at `decide`. Everything with side effects sits after the
-  `interrupt`: a node that interrupts runs again from its top on resume.
+  with the choice, restores the search budget and continues at `decide`. The answer `settings.NO_VOTE_ANSWER` (none
+  of the options is meant) ends the run as `quelle_fehlt` instead, without a further request. Everything with side
+  effects sits after the `interrupt`: a node that interrupts runs again from its top on resume.
 * `teilaussage_fragen` (a compound claim: which of its 2-4 statements to check) is a question of the model that ends
   the run in both modes: `ask` sets `rueckfrage` with `statements` and never interrupts. Checking a statement is a new
   check with it as the claim, never a resume. Unlike `quelle_fehlt` it needs no search before (the claim itself shows
@@ -114,6 +115,7 @@ ASK_NO_VOTE = ("Rückfrage nicht nötig: Zur Behauptung passt keine Vorlage. Bee
                "Behauptung trotzdem offen, welche Vorlage gemeint ist, wiederhole rueckfrage.")
 ANSWER_PROMPT = ("Antwort der Person auf die Rückfrage: Gemeint ist die Vorlage {vote_id} «{title}». Die Vorlage steht "
                  "fest. Suche nur in dieser Vorlage und beende mit pruefen oder quelle_fehlt.")
+NO_VOTE_REASON = "Die Person hat in der Rückfrage angegeben, dass keine der angebotenen Vorlagen gemeint ist."
 ANSWER_NOT_AN_OPTION = "Die Antwort {answer} gehört nicht zu den angebotenen Vorlagen ({options})."
 VOTE_BOUND_TOOLS = frozenset({"suche_passagen", "suche_passagen_vektor", "pruefen"})  # the guard checks before these
 PASSAGE_SEARCH_TOOLS = frozenset({"suche_passagen", "suche_passagen_vektor"})
@@ -539,7 +541,13 @@ class _Nodes:
             return {"outcome": "rueckfrage", "reasoning": state.get("ask_reason", QUESTION_REASON), "route": "finish"}
         # Resuming runs this node again from the top, so the interrupt comes first and the side effects after it.
         answer = interrupt({"question": state["question"], "options": ids, "asked_by": asked_by})
-        last = state.get("last_vote")  # the only answer outside the options (an extra button of the app)
+        if answer == settings.NO_VOTE_ANSWER:  # none of the options is meant: no vote, no check, no further request
+            shown = [{"vote_id": o.vote_id, "title": o.title, "date": o.date} for o in options]
+            self.emit(step, "ask", started, tool="rueckfrage", args={"optionen": ids, "antwort": answer},
+                      data={**(state.get("ask_data") or {}), "options": shown},
+                      summary="Rückfrage beantwortet: keine der angebotenen Vorlagen")
+            return {"outcome": "quelle_fehlt", "reasoning": NO_VOTE_REASON, "route": "finish"}
+        last = state.get("last_vote")  # the only answer outside the options besides "none" (an extra button of the app)
         if answer not in ids and not (last is not None and answer == last.vote_id):
             raise ValueError(ANSWER_NOT_AN_OPTION.format(answer=_short(repr(answer), 80), options=", ".join(ids)))
         vote = self.tools.fix_vote(answer)

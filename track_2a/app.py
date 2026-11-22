@@ -491,7 +491,8 @@ def _check_statement(statement: str) -> None:
 def _draw_agent_steps(placeholder, check, events, *, question=None, statements=()) -> Optional[str]:
     """Draws the finished step list into `placeholder`, an error row red. With an open `question` (a `Pending`)
     its text and one button per option sit inside the last ask step, plus the "wie zuletzt" button of the question's
-    `last_vote`. Returns the vote id of a clicked button. With `statements` (the model asked which statement of a
+    `last_vote` and the "Keine dieser Vorlagen" button. Returns the vote id of a clicked button
+    (`agent_ui.NO_VOTE_ANSWER` for the last one). With `statements` (the model asked which statement of a
     compound claim to check) one button per statement sits there instead; a click starts a new check with it."""
     rows = agent_ui.step_rows(events)
     asks = [index for index, row in enumerate(rows) if row.mark == "ask"]
@@ -508,6 +509,8 @@ def _draw_agent_steps(placeholder, check, events, *, question=None, statements=(
                     if st.button(f"{label} · {_vote_date(option.vote.date)}", width="stretch",
                                  key=f"agent_option_{check.key}_{option.vote.vote_id}"):
                         chosen = option.vote.vote_id
+                if st.button(t(agent_ui.TEXT_NO_VOTE), width="stretch", key=f"agent_no_vote_{check.key}"):
+                    chosen = agent_ui.NO_VOTE_ANSWER
             if statements and index == question_at:
                 st.markdown(t(agent_ui.TEXT_STATEMENT))
                 for number, statement in enumerate(statements):  # the model's text: shown, never rendered
@@ -614,7 +617,8 @@ def run_agent_check(steps, verify_clicked: bool, claim: str, claim_lang: str, si
                                question=turn if agent_app.is_question(turn) else None,
                                statements=agent_ui.statement_choices(turn))
     if chosen is not None and check.session.pending is not None and not check.running:
-        st.session_state["last_vote_id"] = chosen  # the memory of this browser session only, never saved
+        if chosen != agent_ui.NO_VOTE_ANSWER:  # "none" is no vote to offer again as "wie zuletzt"
+            st.session_state["last_vote_id"] = chosen  # the memory of this browser session only, never saved
         _run_agent(steps, check, lambda session: session.answer(chosen))
         _adopt_agent_turn(check, save_history)
         turn = st.session_state.get("agent_turn")

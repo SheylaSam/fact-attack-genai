@@ -15,6 +15,7 @@ import threading
 from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Literal, Mapping, Optional, Sequence, Tuple, Union)
 
 from src import config
+from src.agent import settings
 from src.agent.trace import TraceEvent
 from src.inference import EvidenceSource, PredictionResult
 
@@ -62,6 +63,8 @@ TEXT_PICK_SOURCE = ("Die Suche über alle Vorlagen gibt es bisher nur für deuts
                     "mit gewählter Quelle wird die Behauptung in jeder Sprache geprüft.")
 TITLE_NO_SOURCE = "Keine passende Vorlage gefunden"
 TEXT_NO_SOURCE = "Zur Behauptung passt keine Vorlage. Wähle die Quelle selbst oder formuliere die Behauptung um."
+TEXT_NO_VOTE = "Keine dieser Vorlagen"  # the button after the options: none of them is meant
+NO_VOTE_ANSWER = settings.NO_VOTE_ANSWER  # the answer that button gives; the check ends as `quelle_fehlt`
 TEXT_LAST_VOTE = "wie zuletzt: {v0}"  # the button of the person's last chosen vote; {v0} is its title
 TITLE_TECHNICAL = "Die Prüfung konnte nicht abgeschlossen werden"
 TEXT_TECHNICAL = "Die Prüfung wurde wegen eines technischen Fehlers abgebrochen; es gibt kein Urteil."
@@ -70,6 +73,7 @@ TEXT_TECHNICAL = "Die Prüfung wurde wegen eines technischen Fehlers abgebrochen
 TITLE_VOTES_MANY = "{n} passende Vorlagen gefunden"
 TITLE_VOTES_ONE = "Passende Vorlage gefunden: {v0}"
 TITLE_ANSWERED = "Du hast gewählt: {v0}, Abstimmung vom {date}"
+TITLE_ANSWERED_NO_VOTE = "Du hast gewählt: keine dieser Vorlagen"
 TITLE_PASSAGES = "{n} Textstellen im Büchlein gefunden"
 TITLE_VECTOR = "Nachsuche: {n} neue Textstellen"
 TITLE_VERIFIED = "Apertus hat geprüft: {v0}"
@@ -90,7 +94,7 @@ TEXT_KEYS: Tuple[str, ...] = tuple(dict.fromkeys((
     TITLE_SUPPORTED, TEXT_SUPPORTED, TITLE_NOT_PROVEN, TEXT_NOT_PROVEN, TITLE_CONTRADICTED, TEXT_CONTRADICTED,
     TITLE_QUESTION, TEXT_QUESTION, TEXT_QUESTION_CHOOSE, TITLE_STATEMENT, TEXT_STATEMENT,
     TITLE_WHOLE_BOOKLET, TITLE_UPLOAD, TITLE_PICK_SOURCE, TEXT_PICK_SOURCE, TITLE_NO_SOURCE, TEXT_NO_SOURCE,
-    TEXT_LAST_VOTE, TITLE_TECHNICAL, TEXT_TECHNICAL)))
+    TEXT_LAST_VOTE, TEXT_NO_VOTE, TITLE_ANSWERED_NO_VOTE, TITLE_TECHNICAL, TEXT_TECHNICAL)))
 
 # outcome -> NLI label (the card's label); the same mapping as the agent graph's, without importing langgraph
 OUTCOME_LABELS = {"gestuetzt": 0, "nicht_belegt": 1, "widersprochen": 2}
@@ -187,6 +191,8 @@ def _sentence(group: List[TraceEvent]) -> Optional[Tuple[str, str, Tuple[Tuple[s
         answer = (ask.args or {}).get("antwort") if ask is not None else None
         if answer is None:
             return "ask", TITLE_QUESTION, ()
+        if answer == settings.NO_VOTE_ANSWER:
+            return "ask", TITLE_ANSWERED_NO_VOTE, ()
         option = next((o for o in (ask.data or {}).get("options") or []
                        if isinstance(o, dict) and o.get("vote_id") == answer), None)
         if option is None or not option.get("title"):

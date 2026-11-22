@@ -14,6 +14,9 @@ MAX_CLAIM_CHARS = 1000  # the claim is data, never part of the system prompt
 LLM_TIMEOUT_S: float = 180.0  # read/write limit of one agent LLM request; connecting is capped at 10 s (decider.py)
 LLM_MAX_TOKENS: int = 1024  # output cap of one agent LLM answer (thinking included); a cut-off thinking is no action
 LANGUAGES = ("de",)
+# The answer to a vote question that none of its options fits (the app's "Keine dieser Vorlagen" button). Never a
+# vote id: those are "<source_id>#<k>".
+NO_VOTE_ANSWER = "keine"
 
 # "json": the capped smoke of 2026-10-31 (results/genai/agent_tool_smoke.json, 6 requests) found JSON actions valid in 3 of
 # 3 situations, while the endpoint rejects native tool calling with HTTP 400 ("auto" tool choice needs the server flags

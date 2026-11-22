@@ -9,6 +9,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src import agent_ui, config
+from src.agent import settings
 from src.agent.source_index import VoteRef
 from src.agent.trace import TraceEvent
 from src.inference import EvidenceSource, PredictionResult
@@ -183,6 +184,16 @@ class PlainStepTextTests(unittest.TestCase):
         self.assertEqual((row.mark, row.kind), ('ask', 'ask'))
         self.assertEqual(agent_ui.row_text(row, str, lambda d: '28. September 2025'),
                          'Du hast gewählt: E-ID-Gesetz, Abstimmung vom 28. September 2025')
+
+    def test_a_question_answered_with_none_of_the_options_says_so(self):
+        events = [event(1, 'decide', 'rueckfrage'),
+                  event(1, 'act', 'rueckfrage', 'Wächter: mehrdeutig; nicht ausgeführt',
+                        data={'guard': {'kind': 'mehrdeutig'}}),
+                  event(1, 'ask', 'rueckfrage', 'Rückfrage beantwortet',
+                        args={'optionen': ['a'], 'antwort': settings.NO_VOTE_ANSWER}, data={'options': OPTIONS})]
+        [row] = agent_ui.step_rows(events)
+        self.assertEqual((row.mark, row.kind), ('ask', 'ask'))
+        self.assertEqual(agent_ui.row_text(row, str, str), agent_ui.TITLE_ANSWERED_NO_VOTE)
 
     def test_an_open_question_and_a_statement_question_use_their_titles(self):
         open_q = [event(1, 'decide', 'rueckfrage'), event(1, 'act', 'rueckfrage', 'Rückfrage mit 2 Optionen')]

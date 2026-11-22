@@ -17,6 +17,7 @@ pytest.importorskip('streamlit')
 from streamlit.testing.v1 import AppTest
 
 from src import agent_ui
+from src.agent import settings
 from src.agent.source_index import VoteRef
 from src.config import BOOKLETS_DIR
 from tests.test_agent_graph import (BOOKLETS, CLAIM, CLEAR, CLOSE, FRENCH_CLAIM, HAS_LANGGRAPH, NOT_FOUND, V1, V2,
@@ -193,6 +194,37 @@ def test_clicking_an_option_continues_the_check_and_shows_the_result():
         assert not options(app)
         assert has_verdict(app)
         assert any(V2.title in item.value for item in app.caption)
+
+
+def no_vote_button(app):
+    return [button for button in app.button if (button.key or '').startswith('agent_no_vote_')]
+
+
+def test_the_question_offers_none_of_these_votes_after_the_options():
+    fakes = close_fakes()
+    with agent_app(fakes) as app:
+        check(app)
+        [button] = no_vote_button(app)
+        assert button.label == agent_ui.TEXT_NO_VOTE
+        keys = [node.key for node in app.main if node.type == 'button']
+        assert keys.index(button.key) > max(keys.index(option.key) for option in options(app))
+
+
+def test_clicking_none_of_these_votes_ends_the_check_without_a_source_and_without_a_check():
+    fakes = close_fakes()
+    with agent_app(fakes) as app:
+        check(app)
+        no_vote_button(app)[0].click().run()
+        assert not app.exception
+        assert fakes.answers == [settings.NO_VOTE_ANSWER] and len(fakes.sessions) == 1
+        assert fakes.engine.verify_calls == []
+        steps = '\n'.join(step_texts(app))
+        assert agent_ui.TITLE_ANSWERED_NO_VOTE in steps
+        assert not options(app) and not no_vote_button(app)
+        assert not has_verdict(app)
+        assert any(agent_ui.TITLE_NO_SOURCE in box.value for box in app.warning)
+        # "none" is no vote: it never becomes the "wie zuletzt" button of the next question
+        assert 'last_vote_id' not in app.session_state or app.session_state['last_vote_id'] != settings.NO_VOTE_ANSWER
 
 
 def test_changing_the_claim_with_an_open_question_discards_it_and_starts_fresh():
